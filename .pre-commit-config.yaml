@@ -15,6 +15,12 @@ repos:
         types: [text]
         exclude: \.md$
 
+      - id: comments-describe-the-code
+        name: "global:   comments describe the code, not its history"
+        language: system
+        entry: python bin/check-comments.py
+        types: [python]
+
       - id: check-private-key
         name: "security: block committed private keys"
         language: system

@@ -17,6 +17,7 @@ class DustSource(Source):
     id = "dust"
     name = "Dust"
     description = "Conversations in Dust (not implemented yet)"
+    setup = "Not implemented. Nothing to configure until the Dust API is settled."
     # No fields until the API is known — an empty form is more honest than one asking
     # for credentials nothing will use.
     fields: ClassVar[list[ConfigField]] = []

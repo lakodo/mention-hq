@@ -17,6 +17,7 @@ class GitSource(Source):
     id = "git"
     name = "Local Git"
     description = "Branches you're working on in local repositories"
+    setup = "No credentials — it reads the repositories on this machine."
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
             key="repos",

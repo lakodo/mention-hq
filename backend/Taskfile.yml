@@ -13,9 +13,12 @@ tasks:
       - task: db-setup
 
   dev:
-    desc: Run the API with autoreload on :8000
+    desc: Run the API with autoreload on :8000, teeing to logs/backend.log
     cmds:
-      - uv run uvicorn app.main:app --reload --port 8000
+      # tee, not a redirect: you keep the live output in your terminal and anyone
+      # helping you gets a file to read.
+      - mkdir -p ../logs
+      - uv run uvicorn app.main:app --reload --port 8000 2>&1 | tee ../logs/backend.log
 
   db-setup:
     desc: Create the SQLite database and apply every migration

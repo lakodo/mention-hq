@@ -47,13 +47,19 @@ class LinearSource(Source):
     id = "linear"
     name = "Linear"
     description = "Issues assigned to you that are started, unstarted or in triage"
+    setup = (
+        "Linear → Settings → Security & access → Personal API keys → New key. "
+        "A read-only key is enough; HQ never writes to Linear."
+    )
+    setup_url = "https://linear.app/settings/account/security"
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
             key="api_key",
             label="API key",
             kind="secret",
             placeholder="lin_api_…",
-            help="Create one under Linear → Settings → API → Personal API keys",
+            help="Settings → Security & access → Personal API keys → New key.",
+            help_url="https://linear.app/settings/account/security",
         ),
         ConfigField(
             key="user_id",

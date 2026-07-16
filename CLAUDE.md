@@ -85,21 +85,37 @@ task back:db-check    # fail if models drifted from migrations
 task back:sync        # sync from the CLI, no UI
 ```
 
-# Specific Guidelines
+# Working with a running app
+
+**When the user already has the app running, read `logs/`; don't start your own.**
+`task back:dev` and `task front:dev` tee to `logs/backend.log` and `logs/frontend.log`
+(gitignored). That is the shared surface: they get their terminal, you get the file.
+Starting a second server means racing them for the port and reading output from a process
+that isn't the one in front of them.
+
+Only start servers yourself when nobody else is running the app.
 
 - **`backend/hq.db` is the user's data, not a scratchpad.** Never drive a manual test
   against the default database: syncing a source writes tasks, items and config into it,
   and a demo folder full of invented branches then looks like the user's real work. Point
-  `DATABASE_URL` at a throwaway file and run the API on another port:
-  `DATABASE_URL=sqlite+aiosqlite:////tmp/hq-probe.db uv run uvicorn app.main:app --port 8011`.
-  Same for `app.name` and source config — both live in that database.
+  `DB_PATH` at a throwaway file and run on another port:
+  `DB_PATH=/tmp/hq-probe.db uv run uvicorn app.main:app --port 8011`.
+  Same for the app name and source config — both live in that database.
+
+# Specific Guidelines
+
 - Python >3.11 typing: `list[]`, `dict[]`, `X | None`. Don't import from `typing` for these.
 - **Comments and docstrings: the default is none.** Add one only when it brings information
   the code cannot: a non-obvious constraint, a gotcha, a rationale. The Why, not the How.
+  Then keep it to the length that information needs — a four-line essay on a one-line
+  property is noise even when every sentence is true. This one is on the author: no check
+  can catch it (length lets essays through; "docstring longer than its function" flags the
+  short functions whose subtle constraints most deserve one). Review for it.
 - **A comment describes the code as it is now.** Never the history behind it, never the
-  project's own trajectory. `# changed to fix…`, `# now does X instead of Y`,
-  `# as discussed`, `# none ship`, `# this used to be a mention` are all wrong: a future
-  reader has none of that context and shouldn't need it. That belongs in the commit message.
+  project's own trajectory. `# changed to fix…`, `# as discussed`, `# previously a list`
+  are all wrong: a future reader has none of that context and shouldn't need it. That
+  belongs in the commit message. `bin/check-comments.py` enforces this one, and runs as a
+  pre-commit hook.
 - Migrations are required. Schema changes go through Alembic
   (`task back:db-migrate -- "…"`); never edit the DB by hand, never rely on `create_all`
   outside tests. Migrations must not import application code — they outlive it.

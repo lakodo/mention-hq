@@ -19,7 +19,9 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    database_url: str = f"sqlite+aiosqlite:///{BACKEND_DIR / 'hq.db'}"
+    # Where your data lives. Point DB_PATH at a throwaway file to try things out without
+    # touching it — a sync writes tasks, buckets and source config into whatever this names.
+    db_path: Path = BACKEND_DIR / "hq.db"
 
     # Only used when no OS keychain is available; see app/security/secrets.py.
     secrets_dir: Path = Path.home() / ".config" / "personal-hq"
@@ -35,6 +37,10 @@ class Settings(BaseSettings):
     # keychain-backed tokens. Changing this is a deliberate, documented risk.
     host: str = "127.0.0.1"
     port: int = 8000
+
+    @property
+    def database_url(self) -> str:
+        return f"sqlite+aiosqlite:///{self.db_path}"
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -36,6 +36,23 @@ class ConfigField:
     required: bool = True
     placeholder: str = ""
     help: str = ""
+    # Where the user goes to obtain this value, when it comes from a web page.
+    help_url: str = ""
+
+
+@dataclass
+class Detection:
+    """What a local tool already knows, so the user doesn't retype it.
+
+    Secrets in `values` are written straight to the keychain and never returned to the
+    browser; `choices` offers the user a pick where a tool knows the options but not the
+    answer.
+    """
+
+    available: bool
+    detail: str
+    values: dict[str, str] = field(default_factory=dict)
+    choices: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -79,9 +96,17 @@ class Source(abc.ABC):
     name: ClassVar[str]
     description: ClassVar[str] = ""
     fields: ClassVar[list[ConfigField]] = []
+    # Prose for the Admin panel: what this needs and where it comes from.
+    setup: ClassVar[str] = ""
+    setup_url: ClassVar[str] = ""
 
     def __init__(self, config: dict[str, str] | None = None) -> None:
         self._config = config or {}
+
+    @classmethod
+    async def detect(cls) -> Detection:
+        """Read what a local tool already knows. The default knows nothing."""
+        return Detection(available=False, detail="")
 
     def get(self, key: str, default: str = "") -> str:
         return (self._config.get(key) or default).strip()

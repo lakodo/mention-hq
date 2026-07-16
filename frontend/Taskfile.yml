@@ -12,9 +12,10 @@ tasks:
       - task: deps
 
   dev:
-    desc: Run the Vite dev server on :5173
+    desc: Run the Vite dev server on :5173, teeing to logs/frontend.log
     cmds:
-      - yarn dev
+      - mkdir -p ../logs
+      - yarn dev 2>&1 | tee ../logs/frontend.log
 
   build:
     desc: Type-check and build for production

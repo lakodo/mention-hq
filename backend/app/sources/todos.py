@@ -23,6 +23,7 @@ class TodoSource(Source):
     id = "todo"
     name = "Todo list"
     description = "Unchecked todo lines in your local files"
+    setup = "No credentials — point it at the files you keep todos in."
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
             key="globs",

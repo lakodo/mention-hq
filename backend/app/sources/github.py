@@ -7,8 +7,9 @@ from typing import ClassVar
 
 import httpx
 
-from app.sources.base import ConfigField, RawItem, Source
+from app.sources.base import ConfigField, Detection, RawItem, Source
 from app.sources.keys import all_reference_keys, github_key
+from app.sources.tools import run_tool
 
 API_ROOT = "https://api.github.com"
 
@@ -17,17 +18,52 @@ class GitHubSource(Source):
     id = "github"
     name = "GitHub"
     description = "Your open pull requests and assigned issues"
+    setup = (
+        "If you use the GitHub CLI, press Detect and there is nothing to fill in. "
+        "Otherwise create a personal access token with the `repo` scope."
+    )
+    setup_url = "https://github.com/settings/tokens/new?scopes=repo&description=Personal%20HQ"
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
             key="token",
             label="Personal access token",
             kind="secret",
             placeholder="ghp_…",
-            help="Needs the `repo` scope. Create one at github.com/settings/tokens",
+            help="Needs the `repo` scope.",
+            help_url="https://github.com/settings/tokens/new?scopes=repo&description=Personal%20HQ",
         ),
         ConfigField(key="username", label="Username", placeholder="your-username"),
-        ConfigField(key="org", label="Organisation", placeholder="your-org"),
+        ConfigField(
+            key="org",
+            label="Organisation",
+            placeholder="your-org",
+            help="The organisation whose PRs and issues you want.",
+        ),
     ]
+
+    @classmethod
+    async def detect(cls) -> Detection:
+        token = await run_tool("gh", "auth", "token")
+        if not token:
+            return Detection(
+                available=False,
+                detail="The GitHub CLI isn't installed or isn't logged in. Run `gh auth login`.",
+            )
+
+        username = await run_tool("gh", "api", "user", "--jq", ".login")
+        orgs = await run_tool("gh", "api", "user/orgs", "--jq", '[.[].login] | join("\\n")')
+
+        values = {"token": token}
+        if username:
+            values["username"] = username
+
+        who = f"@{username}" if username else "your account"
+        return Detection(
+            available=True,
+            detail=f"Found a token for {who} via the GitHub CLI.",
+            values=values,
+            choices={"org": orgs.splitlines()} if orgs else {},
+        )
 
     def detail(self) -> str:
         if not self.is_configured():

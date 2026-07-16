@@ -38,7 +38,7 @@ class FakeSource(Source):
 
 @pytest.fixture
 def settings() -> Settings:
-    return Settings(database_url="sqlite+aiosqlite:///:memory:")
+    return Settings(db_path=":memory:")
 
 
 @pytest.fixture

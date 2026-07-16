@@ -13,6 +13,7 @@ from app.schemas import (
     AppSettingsOut,
     AppSettingsPatch,
     ConfigFieldOut,
+    DetectionOut,
     SourceConfigUpdate,
     SourceStatusOut,
 )
@@ -73,6 +74,43 @@ async def list_sources(db: AsyncSession = Depends(get_db)) -> list[SourceStatusO
 async def test_source(source_id: str, db: AsyncSession = Depends(get_db)) -> SourceStatusOut:
     source = await _build(db, source_id)
     return await _status(source)
+
+
+@router.post("/sources/{source_id}/detect", response_model=DetectionOut)
+async def detect_source(source_id: str, db: AsyncSession = Depends(get_db)) -> DetectionOut:
+    """Fill in what a local CLI already knows.
+
+    A detected secret goes straight to the keychain: it is never sent to the browser, so
+    reading it back out of HQ is no easier than reading it out of the CLI it came from.
+    """
+    source_class = source_class_by_id(source_id)
+    if source_class is None:
+        raise HTTPException(status_code=404, detail=f"Unknown source: {source_id}")
+
+    detection = await source_class.detect()
+    if not detection.available:
+        return DetectionOut(available=False, detail=detection.detail)
+
+    secrets = get_secret_store()
+    secret_keys = {f.key for f in source_class.fields if f.kind == "secret"}
+    applied: dict[str, str] = {}
+
+    for key, value in detection.values.items():
+        if key in secret_keys:
+            secrets.set(source_id, key, value)
+            applied[key] = "saved"
+        else:
+            await set_value(db, source_id, key, value)
+            applied[key] = value
+    await db.commit()
+
+    return DetectionOut(
+        available=True,
+        detail=detection.detail,
+        applied=applied,
+        choices=detection.choices,
+        source=await _status(await _build(db, source_id)),
+    )
 
 
 @router.put("/sources/{source_id}/config", response_model=SourceStatusOut)
@@ -152,6 +190,7 @@ async def _status(source: Source) -> SourceStatusOut:
             required=spec.required,
             placeholder=spec.placeholder,
             help=spec.help,
+            help_url=spec.help_url,
             value=(
                 secrets.hint(source.id, spec.key) if spec.kind == "secret" else source.get(spec.key) or None
             ),
@@ -169,4 +208,13 @@ async def _status(source: Source) -> SourceStatusOut:
         last_checked_at=datetime.now(UTC) if configured else None,
         error=error,
         fields=fields,
+        setup=source.setup,
+        setup_url=source.setup_url,
+        detectable=_can_detect(type(source)),
     )
+
+
+def _can_detect(source_class: type[Source]) -> bool:
+    # __func__, because accessing a classmethod builds a new bound method every time and
+    # `is not` between two of those is always true.
+    return source_class.detect.__func__ is not Source.detect.__func__

@@ -18,6 +18,7 @@ class MarkdownSource(Source):
     id = "markdown"
     name = "Markdown docs"
     description = "Local docs and specs, attached to the subjects they reference"
+    setup = "No credentials — point it at the docs you write."
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
             key="globs",

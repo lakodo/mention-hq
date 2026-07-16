@@ -113,6 +113,7 @@ class ConfigFieldOut(BaseModel):
     required: bool
     placeholder: str
     help: str
+    help_url: str = ""
     # For secrets this is a mask like "••••••••1234", never the value itself.
     value: str | None = None
     is_set: bool = False
@@ -127,6 +128,21 @@ class SourceStatusOut(BaseModel):
     last_checked_at: datetime | None
     error: str | None = None
     fields: list[ConfigFieldOut] = []
+    setup: str = ""
+    setup_url: str = ""
+    # Whether this source can read its own settings out of a local CLI.
+    detectable: bool = False
+
+
+class DetectionOut(BaseModel):
+    """The result of reading a local CLI. Secrets are saved, never returned."""
+
+    available: bool
+    detail: str
+    # Non-secret values that were filled in, and options for fields the tool can't decide.
+    applied: dict[str, str] = {}
+    choices: dict[str, list[str]] = {}
+    source: SourceStatusOut | None = None
 
 
 class SourceConfigUpdate(BaseModel):

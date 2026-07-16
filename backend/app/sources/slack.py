@@ -22,13 +22,20 @@ class SlackSource(Source):
     id = "slack"
     name = "Slack"
     description = "Threads you wrote in or were mentioned in"
+    setup = (
+        "The fiddliest one. Create an app at api.slack.com/apps → OAuth & Permissions, add "
+        "the search:read *user* scope, install it to your workspace, then copy the User "
+        "OAuth Token (xoxp-). A bot token starts with xoxb- and cannot search."
+    )
+    setup_url = "https://api.slack.com/apps"
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
             key="user_token",
             label="User token",
             kind="secret",
             placeholder="xoxp-…",
-            help="Must be a user token with the search:read scope — a bot token cannot search",
+            help="A user token with the search:read scope. A bot token (xoxb-) cannot search.",
+            help_url="https://api.slack.com/apps",
         ),
         ConfigField(
             key="user_id",
