@@ -31,6 +31,10 @@ task setup          # installs backend + frontend, creates and migrates the data
 task dev            # backend on :8000, frontend on :5173
 ```
 
+Work from inside `devbox shell` (or let direnv activate it). The git hooks call `uv`,
+`yarn` and `ruff` from that environment, so a `git commit` in a plain shell fails on hooks
+that cannot find their tools. `task hooks` installs them.
+
 Then open http://localhost:5173, go to **Admin**, and connect a source. Nothing is
 configured out of the box and nothing is assumed about how you work.
 
