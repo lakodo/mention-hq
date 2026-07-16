@@ -62,6 +62,10 @@ def _api_key() -> str | None:
     return get_secret_store().get(SECRET_NAMESPACE, "api_key")
 
 
+def _stored_key() -> str | None:
+    return get_secret_store().stored(SECRET_NAMESPACE, "api_key")
+
+
 def _client():
     from anthropic import AsyncAnthropic
 
@@ -77,13 +81,13 @@ def status() -> AIStatus:
     except ImportError:
         return AIStatus(False, "none", "The anthropic package is not installed")
 
-    if _api_key():
+    if _stored_key():
         return AIStatus(True, "keychain", "Using the API key you saved in Admin")
 
     import os
 
-    if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
-        return AIStatus(True, "environment", "Using ANTHROPIC_API_KEY from the environment")
+    if _api_key() or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+        return AIStatus(True, "environment", "Using a key from the environment")
 
     if _has_cli_profile():
         return AIStatus(True, "cli-login", "Using your local `ant auth login` session")

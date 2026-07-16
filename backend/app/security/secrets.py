@@ -135,11 +135,19 @@ class SecretStore:
         return self._backend.name == "keyring"
 
     def get(self, source_id: str, key: str) -> str | None:
-        stored = self._backend.get(_qualify(source_id, key))
-        if stored:
-            return stored
-        # Env vars stay readable as a bootstrap path for anyone who already had a .env, and
-        # for CI. Anything set through the UI takes precedence.
+        return self.stored(source_id, key) or self.from_environment(source_id, key)
+
+    def stored(self, source_id: str, key: str) -> str | None:
+        """Only what this store holds. Anything set through the UI takes precedence."""
+        return self._backend.get(_qualify(source_id, key)) or None
+
+    def from_environment(self, source_id: str, key: str) -> str | None:
+        """Env vars are a bootstrap path for an existing .env, and for CI.
+
+        Kept separate from `stored` so callers can report *where* a credential came from:
+        telling someone their key is saved in Admin when it actually came from the
+        environment sends them looking in the wrong place.
+        """
         return os.environ.get(f"{source_id}_{key}".upper()) or None
 
     def set(self, source_id: str, key: str, value: str) -> None:
