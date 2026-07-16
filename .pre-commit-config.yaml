@@ -1,0 +1,86 @@
+default_stages: [pre-commit]
+fail_fast: false
+
+repos:
+  - repo: local
+    hooks:
+      # --- hygiene ---
+      - id: trailing-whitespace
+        name: "global:   trim trailing whitespace"
+        language: system
+        entry: bash -c 'for f in "$@"; do perl -pi -e "s/[ \t]+$//" "$f"; done; git add -u' --
+        types: [text]
+        exclude: \.md$
+
+      - id: check-private-key
+        name: "security: block committed private keys"
+        language: system
+        entry: bash -c 'grep -lE "BEGIN (RSA|OPENSSH|DSA|EC|PGP) PRIVATE KEY" "$@" && exit 1 || exit 0' --
+        types: [text]
+
+      - id: no-secrets-in-env
+        name: "security: block committed .env"
+        language: fail
+        entry: ".env must never be committed — secrets live in the OS keychain (see CLAUDE.md)"
+        files: ^\.env$
+
+      # --- backend ---
+      # Scoped to the staged files: a repo-wide --fix rewrites files you didn't touch and
+      # leaves unrelated changes in the tree, which then block the commit.
+      - id: ruff-format
+        name: "backend:  format (ruff)"
+        language: system
+        entry: bash -c 'cd backend && uv run ruff format "$@" && git add -u' --
+        types: [python]
+        files: ^backend/
+
+      - id: ruff-lint
+        name: "backend:  lint (ruff)"
+        language: system
+        entry: bash -c 'cd backend && uv run ruff check --fix "$@" && git add -u' --
+        types: [python]
+        files: ^backend/
+
+      - id: backend-tests
+        name: "backend:  test (pytest)"
+        language: system
+        # The suite is seconds long, so it runs whole rather than trying to guess which
+        # tests a staged file affects — a wrong guess here means a broken commit.
+        entry: bash -c 'cd backend && uv run pytest -q'
+        pass_filenames: false
+        files: ^backend/.*\.py$
+
+      - id: alembic-check
+        name: "backend:  models match migrations"
+        language: system
+        entry: bash -c 'cd backend && uv run alembic upgrade head >/dev/null && uv run alembic check'
+        pass_filenames: false
+        files: ^backend/app/models\.py$
+
+      # --- frontend ---
+      - id: prettier
+        name: "frontend: format (prettier)"
+        language: system
+        entry: bash -c 'cd frontend && yarn prettier --write "${@#frontend/}" && cd .. && git add -u' --
+        files: ^frontend/.*\.(ts|tsx|js|jsx|json|css|md)$
+
+      - id: eslint
+        name: "frontend: lint (eslint)"
+        language: system
+        entry: bash -c 'cd frontend && yarn eslint --fix "${@#frontend/}" && cd .. && git add -u' --
+        files: ^frontend/.*\.(ts|tsx)$
+
+      - id: tsc
+        name: "frontend: typecheck"
+        language: system
+        entry: bash -c 'cd frontend && yarn typecheck'
+        pass_filenames: false
+        files: ^frontend/.*\.(ts|tsx)$
+
+      - id: vitest-related
+        name: "frontend: test (vitest, related only)"
+        # `vitest related` runs only the tests importing the staged files — the frontend
+        # suite is slower than the backend's, so full-suite-on-every-commit isn't worth it.
+        language: system
+        entry: bash -c 'cd frontend && yarn vitest related --run --passWithNoTests "${@#frontend/}"' --
+        files: ^frontend/src/.*\.(ts|tsx)$

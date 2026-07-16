@@ -1,0 +1,54 @@
+version: "3"
+
+includes:
+  back:
+    taskfile: ./backend/Taskfile.yml
+    dir: ./backend
+  front:
+    taskfile: ./frontend/Taskfile.yml
+    dir: ./frontend
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  setup:
+    desc: Install everything and prepare the database (run this first)
+    cmds:
+      - task: back:setup
+      - task: front:setup
+      - echo "Personal HQ ready ✓  ->  task dev"
+
+  dev:
+    desc: Run backend (:8000) and frontend (:5173) together
+    deps:
+      - back:dev
+      - front:dev
+
+  test:
+    desc: Run backend and frontend tests
+    cmds:
+      - task: back:test
+      - task: front:test
+
+  lint:
+    desc: Lint backend and frontend
+    cmds:
+      - task: back:lint
+      - task: front:lint
+
+  check:
+    desc: Everything CI would run — lint, types, migrations, tests
+    cmds:
+      - task: lint
+      - task: front:typecheck
+      - task: back:db-check
+      - task: test
+
+  hooks:
+    desc: Install the git pre-commit hooks
+    cmds:
+      - uv run --with pre-commit pre-commit install
