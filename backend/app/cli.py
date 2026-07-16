@@ -15,7 +15,12 @@ async def _sync(source: str | None) -> int:
     async with SessionLocal() as db:
         result = await sync_all(db, settings, only=source)
 
-    print(f"Synced {', '.join(result.sources_synced) or 'nothing'} in {result.duration_seconds}s")
+    if not result.sources_synced and not result.errors:
+        print("No sources are configured, so there was nothing to sync.")
+        print("Connect one in Admin (task dev, then http://localhost:5173).")
+        return 0
+
+    print(f"Synced {', '.join(result.sources_synced)} in {result.duration_seconds}s")
     print(f"  {result.tasks_added} tasks added, {result.tasks_updated} updated")
     for error in result.errors:
         print(f"  error: {error}")
