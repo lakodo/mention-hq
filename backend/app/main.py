@@ -57,3 +57,21 @@ app.include_router(admin.router)
 @app.get("/health", tags=["meta"])
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def _serve_frontend(app: FastAPI) -> None:
+    """Serve the built frontend, so a production run is one process on one origin.
+
+    Built output only: hot reload is a websocket Vite owns, so in dev the two run side by
+    side and this does nothing. check_dir is off for exactly that reason — no build is a
+    normal state here, not a misconfiguration.
+    """
+    dist = get_settings().frontend_dist
+    if not (dist / "index.html").exists():
+        return
+
+    app.frontend("/", directory=dist, check_dir=False)
+    log.info("frontend_served", directory=str(dist))
+
+
+_serve_frontend(app)

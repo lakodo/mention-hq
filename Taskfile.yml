@@ -28,6 +28,12 @@ tasks:
       - back:dev
       - front:dev
 
+  serve:
+    desc: Build the UI and serve the whole app from the API alone, on :8000
+    cmds:
+      - task: front:build
+      - task: back:dev
+
   test:
     desc: Run backend and frontend tests
     cmds:

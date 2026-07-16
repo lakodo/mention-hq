@@ -9,15 +9,19 @@ to the APIs you connect.
 
 ## What has to be running
 
-Two processes, both local:
+In development, two processes:
 
 | | | |
 |---|---|---|
 | **Backend** | http://localhost:8000 | FastAPI. Talks to the sources, owns the database. API docs at `/docs`. |
-| **Frontend** | http://localhost:5173 | Vite dev server. Useless without the backend — it is a client. |
+| **Frontend** | http://localhost:5173 | Vite dev server, for hot reload. Useless without the backend — it is a client. |
 
-`task dev` starts both. The frontend calls the backend directly from your browser, so both
-must be up; if the UI loads but shows no data, the backend isn't running.
+`task dev` starts both. The frontend calls the backend from your browser, so both must be
+up; if the UI loads but shows no data, the backend isn't running.
+
+**Or just one.** `task serve` builds the UI and serves the whole app from the API on
+**http://localhost:8000** — one process, one origin, no CORS. That is the better way to
+actually *use* HQ; the two-process setup exists for hot reload while developing it.
 
 ## Getting started
 
@@ -47,6 +51,19 @@ configured out of the box and nothing is assumed about how you work.
 task back:dev     # terminal 1 — http://localhost:8000, API docs at /docs
 task front:dev    # terminal 2 — http://localhost:5173, needs the backend up
 ```
+
+### One process, one port
+
+```bash
+task serve        # builds the UI, then serves everything from :8000
+```
+
+The API serves `frontend/dist` when a build exists (`app.frontend` in `backend/app/main.py`),
+so the SPA and the API share an origin and CORS stops being involved. Client-side routes
+like `/task/abc` fall back to `index.html` for a browser navigation, while an API call for
+a path that doesn't exist still gets a JSON 404 rather than a page.
+
+There is no single-process equivalent *with* hot reload: that is a websocket Vite owns.
 
 The frontend is only a client: it holds no data and talks to the backend from your browser.
 If the UI loads but every panel is empty, the backend isn't running.

@@ -32,6 +32,11 @@ from app.sources.base import STATUS_PRIORITY, TITLE_PRIORITY, RawItem, Source
 
 log = structlog.get_logger(__name__)
 
+# A proposal this strong stands in for a task of the item's own. Below it, the item gets
+# its own task and keeps the proposal as a suggestion — so a weak candidate is something to
+# review, never something that hides an item until someone notices.
+TRUSTED_ENOUGH_TO_HOME = 0.9
+
 # Which source adapter owns each kind of item — "pr" and "issue" both come from GitHub.
 OWNER_BY_ITEM_SOURCE = {
     "pr": "github",
@@ -264,24 +269,24 @@ async def _route(
     candidates = [t for t in tasks if decided.get(t.id) != REJECTED]
 
     proposals = engine_registry.propose(raw, candidates)
-    if proposals:
-        for proposal, source_engine in proposals:
-            db.add(
-                Link(
-                    task_id=proposal.task_id,
-                    item_id=raw.id,
-                    state=PROPOSED,
-                    engine=source_engine.id,
-                    confidence=proposal.confidence,
-                    reason=proposal.reason,
-                )
+    for proposal, source_engine in proposals:
+        db.add(
+            Link(
+                task_id=proposal.task_id,
+                item_id=raw.id,
+                state=PROPOSED,
+                engine=source_engine.id,
+                confidence=proposal.confidence,
+                reason=proposal.reason,
             )
-        await db.flush()
+        )
+    await db.flush()
+
+    if any(p.confidence >= TRUSTED_ENOUGH_TO_HOME for p, _ in proposals):
         return None
 
-    # Nowhere to attach: the item becomes its own task. Rejecting a link says "not this
-    # task", not "not anywhere", so a rejection falls through to here rather than leaving
-    # the item with no home at all.
+    # Every other case gives the item a task of its own: a weak proposal is a suggestion,
+    # not a home. Rejecting a link likewise says "not this task", not "not anywhere".
     return await _create_task_for(db, raw, matcher)
 
 

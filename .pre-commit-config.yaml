@@ -82,10 +82,13 @@ repos:
         pass_filenames: false
         files: ^frontend/.*\.(ts|tsx)$
 
-      - id: vitest-related
-        name: "frontend: test (vitest, related only)"
-        # `vitest related` runs only the tests importing the staged files — the frontend
-        # suite is slower than the backend's, so full-suite-on-every-commit isn't worth it.
+      - id: vitest
+        name: "frontend: test (vitest)"
+        # The whole suite, once. `vitest related` on the staged files looks cheaper, but
+        # pre-commit partitions the file list and runs the hook on each chunk in parallel
+        # — ten vitest processes at once, tripping over each other. The suite takes
+        # seconds; determinism is worth more than the seconds.
         language: system
-        entry: bash -c 'cd frontend && yarn vitest related --run --passWithNoTests "${@#frontend/}"' --
+        entry: bash -c 'cd frontend && yarn vitest run'
+        pass_filenames: false
         files: ^frontend/src/.*\.(ts|tsx)$

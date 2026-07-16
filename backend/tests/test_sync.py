@@ -342,3 +342,38 @@ async def test_unknown_source_is_rejected(db, settings, use_sources, item):
     use_sources(FakeSource([]))
     with pytest.raises(ValueError, match="Unknown source"):
         await sync_all(db, settings, only="nope")
+
+
+async def test_a_weak_candidate_does_not_hide_the_item(db, settings, use_sources, item):
+    """A title lookalike is a suggestion to review, not a home."""
+    use_sources(
+        FakeSource(
+            [
+                item("todo", "t1", label="Bump lodash in the api package"),
+                item("pr", "r~1", title="Bump lodash in the web package"),
+            ]
+        )
+    )
+    await sync_all(db, settings)
+
+    titles = {t.title for t in await _tasks(db)}
+    assert titles == {"Bump lodash in the api package", "Bump lodash in the web package"}, (
+        "each item keeps a task of its own"
+    )
+
+    proposed = [link for link in await _links(db) if link.state == PROPOSED]
+    assert proposed, "and the lookalike still surfaces as a candidate to review"
+
+
+async def test_a_ticket_reference_is_trusted_to_home_an_item(db, settings, use_sources, item):
+    use_sources(
+        FakeSource(
+            [
+                item("linear", "1", identity_keys={"ENG-42"}, title="Refund bug"),
+                item("slack", "C1:1", reference_keys={"ENG-42"}),
+            ]
+        )
+    )
+    await sync_all(db, settings)
+
+    assert len(await _tasks(db)) == 1, "an explicit reference is strong enough to attach to"

@@ -1,0 +1,472 @@
+import {
+  ActionIcon,
+  Alert,
+  Anchor,
+  Badge,
+  Box,
+  Button,
+  Card,
+  Center,
+  Group,
+  Loader,
+  Stack,
+  Text,
+  TextInput,
+  Tooltip,
+} from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconExternalLink,
+  IconSearch,
+  IconSparkles,
+  IconTrash,
+} from '@tabler/icons-react';
+import { useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ReadToggle } from '../components/ReadToggle';
+import { SourceDot } from '../components/SourceDot';
+import { StatusPill } from '../components/StatusPill';
+import { SLACK_ACCENT, sourceMeta } from '../constants';
+import { errorMessage } from '../api/client';
+import {
+  useCreateBucket,
+  useDeleteTask,
+  useSuggestBucket,
+  useTasks,
+  useUpdateTask,
+} from '../api/hooks';
+import { matchesSidebarQuery } from '../lib/search';
+import {
+  groupByTag,
+  newestItemAt,
+  primarySource,
+  sortTasksByRecency,
+  splitSlackItems,
+} from '../lib/tasks';
+import { formatAgo } from '../lib/time';
+import type { BucketSuggestion, Item, Task } from '../types';
+
+interface ItemCardProps {
+  item: Item;
+}
+
+function ItemCard({ item }: ItemCardProps) {
+  const meta = sourceMeta(item.source);
+
+  return (
+    <Card withBorder radius="sm" p="sm" data-testid="detail-item">
+      <Group gap={12} align="flex-start" wrap="nowrap">
+        <Box mt={5}>
+          <SourceDot source={item.source} />
+        </Box>
+        <Box style={{ flex: 1, minWidth: 0 }}>
+          <Text fz={10} c="dimmed" fw={700} tt="uppercase" style={{ letterSpacing: '0.04em' }}>
+            {meta.label}
+          </Text>
+          {item.url ? (
+            <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" lh={1.4}>
+              <Group gap={4} wrap="nowrap">
+                {item.label}
+                <IconExternalLink size={12} />
+              </Group>
+            </Anchor>
+          ) : (
+            <Text fz="sm" lh={1.4}>
+              {item.label}
+            </Text>
+          )}
+          {item.context && (
+            <Text fz="xs" c="dimmed">
+              {item.context}
+            </Text>
+          )}
+        </Box>
+        <Text fz="xs" c="dimmed" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+          {formatAgo(item.occurred_at)}
+        </Text>
+      </Group>
+    </Card>
+  );
+}
+
+interface SuggestionPanelProps {
+  task: Task;
+  suggestion: BucketSuggestion;
+  onAccept: (suggestion: BucketSuggestion) => void;
+  onDismiss: () => void;
+  busy: boolean;
+}
+
+/** A suggestion is only ever an argument to accept or dismiss — never applied on arrival. */
+function SuggestionPanel({ task, suggestion, onAccept, onDismiss, busy }: SuggestionPanelProps) {
+  const alreadyThere = suggestion.bucket === task.bucket;
+
+  return (
+    <Alert color="violet" variant="light" title="Suggested bucket" mb="md">
+      <Stack gap={8}>
+        <Group gap={8}>
+          <Badge color="violet" radius="xl">
+            {suggestion.bucket}
+          </Badge>
+          {suggestion.is_new && (
+            <Badge color="gray" variant="outline" radius="xl">
+              new bucket
+            </Badge>
+          )}
+          <Text fz="xs" c="dimmed">
+            {Math.round(suggestion.confidence * 100)}% confident
+          </Text>
+        </Group>
+
+        <Text fz="sm">{suggestion.reasoning}</Text>
+
+        {suggestion.is_new && suggestion.keywords.length > 0 && (
+          <Text fz="xs" c="dimmed">
+            Keywords: {suggestion.keywords.join(', ')}
+          </Text>
+        )}
+
+        <Group gap={8}>
+          <Button
+            size="xs"
+            color="violet"
+            disabled={busy || alreadyThere}
+            onClick={() => onAccept(suggestion)}
+          >
+            {suggestion.is_new ? 'Create bucket and move' : 'Move to this bucket'}
+          </Button>
+          <Button size="xs" variant="subtle" color="gray" onClick={onDismiss}>
+            Dismiss
+          </Button>
+          {alreadyThere && (
+            <Text fz="xs" c="dimmed">
+              Already in this bucket.
+            </Text>
+          )}
+        </Group>
+      </Stack>
+    </Alert>
+  );
+}
+
+export function TaskDetailView() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { data: tasks, isLoading } = useTasks();
+
+  const [collapsed, setCollapsed] = useState(false);
+  const [sidebarQuery, setSidebarQuery] = useState('');
+  const [groupTags, setGroupTags] = useState(false);
+  const [suggestion, setSuggestion] = useState<BucketSuggestion | null>(null);
+
+  const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
+  const createBucket = useCreateBucket();
+  const suggest = useSuggestBucket();
+
+  const ordered = useMemo(() => sortTasksByRecency(tasks ?? []), [tasks]);
+  const filtered = useMemo(
+    () => ordered.filter((task) => matchesSidebarQuery(task, sidebarQuery)),
+    [ordered, sidebarQuery],
+  );
+  const selected = useMemo(
+    () => ordered.find((task) => task.id === id) ?? ordered[0],
+    [ordered, id],
+  );
+
+  if (isLoading) {
+    return (
+      <Center style={{ flex: 1 }}>
+        <Loader />
+      </Center>
+    );
+  }
+
+  if (!selected) {
+    return (
+      <Center style={{ flex: 1 }}>
+        <Text c="dimmed">No tasks yet.</Text>
+      </Center>
+    );
+  }
+
+  const fail = (error: unknown) =>
+    notifications.show({ title: 'Action failed', message: errorMessage(error), color: 'red' });
+
+  const acceptSuggestion = (accepted: BucketSuggestion) => {
+    const move = () =>
+      updateTask.mutate(
+        { id: selected.id, patch: { bucket: accepted.bucket } },
+        {
+          onSuccess: () => {
+            setSuggestion(null);
+            notifications.show({
+              title: 'Bucket updated',
+              message: `Moved to ${accepted.bucket}.`,
+              color: 'teal',
+            });
+          },
+          onError: fail,
+        },
+      );
+
+    if (!accepted.is_new) {
+      move();
+      return;
+    }
+    createBucket.mutate(
+      { name: accepted.bucket, keywords: accepted.keywords },
+      { onSuccess: move, onError: fail },
+    );
+  };
+
+  const askForSuggestion = () =>
+    suggest.mutate(selected.id, { onSuccess: setSuggestion, onError: fail });
+
+  const removeTask = () =>
+    deleteTask.mutate(selected.id, {
+      onSuccess: () => {
+        notifications.show({ title: 'Task deleted', message: selected.title, color: 'teal' });
+        navigate('/');
+      },
+      onError: fail,
+    });
+
+  const { slack, other } = splitSlackItems(selected);
+  const sidebarGroups = groupTags ? groupByTag(filtered) : [{ tag: '', tasks: filtered }];
+  const busy = updateTask.isPending || createBucket.isPending;
+
+  const sidebarRow = (task: Task) => {
+    const source = primarySource(task);
+    const active = task.id === selected.id;
+    return (
+      <Group
+        key={task.id}
+        gap={10}
+        wrap="nowrap"
+        px={collapsed ? 0 : 12}
+        py={8}
+        mx={collapsed ? 'auto' : 8}
+        onClick={() => navigate(`/task/${encodeURIComponent(task.id)}`)}
+        title={task.title}
+        justify={collapsed ? 'center' : 'flex-start'}
+        style={{
+          borderRadius: 6,
+          cursor: 'pointer',
+          background: active ? 'var(--mantine-color-gray-1)' : 'transparent',
+        }}
+      >
+        {source ? <SourceDot source={source} /> : <Box w={8} />}
+        {!collapsed && (
+          <Text
+            fz="sm"
+            truncate
+            fw={task.unread ? 700 : 400}
+            c={active ? undefined : 'dimmed'}
+            style={{ opacity: task.unread ? 1 : 0.65 }}
+          >
+            {task.title}
+          </Text>
+        )}
+      </Group>
+    );
+  };
+
+  return (
+    <Box style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <Box
+        style={{
+          width: collapsed ? 56 : 280,
+          flexShrink: 0,
+          background: 'var(--mantine-color-body)',
+          borderRight: '1px solid var(--mantine-color-gray-3)',
+          display: 'flex',
+          flexDirection: 'column',
+          transition: 'width 0.18s ease',
+          overflow: 'hidden',
+        }}
+      >
+        <Group
+          gap={8}
+          wrap="nowrap"
+          px={8}
+          py={12}
+          style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+        >
+          {!collapsed && (
+            <TextInput
+              size="xs"
+              placeholder="Search tasks…"
+              aria-label="Search tasks"
+              leftSection={<IconSearch size={12} />}
+              value={sidebarQuery}
+              onChange={(e) => setSidebarQuery(e.currentTarget.value)}
+              style={{ flex: 1 }}
+            />
+          )}
+          <Tooltip label={collapsed ? 'Expand' : 'Collapse'} withArrow>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              aria-label="Toggle sidebar"
+              onClick={() => setCollapsed((c) => !c)}
+            >
+              {collapsed ? <IconChevronRight size={16} /> : <IconChevronLeft size={16} />}
+            </ActionIcon>
+          </Tooltip>
+        </Group>
+
+        {!collapsed && (
+          <Box px={12} pt={8}>
+            <Button
+              size="xs"
+              variant={groupTags ? 'filled' : 'default'}
+              onClick={() => setGroupTags((g) => !g)}
+            >
+              Group by tags
+            </Button>
+          </Box>
+        )}
+
+        <Box style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
+          {sidebarGroups.map((group) => (
+            <Box key={group.tag || 'all'}>
+              {groupTags && !collapsed && (
+                <Text
+                  fz={10}
+                  fw={700}
+                  c="dimmed"
+                  tt="uppercase"
+                  px={12}
+                  pt={10}
+                  pb={4}
+                  style={{ letterSpacing: '0.05em' }}
+                >
+                  {group.tag}
+                </Text>
+              )}
+              {group.tasks.map(sidebarRow)}
+            </Box>
+          ))}
+        </Box>
+      </Box>
+
+      <Box style={{ flex: 1, overflow: 'auto', padding: '32px 40px' }} data-testid="task-detail">
+        <Box style={{ maxWidth: 720 }}>
+          <Group gap={8} wrap="nowrap">
+            {primarySource(selected) && <SourceDot source={primarySource(selected)!} />}
+            <Badge variant="default" radius="xl">
+              {selected.bucket}
+            </Badge>
+            <Text fz="sm" c="dimmed" ml="auto">
+              {formatAgo(newestItemAt(selected))}
+            </Text>
+          </Group>
+
+          <Text fz={28} fw={700} lh={1.3} my={14}>
+            {selected.title}
+          </Text>
+
+          <Group gap={8} mb="lg">
+            <StatusPill status={selected.status} />
+            {selected.tags.map((tag) => (
+              <Badge key={tag} variant="default" radius="xl">
+                {tag}
+              </Badge>
+            ))}
+          </Group>
+
+          <Group gap="md" mb="lg">
+            <ReadToggle
+              unread={selected.unread}
+              onToggle={() =>
+                updateTask.mutate({ id: selected.id, patch: { unread: !selected.unread } })
+              }
+            />
+            <Button
+              size="xs"
+              variant="light"
+              color="violet"
+              leftSection={<IconSparkles size={14} />}
+              loading={suggest.isPending}
+              onClick={askForSuggestion}
+            >
+              Suggest bucket
+            </Button>
+            {selected.origin === 'manual' && (
+              <Button
+                size="xs"
+                variant="subtle"
+                color="red"
+                leftSection={<IconTrash size={14} />}
+                loading={deleteTask.isPending}
+                onClick={removeTask}
+              >
+                Delete
+              </Button>
+            )}
+          </Group>
+
+          {suggestion && (
+            <SuggestionPanel
+              task={selected}
+              suggestion={suggestion}
+              onAccept={acceptSuggestion}
+              onDismiss={() => setSuggestion(null)}
+              busy={busy}
+            />
+          )}
+
+          {slack.length > 0 && (
+            <Box mb="lg" data-testid="slack-section">
+              <Text
+                fz="xs"
+                fw={700}
+                tt="uppercase"
+                mb={8}
+                data-testid="section-heading"
+                style={{ color: SLACK_ACCENT, letterSpacing: '0.05em' }}
+              >
+                Slack
+              </Text>
+              <Stack gap={8}>
+                {slack.map((item) => (
+                  <ItemCard key={item.id} item={item} />
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          {other.length > 0 && (
+            <Box data-testid="other-section">
+              <Text
+                fz="xs"
+                fw={700}
+                c="dimmed"
+                tt="uppercase"
+                mb={8}
+                data-testid="section-heading"
+                style={{ letterSpacing: '0.05em' }}
+              >
+                Other sources
+              </Text>
+              <Stack gap={8}>
+                {other.map((item) => (
+                  <ItemCard key={item.id} item={item} />
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          {selected.items.length === 0 && (
+            <Text c="dimmed" fz="sm">
+              No items attached yet.
+            </Text>
+          )}
+        </Box>
+      </Box>
+    </Box>
+  );
+}

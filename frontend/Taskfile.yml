@@ -1,0 +1,52 @@
+version: "3"
+
+tasks:
+  deps:
+    desc: Install JS dependencies
+    cmds:
+      - yarn install
+
+  setup:
+    desc: Install dependencies
+    cmds:
+      - task: deps
+
+  dev:
+    desc: Run the Vite dev server on :5173
+    cmds:
+      - yarn dev
+
+  build:
+    desc: Type-check and build for production
+    cmds:
+      - yarn build
+
+  preview:
+    desc: Serve the production build locally
+    cmds:
+      - yarn preview
+
+  test:
+    desc: Run the frontend tests once
+    cmds:
+      - yarn test:run {{.CLI_ARGS}}
+
+  test-watch:
+    desc: Run the frontend tests in watch mode
+    cmds:
+      - yarn test {{.CLI_ARGS}}
+
+  lint:
+    desc: Lint
+    cmds:
+      - yarn lint {{.CLI_ARGS}}
+
+  typecheck:
+    desc: Type-check without emitting
+    cmds:
+      - yarn typecheck
+
+  format:
+    desc: Format
+    cmds:
+      - yarn format

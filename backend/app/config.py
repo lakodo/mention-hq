@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Only used when no OS keychain is available; see app/security/secrets.py.
     secrets_dir: Path = Path.home() / ".config" / "personal-hq"
 
+    # Built frontend. Served by the API when present, so a production run is one process
+    # on one origin; absent in dev, where Vite serves it with hot reload.
+    frontend_dist: Path = BACKEND_DIR.parent / "frontend" / "dist"
+
     sync_on_startup: bool = False
     cors_origins: str = "http://localhost:5173"
 
