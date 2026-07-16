@@ -282,3 +282,38 @@ async def test_app_name_is_configurable(client):
 
 async def test_sync_rejects_an_unknown_source(client):
     assert (await client.post("/sync", json={"source": "nope"})).status_code == 400
+
+
+async def test_a_second_sync_is_refused_while_one_is_running(client, monkeypatch):
+    """Auto-sync runs on a timer while the Sync button stays clickable."""
+    import asyncio
+
+    from app.routers import sync as sync_router
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def slow_sync(db, settings, only=None):
+        started.set()
+        await release.wait()
+        from app.schemas import SyncResult
+
+        return SyncResult(sources_synced=[], tasks_added=0, tasks_updated=0, duration_seconds=0.0)
+
+    monkeypatch.setattr(sync_router, "sync_all", slow_sync)
+
+    first = asyncio.create_task(client.post("/sync", json={}))
+    await started.wait()
+
+    second = await client.post("/sync", json={})
+    assert second.status_code == 409
+    assert "already running" in second.json()["detail"]
+
+    release.set()
+    assert (await first).status_code == 200
+
+
+async def test_the_lock_is_released_after_a_sync_fails(client):
+    """A 400 must not wedge every later sync behind a lock nobody holds."""
+    assert (await client.post("/sync", json={"source": "nope"})).status_code == 400
+    assert (await client.post("/sync", json={"source": "nope"})).status_code == 400
