@@ -75,9 +75,15 @@ export function AppLayout() {
 
   const visible = useMemo(() => filterTasks(tasks ?? [], query), [tasks, query]);
 
+  const appName = settings?.app_name ?? DEFAULT_APP_NAME;
+
+  useEffect(() => {
+    document.title = appName;
+  }, [appName]);
+
   const value: HqContextValue = useMemo(
     () => ({
-      appName: settings?.app_name ?? DEFAULT_APP_NAME,
+      appName,
       query,
       setQuery,
       autoSync,
@@ -88,7 +94,7 @@ export function AppLayout() {
       taskCount: visible.length,
       itemCount: countItems(visible),
     }),
-    [settings?.app_name, query, autoSync, lastSync, sync.isPending, runSync, visible],
+    [appName, query, autoSync, lastSync, sync.isPending, runSync, visible],
   );
 
   return (

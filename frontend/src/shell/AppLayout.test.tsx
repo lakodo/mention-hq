@@ -61,6 +61,21 @@ describe('AppLayout sync', () => {
     expect(await screen.findByText('Mission Control')).toBeInTheDocument();
   });
 
+  it('titles the browser tab from the app settings too', async () => {
+    server.use(
+      http.get('http://localhost:8000/admin/settings', () =>
+        HttpResponse.json({
+          app_name: 'Mission Control',
+          secret_backend: 'keyring',
+          secret_backend_is_keychain: true,
+        }),
+      ),
+    );
+    renderApp('/');
+
+    await waitFor(() => expect(document.title).toBe('Mission Control'));
+  });
+
   it('counts the items and tasks in view', async () => {
     renderApp('/');
     expect(await screen.findByText('6 items across 3 tasks')).toBeInTheDocument();
