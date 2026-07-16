@@ -1,0 +1,26 @@
+display_information:
+  name: Mention Tracker
+  description: Tracks where I'm mentioned across channels and DMs, reads the thread, and can reply/react as me.
+  background_color: "#2c2d30"
+
+oauth_config:
+  scopes:
+    user:
+      - search:read        # search.messages — find mentions anywhere (user-token only)
+      - channels:history   # read public-channel messages/threads
+      - groups:history     # read private-channel messages/threads
+      - im:history         # read DM messages/threads
+      - mpim:history       # read group-DM messages/threads
+      - channels:read      # resolve public channel metadata
+      - groups:read        # resolve private channel metadata
+      - im:read            # list/resolve DMs
+      - mpim:read          # list/resolve group DMs
+      - users:read         # map user IDs -> names
+      - chat:write         # post replies AS me
+      - reactions:write    # add/remove reactions AS me
+      - reactions:read     # read existing reactions on a message
+
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

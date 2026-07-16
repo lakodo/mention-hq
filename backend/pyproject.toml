@@ -38,6 +38,7 @@ package = true
 
 [tool.hatch.build.targets.wheel]
 include = ["app"]
+artifacts = ["app/sources/*.yaml"]
 
 [build-system]
 requires = ["hatchling"]

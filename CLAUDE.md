@@ -121,11 +121,13 @@ Only start servers yourself when nobody else is running the app.
   outside tests. Migrations must not import application code — they outlive it.
 - Sources degrade gracefully: missing credentials means the source reports itself
   unconfigured in `/admin/sources`, it does not fail the sync.
-- HQ reads; it does not author content in a source. No creating Linear issues, no posting
-  Slack messages. The one sanctioned write is marking a thread handled — a Slack reaction
-  from the board — which is an annotation on your own view, not content others receive. The
-  Slack manifest provisions `reactions:write`/`reactions:read` for it; keep that the only
-  exception, and keep it opt-in.
+- HQ reads by default, and writes to a source only on a deliberate action the user takes
+  from the board — never as a side effect of a sync. GitHub, Linear, git, todos and
+  markdown are read-only. Slack is the exception: its manifest provisions write scopes
+  (`chat:write`, `reactions:write`) so the user can react to or reply to a thread from HQ.
+  None of that fires automatically — a sync still only reads. When a write feature lands,
+  gate it behind an explicit user action and make the reach clear; don't let "HQ can post
+  as you" become something that happens without a click.
 - Secrets live in the OS keychain via `app/security/secrets.py` — never in the database, in
   `.env`, or in a log line. The API returns masked hints only.
 - Ids travel in URL paths, so they are restricted to URL-safe characters at construction

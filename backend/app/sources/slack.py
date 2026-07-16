@@ -6,6 +6,7 @@ Needs a *user* token (xoxp-) with the `search:read` scope — a bot token cannot
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import ClassVar
 
 import httpx
@@ -18,30 +19,12 @@ SEARCH_WINDOW_DAYS = 14
 MAX_LABEL_CHARS = 100
 
 
-# Slack has no CLI to read a token from, but it does take a manifest — which spares the
-# user picking scopes out of a long list and getting it subtly wrong.
-#
-# The reactions scopes are provisioned ahead of the feature that uses them: adding a Slack
-# app scope means another round of admin approval, so the scopes an HQ user is likely to
-# want are gathered into the one manifest they get approved. search:read is used today;
-# reactions:write/read back marking a thread handled from the board, which is the one place
-# HQ writes to a source at all.
-MANIFEST = """\
-display_information:
-  name: Personal HQ
-  description: Reads your threads into your personal dashboard
-  background_color: "#2c2d30"
-oauth_config:
-  scopes:
-    user:
-      - search:read
-      - reactions:write
-      - reactions:read
-settings:
-  org_deploy_enabled: false
-  socket_mode_enabled: false
-  token_rotation_enabled: false
-"""
+# Slack takes a manifest — which spares the user picking scopes out of a long list and
+# getting them subtly wrong. It lives beside this file as YAML so it stays editable as the
+# thing it is. Most scopes are provisioned ahead of the features that use them: each added
+# scope means another round of admin approval, so the ones an HQ user is likely to want are
+# in the one manifest they get approved. Today only search:read is exercised (see fetch).
+MANIFEST = (Path(__file__).parent / "slack_manifest.yaml").read_text(encoding="utf-8")
 
 
 class SlackSource(Source):
