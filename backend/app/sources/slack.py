@@ -32,9 +32,10 @@ class SlackSource(Source):
     name = "Slack"
     description = "Threads you wrote in or were mentioned in"
     setup = (
-        "Create an app from the manifest below, install it to your workspace, then paste the "
-        "User OAuth Token (xoxp-) from OAuth & Permissions. If installing needs admin approval, "
-        "the manifest is what you send them to approve. A bot token (xoxb-) cannot search."
+        "Create an app from the manifest below, then open OAuth & Permissions and Install to "
+        "Workspace — the token you want is the User OAuth Token (xoxp-) at the top of that "
+        "page. Not the Client Secret or Signing Secret on the App Credentials page, and not a "
+        "bot token (xoxb-). If installing needs admin approval, the manifest is what they approve."
     )
     setup_url = "https://api.slack.com/apps?new_app=1"
     manifest = MANIFEST
