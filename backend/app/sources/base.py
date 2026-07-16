@@ -99,6 +99,9 @@ class Source(abc.ABC):
     # Prose for the Admin panel: what this needs and where it comes from.
     setup: ClassVar[str] = ""
     setup_url: ClassVar[str] = ""
+    # A config blob the user pastes into the other service to provision access.
+    manifest: ClassVar[str] = ""
+    manifest_hint: ClassVar[str] = ""
 
     def __init__(self, config: dict[str, str] | None = None) -> None:
         self._config = config or {}

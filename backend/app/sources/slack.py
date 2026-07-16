@@ -18,24 +18,55 @@ SEARCH_WINDOW_DAYS = 14
 MAX_LABEL_CHARS = 100
 
 
+# Slack has no CLI to read a token from, but it does take a manifest — which spares the
+# user picking scopes out of a long list and getting it subtly wrong.
+MANIFEST = """\
+display_information:
+  name: Personal HQ
+  description: Reads your threads into your personal dashboard
+  background_color: "#2c2d30"
+oauth_config:
+  scopes:
+    user:
+      - search:read
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
+"""
+
+
 class SlackSource(Source):
     id = "slack"
     name = "Slack"
     description = "Threads you wrote in or were mentioned in"
     setup = (
-        "The fiddliest one. Create an app at api.slack.com/apps → OAuth & Permissions, add "
-        "the search:read *user* scope, install it to your workspace, then copy the User "
-        "OAuth Token (xoxp-). A bot token starts with xoxb- and cannot search."
+        "Two ways in. If you can install an app: create one from the manifest below, install "
+        "it, and paste the User OAuth Token (xoxp-). If your workspace requires admin approval "
+        "you can't get, use your browser session instead — paste the xoxc- token and the xoxd- "
+        "cookie your logged-in Slack already holds. The session route is your own login, needs "
+        "no approval, but breaks when you log out of Slack and may run against your workspace's "
+        "policy — that's your call."
     )
-    setup_url = "https://api.slack.com/apps"
+    setup_url = "https://api.slack.com/apps?new_app=1"
+    manifest = MANIFEST
+    manifest_hint = "Slack → Create an app → From a manifest → paste this"
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
             key="user_token",
-            label="User token",
+            label="Token",
             kind="secret",
-            placeholder="xoxp-…",
-            help="A user token with the search:read scope. A bot token (xoxb-) cannot search.",
+            placeholder="xoxp-… or xoxc-…",
+            help="An app user token (xoxp-), or your browser session token (xoxc-). Not a bot token (xoxb-).",
             help_url="https://api.slack.com/apps",
+        ),
+        ConfigField(
+            key="cookie",
+            label="Session cookie",
+            kind="secret",
+            required=False,
+            placeholder="xoxd-…",
+            help="Only for a session (xoxc-) token: the `d` cookie from your browser. Leave blank for xoxp-.",
         ),
         ConfigField(
             key="user_id",
@@ -47,15 +78,30 @@ class SlackSource(Source):
     ]
 
     def is_configured(self) -> bool:
-        return bool(self.get("user_token"))
+        token = self.get("user_token")
+        if not token:
+            return False
+        # A session token is useless without the cookie that authenticates it.
+        if token.startswith("xoxc-"):
+            return bool(self.get("cookie"))
+        return True
 
     def detail(self) -> str:
         if not self.is_configured():
             return "Not configured"
-        return f"Own messages + items, last {SEARCH_WINDOW_DAYS} days"
+        via = "browser session" if self.get("user_token").startswith("xoxc-") else "app token"
+        return f"Own messages + items, last {SEARCH_WINDOW_DAYS} days · {via}"
 
     def _headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.get('user_token')}"}
+        headers = {"Authorization": f"Bearer {self.get('user_token')}"}
+        cookie = self.get("cookie")
+        if cookie:
+            # Slack authenticates a session token by the paired `d` cookie, not the header
+            # alone. urlencode because the raw value contains characters a header rejects.
+            from urllib.parse import quote
+
+            headers["Cookie"] = f"d={quote(cookie, safe='')}"
+        return headers
 
     async def _call(self, client: httpx.AsyncClient, method: str, params: dict) -> dict:
         response = await client.get(f"{API_ROOT}/{method}", headers=self._headers(), params=params)

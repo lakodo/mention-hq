@@ -12,8 +12,9 @@ import pytest
 from sqlalchemy import select
 
 from app.config import Settings
-from app.models import CONFIRMED, PROPOSED, REJECTED, Bucket, Item, Link, SyncLog, Task
+from app.models import CONFIRMED, PROPOSED, REJECTED, Bucket, Item, Link, SourceInstance, SyncLog, Task
 from app.services import sync as sync_module
+from app.services.sources_factory import Connected
 from app.services.sync import sync_all
 from app.sources.base import RawItem, Source
 
@@ -43,11 +44,23 @@ def settings() -> Settings:
 
 @pytest.fixture
 def use_sources(monkeypatch):
-    def _install(*sources):
-        async def fake_build(db, settings):
-            return list(sources)
+    """Connect the given adapters, each as its own source the user added."""
 
-        monkeypatch.setattr(sync_module, "build_configured_sources", fake_build)
+    def _install(*sources, name: str = "GitHub"):
+        connected = [
+            Connected(
+                instance=SourceInstance(
+                    id=f"github-{index}", kind="github", name=f"{name} {index}", position=index
+                ),
+                source=source,
+            )
+            for index, source in enumerate(sources)
+        ]
+
+        async def fake_build(db):
+            return connected
+
+        monkeypatch.setattr(sync_module, "build_connected", fake_build)
 
     return _install
 
@@ -326,7 +339,9 @@ async def test_sync_writes_one_log_row_per_run(db, settings, use_sources, item):
     assert len(logs) == 1, "one row per run, not per source"
     assert logs[0].error is None
     assert logs[0].tasks_added == 1
-    assert logs[0].sources == [{"source": "github", "items_fetched": 1, "configured": True, "error": None}]
+    assert logs[0].sources == [
+        {"source": "GitHub 0", "kind": "github", "items_fetched": 1, "configured": True, "error": None}
+    ]
 
 
 async def test_sync_log_records_a_source_error_without_failing_the_run(db, settings, use_sources):
@@ -377,3 +392,53 @@ async def test_a_ticket_reference_is_trusted_to_home_an_item(db, settings, use_s
     await sync_all(db, settings)
 
     assert len(await _tasks(db)) == 1, "an explicit reference is strong enough to attach to"
+
+
+async def test_two_accounts_of_the_same_kind_both_sync(db, settings, use_sources, item):
+    """A work GitHub and a personal one are two sources, not a conflict."""
+    use_sources(
+        FakeSource([item("pr", "acme~api~1", title="Work PR")]),
+        FakeSource([item("pr", "me~blog~2", title="Weekend PR")]),
+    )
+
+    await sync_all(db, settings)
+
+    assert {t.title for t in await _tasks(db)} == {"Work PR", "Weekend PR"}
+
+
+async def test_each_item_records_which_account_fetched_it(db, settings, use_sources, item):
+    use_sources(
+        FakeSource([item("pr", "acme~api~1", title="Work PR")]),
+        FakeSource([item("pr", "me~blog~2", title="Weekend PR")]),
+    )
+
+    await sync_all(db, settings)
+
+    owners = {row.id: row.instance_id for row in (await db.execute(select(Item))).scalars().all()}
+    assert owners == {"pr:acme~api~1": "github-0", "pr:me~blog~2": "github-1"}
+
+
+async def test_one_account_failing_leaves_the_others_items_alone(db, settings, use_sources, item):
+    """The regression this guards: keeping items by kind would drop the healthy account's."""
+    work = FakeSource([item("pr", "acme~api~1", title="Work PR")])
+    personal = FakeSource([item("pr", "me~blog~2", title="Weekend PR")])
+    use_sources(work, personal)
+    await sync_all(db, settings)
+
+    use_sources(FakeSource([], fail=True), personal)
+    result = await sync_all(db, settings)
+
+    assert result.errors
+    assert {t.title for t in await _tasks(db)} == {"Work PR", "Weekend PR"}
+
+
+async def test_syncing_one_account_leaves_the_other_untouched(db, settings, use_sources, item):
+    use_sources(
+        FakeSource([item("pr", "acme~api~1", title="Work PR")]),
+        FakeSource([item("pr", "me~blog~2", title="Weekend PR")]),
+    )
+    await sync_all(db, settings)
+
+    await sync_all(db, settings, only="github-1")
+
+    assert {t.title for t in await _tasks(db)} == {"Work PR", "Weekend PR"}

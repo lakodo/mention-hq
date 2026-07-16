@@ -57,59 +57,67 @@ class TestGitHubDetection:
 
 
 class TestDetectEndpoint:
-    async def test_a_detected_secret_is_saved_and_never_returned(self, client, fake_gh, isolated_secrets):
+    async def test_a_detected_secret_is_saved_and_never_returned(
+        self, client, connect, fake_gh, isolated_secrets
+    ):
         fake_gh(LOGGED_IN)
+        source_id = await connect("github", "Work")
 
-        response = await client.post("/admin/sources/github/detect")
+        response = await client.post(f"/admin/sources/{source_id}/detect")
 
         assert response.status_code == 200
         assert "gho_realtoken1234" not in response.text, "the browser must never see the token"
         assert response.json()["applied"]["token"] == "saved"
-        assert isolated_secrets.get("github", "token") == "gho_realtoken1234"
+        assert isolated_secrets.get(source_id, "token") == "gho_realtoken1234"
 
-    async def test_non_secret_values_are_written_and_shown(self, client, fake_gh, isolated_secrets):
+    async def test_non_secret_values_are_written_and_shown(self, client, connect, fake_gh, isolated_secrets):
         fake_gh(LOGGED_IN)
+        source_id = await connect("github", "Work")
 
-        body = (await client.post("/admin/sources/github/detect")).json()
+        body = (await client.post(f"/admin/sources/{source_id}/detect")).json()
 
         assert body["applied"]["username"] == "someone"
         assert body["choices"]["org"] == ["acme", "widgets"]
         assert body["source"]["fields"][0]["value"].endswith("1234")
 
     async def test_detection_leaves_a_source_reporting_what_is_still_missing(
-        self, client, fake_gh, isolated_secrets
+        self, client, connect, fake_gh, isolated_secrets
     ):
         """gh knows the token, not which org you want."""
         fake_gh(LOGGED_IN)
+        source_id = await connect("github", "Work")
 
-        body = (await client.post("/admin/sources/github/detect")).json()
+        body = (await client.post(f"/admin/sources/{source_id}/detect")).json()
 
         assert body["source"]["status"] == "unconfigured"
 
-    async def test_no_cli_changes_nothing(self, client, fake_gh, isolated_secrets):
+    async def test_no_cli_changes_nothing(self, client, connect, fake_gh, isolated_secrets):
         fake_gh({})
+        source_id = await connect("github", "Work")
 
-        body = (await client.post("/admin/sources/github/detect")).json()
+        body = (await client.post(f"/admin/sources/{source_id}/detect")).json()
 
         assert body["available"] is False
         assert body["applied"] == {}
-        assert isolated_secrets.get("github", "token") is None
+        assert isolated_secrets.get(source_id, "token") is None
 
     async def test_unknown_source_404s(self, client):
         assert (await client.post("/admin/sources/nope/detect")).status_code == 404
 
-    async def test_sources_advertise_whether_they_can_detect(self, client):
-        sources = {s["id"]: s for s in (await client.get("/admin/sources")).json()}
+    async def test_the_picker_says_which_kinds_can_detect(self, client):
+        kinds = {k["kind"]: k for k in (await client.get("/admin/source-kinds")).json()}
 
-        assert sources["github"]["detectable"] is True
-        assert sources["todo"]["detectable"] is False
+        assert kinds["github"]["detectable"] is True
+        assert kinds["todo"]["detectable"] is False
 
-    async def test_sources_carry_setup_prose_and_a_link(self, client):
-        sources = {s["id"]: s for s in (await client.get("/admin/sources")).json()}
+    async def test_the_picker_carries_setup_prose_and_a_link(self, client):
+        kinds = {k["kind"]: k for k in (await client.get("/admin/source-kinds")).json()}
 
-        assert sources["slack"]["setup"], "the fiddly ones need instructions"
-        assert sources["slack"]["setup_url"].startswith("https://")
-        assert sources["git"]["setup"], "and the easy ones should say there is nothing to do"
+        assert kinds["slack"]["setup"], "the fiddly ones need instructions"
+        assert kinds["slack"]["setup_url"].startswith("https://")
+        assert kinds["git"]["setup"], "and the easy ones should say there is nothing to do"
+        assert kinds["git"]["needs_credentials"] is False
+        assert kinds["github"]["needs_credentials"] is True
 
 
 async def test_run_tool_survives_a_missing_binary():

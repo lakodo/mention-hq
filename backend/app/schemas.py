@@ -119,9 +119,38 @@ class ConfigFieldOut(BaseModel):
     is_set: bool = False
 
 
-class SourceStatusOut(BaseModel):
-    id: str
+class SourceKindOut(BaseModel):
+    """A source you can add. Drives the Add-a-source picker."""
+
+    kind: str
     name: str
+    description: str
+    setup: str = ""
+    setup_url: str = ""
+    # Paste-into-the-other-service config, when that service takes one.
+    manifest: str = ""
+    manifest_hint: str = ""
+    detectable: bool = False
+    needs_credentials: bool = False
+
+
+class SourceCreate(BaseModel):
+    kind: str
+    name: str = ""
+
+
+class SourcePatch(BaseModel):
+    name: str | None = None
+    position: int | None = None
+
+
+class SourceStatusOut(BaseModel):
+    """A source the user has added, and how it is doing."""
+
+    id: str
+    kind: str
+    name: str
+    position: int = 0
     description: str
     status: str  # "connected" | "error" | "unconfigured"
     detail: str
@@ -130,6 +159,8 @@ class SourceStatusOut(BaseModel):
     fields: list[ConfigFieldOut] = []
     setup: str = ""
     setup_url: str = ""
+    manifest: str = ""
+    manifest_hint: str = ""
     # Whether this source can read its own settings out of a local CLI.
     detectable: bool = False
 
@@ -206,6 +237,7 @@ class SyncRequest(BaseModel):
 
 class SyncLogSourceOut(BaseModel):
     source: str
+    kind: str = ""
     items_fetched: int = 0
     configured: bool = True
     error: str | None = None

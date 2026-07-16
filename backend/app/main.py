@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI
@@ -67,11 +68,29 @@ def _serve_frontend(app: FastAPI) -> None:
     normal state here, not a misconfiguration.
     """
     dist = get_settings().frontend_dist
-    if not (dist / "index.html").exists():
+    index = dist / "index.html"
+    if not index.exists():
         return
 
     app.frontend("/", directory=dist, check_dir=False)
-    log.info("frontend_served", directory=str(dist))
+    log.info("frontend_served", directory=str(dist), stale=_is_stale(index))
+
+
+def _is_stale(index: Path) -> bool:
+    """Whether the build predates the source it was built from.
+
+    A stale dist serves an old UI with no visible sign, which reads as a bug that won't
+    reproduce in dev. Worth a word in the log rather than an afternoon.
+    """
+    source = get_settings().frontend_dist.parent / "src"
+    if not source.is_dir():
+        return False
+
+    newest = max((path.stat().st_mtime for path in source.rglob("*") if path.is_file()), default=0)
+    stale = newest > index.stat().st_mtime
+    if stale:
+        log.warning("frontend_build_is_stale", hint="run `task front:build` to rebuild it")
+    return stale
 
 
 _serve_frontend(app)

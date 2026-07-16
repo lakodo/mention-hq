@@ -4,9 +4,11 @@ import asyncio
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models import Item, SourceInstance
 from app.schemas import (
     AIKeyUpdate,
     AIStatusOut,
@@ -15,12 +17,22 @@ from app.schemas import (
     ConfigFieldOut,
     DetectionOut,
     SourceConfigUpdate,
+    SourceCreate,
+    SourceKindOut,
+    SourcePatch,
     SourceStatusOut,
 )
 from app.security import get_secret_store
 from app.services import ai
 from app.services.app_config import get_app_name, set_app_name, set_value
-from app.services.sources_factory import SOURCE_CLASSES, resolve_config, source_class_by_id
+from app.services.sources_factory import (
+    BY_KIND,
+    SOURCE_CLASSES,
+    Connected,
+    build_connected,
+    new_instance_id,
+    resolve_config,
+)
 from app.sources.base import Source
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -64,28 +76,100 @@ async def set_ai_key(update: AIKeyUpdate) -> AIStatusOut:
     return await ai_status()
 
 
+@router.get("/source-kinds", response_model=list[SourceKindOut])
+async def list_source_kinds() -> list[SourceKindOut]:
+    """What you can connect. The Add-a-source picker is built from this."""
+    return [
+        SourceKindOut(
+            kind=cls.id,
+            name=cls.name,
+            description=cls.description,
+            setup=cls.setup,
+            setup_url=cls.setup_url,
+            manifest=cls.manifest,
+            manifest_hint=cls.manifest_hint,
+            detectable=_can_detect(cls),
+            needs_credentials=any(f.kind == "secret" for f in cls.fields),
+        )
+        for cls in SOURCE_CLASSES
+    ]
+
+
 @router.get("/sources", response_model=list[SourceStatusOut])
 async def list_sources(db: AsyncSession = Depends(get_db)) -> list[SourceStatusOut]:
-    built = [(cls, cls(await resolve_config(db, cls))) for cls in SOURCE_CLASSES]
-    return list(await asyncio.gather(*(_status(source) for _, source in built)))
+    connected = await build_connected(db)
+    return list(await asyncio.gather(*(_status(c) for c in connected)))
 
 
-@router.post("/sources/{source_id}/test", response_model=SourceStatusOut)
-async def test_source(source_id: str, db: AsyncSession = Depends(get_db)) -> SourceStatusOut:
-    source = await _build(db, source_id)
-    return await _status(source)
+@router.post("/sources", response_model=SourceStatusOut, status_code=201)
+async def add_source(payload: SourceCreate, db: AsyncSession = Depends(get_db)) -> SourceStatusOut:
+    source_class = BY_KIND.get(payload.kind)
+    if source_class is None:
+        raise HTTPException(status_code=400, detail=f"Unknown kind: {payload.kind}")
+
+    name = payload.name.strip() or source_class.name
+    instance_id = new_instance_id(payload.kind, name)
+    if await db.get(SourceInstance, instance_id) is not None:
+        raise HTTPException(status_code=409, detail=f"You already have a source called {name}")
+
+    highest = (await db.execute(select(SourceInstance.position))).scalars().all()
+    instance = SourceInstance(
+        id=instance_id, kind=payload.kind, name=name, position=(max(highest, default=0) + 1)
+    )
+    db.add(instance)
+    await db.commit()
+
+    return await _status(Connected(instance=instance, source=source_class({})))
 
 
-@router.post("/sources/{source_id}/detect", response_model=DetectionOut)
-async def detect_source(source_id: str, db: AsyncSession = Depends(get_db)) -> DetectionOut:
+@router.patch("/sources/{instance_id}", response_model=SourceStatusOut)
+async def rename_source(
+    instance_id: str, payload: SourcePatch, db: AsyncSession = Depends(get_db)
+) -> SourceStatusOut:
+    instance = await _require(db, instance_id)
+    if payload.name is not None and payload.name.strip():
+        instance.name = payload.name.strip()
+    if payload.position is not None:
+        instance.position = payload.position
+    await db.commit()
+    return await _status(await _connected(db, instance_id))
+
+
+@router.delete("/sources/{instance_id}", status_code=204)
+async def remove_source(instance_id: str, db: AsyncSession = Depends(get_db)) -> None:
+    instance = await _require(db, instance_id)
+    source_class = BY_KIND[instance.kind]
+
+    secrets = get_secret_store()
+    for spec in source_class.fields:
+        if spec.kind == "secret":
+            secrets.delete(instance_id, spec.key)
+        else:
+            await set_value(db, instance_id, spec.key, None)
+
+    # Items outlive the connection: they may be attached to tasks the user cares about,
+    # and the next sync drops them once nothing fetches them.
+    for item in (await db.execute(select(Item).where(Item.instance_id == instance_id))).scalars().all():
+        item.instance_id = None
+
+    await db.delete(instance)
+    await db.commit()
+
+
+@router.post("/sources/{instance_id}/test", response_model=SourceStatusOut)
+async def test_source(instance_id: str, db: AsyncSession = Depends(get_db)) -> SourceStatusOut:
+    return await _status(await _connected(db, instance_id))
+
+
+@router.post("/sources/{instance_id}/detect", response_model=DetectionOut)
+async def detect_source(instance_id: str, db: AsyncSession = Depends(get_db)) -> DetectionOut:
     """Fill in what a local CLI already knows.
 
     A detected secret goes straight to the keychain: it is never sent to the browser, so
     reading it back out of HQ is no easier than reading it out of the CLI it came from.
     """
-    source_class = source_class_by_id(source_id)
-    if source_class is None:
-        raise HTTPException(status_code=404, detail=f"Unknown source: {source_id}")
+    instance = await _require(db, instance_id)
+    source_class = BY_KIND[instance.kind]
 
     detection = await source_class.detect()
     if not detection.available:
@@ -97,10 +181,10 @@ async def detect_source(source_id: str, db: AsyncSession = Depends(get_db)) -> D
 
     for key, value in detection.values.items():
         if key in secret_keys:
-            secrets.set(source_id, key, value)
+            secrets.set(instance_id, key, value)
             applied[key] = "saved"
         else:
-            await set_value(db, source_id, key, value)
+            await set_value(db, instance_id, key, value)
             applied[key] = value
     await db.commit()
 
@@ -109,19 +193,16 @@ async def detect_source(source_id: str, db: AsyncSession = Depends(get_db)) -> D
         detail=detection.detail,
         applied=applied,
         choices=detection.choices,
-        source=await _status(await _build(db, source_id)),
+        source=await _status(await _connected(db, instance_id)),
     )
 
 
-@router.put("/sources/{source_id}/config", response_model=SourceStatusOut)
+@router.put("/sources/{instance_id}/config", response_model=SourceStatusOut)
 async def update_source_config(
-    source_id: str, update: SourceConfigUpdate, db: AsyncSession = Depends(get_db)
+    instance_id: str, update: SourceConfigUpdate, db: AsyncSession = Depends(get_db)
 ) -> SourceStatusOut:
-    source_class = source_class_by_id(source_id)
-    if source_class is None:
-        raise HTTPException(status_code=404, detail=f"Unknown source: {source_id}")
-
-    known = {spec.key: spec for spec in source_class.fields}
+    instance = await _require(db, instance_id)
+    known = {spec.key: spec for spec in BY_KIND[instance.kind].fields}
     secrets = get_secret_store()
 
     for key, value in update.values.items():
@@ -131,41 +212,36 @@ async def update_source_config(
         if spec.kind == "secret":
             # Straight to the keychain; a secret must never reach the DB or a log line.
             if value:
-                secrets.set(source_id, key, value)
+                secrets.set(instance_id, key, value)
             else:
-                secrets.delete(source_id, key)
+                secrets.delete(instance_id, key)
         else:
-            await set_value(db, source_id, key, value)
+            await set_value(db, instance_id, key, value)
 
     await db.commit()
-    return await _status(await _build(db, source_id))
+    return await _status(await _connected(db, instance_id))
 
 
-@router.delete("/sources/{source_id}/config", response_model=SourceStatusOut)
-async def clear_source_config(source_id: str, db: AsyncSession = Depends(get_db)) -> SourceStatusOut:
-    source_class = source_class_by_id(source_id)
-    if source_class is None:
-        raise HTTPException(status_code=404, detail=f"Unknown source: {source_id}")
-
-    secrets = get_secret_store()
-    for spec in source_class.fields:
-        if spec.kind == "secret":
-            secrets.delete(source_id, spec.key)
-        else:
-            await set_value(db, source_id, spec.key, None)
-
-    await db.commit()
-    return await _status(await _build(db, source_id))
+async def _require(db: AsyncSession, instance_id: str) -> SourceInstance:
+    instance = await db.get(SourceInstance, instance_id)
+    if instance is None or instance.kind not in BY_KIND:
+        raise HTTPException(status_code=404, detail=f"No source: {instance_id}")
+    return instance
 
 
-async def _build(db: AsyncSession, source_id: str) -> Source:
-    source_class = source_class_by_id(source_id)
-    if source_class is None:
-        raise HTTPException(status_code=404, detail=f"Unknown source: {source_id}")
-    return source_class(await resolve_config(db, source_class))
+async def _connected(db: AsyncSession, instance_id: str) -> Connected:
+    instance = await _require(db, instance_id)
+    return Connected(instance=instance, source=BY_KIND[instance.kind](await resolve_config(db, instance)))
 
 
-async def _status(source: Source) -> SourceStatusOut:
+def _can_detect(source_class: type[Source]) -> bool:
+    # __func__, because accessing a classmethod builds a new bound method every time and
+    # `is not` between two of those is always true.
+    return source_class.detect.__func__ is not Source.detect.__func__
+
+
+async def _status(connected: Connected) -> SourceStatusOut:
+    instance, source = connected.instance, connected.source
     configured = source.is_configured()
     error: str | None = None
     if configured:
@@ -192,7 +268,7 @@ async def _status(source: Source) -> SourceStatusOut:
             help=spec.help,
             help_url=spec.help_url,
             value=(
-                secrets.hint(source.id, spec.key) if spec.kind == "secret" else source.get(spec.key) or None
+                secrets.hint(instance.id, spec.key) if spec.kind == "secret" else source.get(spec.key) or None
             ),
             is_set=bool(source.get(spec.key)),
         )
@@ -200,8 +276,10 @@ async def _status(source: Source) -> SourceStatusOut:
     ]
 
     return SourceStatusOut(
-        id=source.id,
-        name=source.name,
+        id=instance.id,
+        kind=instance.kind,
+        name=instance.name,
+        position=instance.position,
         description=source.description,
         status=status,
         detail=source.detail(),
@@ -210,11 +288,7 @@ async def _status(source: Source) -> SourceStatusOut:
         fields=fields,
         setup=source.setup,
         setup_url=source.setup_url,
+        manifest=source.manifest,
+        manifest_hint=source.manifest_hint,
         detectable=_can_detect(type(source)),
     )
-
-
-def _can_detect(source_class: type[Source]) -> bool:
-    # __func__, because accessing a classmethod builds a new bound method every time and
-    # `is not` between two of those is always true.
-    return source_class.detect.__func__ is not Source.detect.__func__

@@ -262,14 +262,15 @@ async def test_manual_task_can_be_deleted_but_auto_cannot(client, db):
     assert (await client.delete(f"/tasks/{created['id']}")).status_code == 204
 
 
-async def test_admin_reports_source_fields_without_leaking_secrets(client, isolated_secrets):
-    isolated_secrets.set("github", "token", "ghp_supersecrettoken1234")
+async def test_admin_reports_source_fields_without_leaking_secrets(client, connect, isolated_secrets):
+    source_id = await connect("github", "Work")
+    isolated_secrets.set(source_id, "token", "ghp_supersecrettoken1234")
 
     sources = {s["id"]: s for s in (await client.get("/admin/sources")).json()}
-    token_field = next(f for f in sources["github"]["fields"] if f["key"] == "token")
+    token_field = next(f for f in sources[source_id]["fields"] if f["key"] == "token")
 
     assert token_field["is_set"] is True
-    assert "supersecret" not in str(sources["github"])
+    assert "supersecret" not in str(sources[source_id])
     assert token_field["value"].endswith("1234")
 
 

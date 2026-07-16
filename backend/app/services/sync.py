@@ -27,8 +27,8 @@ from app.engine import TaskView
 from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, SyncLog, Task
 from app.schemas import SyncResult, SyncSourceResult
 from app.services.buckets import load_matcher
-from app.services.sources_factory import build_configured_sources
-from app.sources.base import STATUS_PRIORITY, TITLE_PRIORITY, RawItem, Source
+from app.services.sources_factory import Connected, build_connected
+from app.sources.base import STATUS_PRIORITY, TITLE_PRIORITY, RawItem
 
 log = structlog.get_logger(__name__)
 
@@ -37,22 +37,12 @@ log = structlog.get_logger(__name__)
 # review, never something that hides an item until someone notices.
 TRUSTED_ENOUGH_TO_HOME = 0.9
 
-# Which source adapter owns each kind of item — "pr" and "issue" both come from GitHub.
-OWNER_BY_ITEM_SOURCE = {
-    "pr": "github",
-    "issue": "github",
-    "linear": "linear",
-    "slack": "slack",
-    "branch": "git",
-    "todo": "todo",
-    "markdown": "markdown",
-    "dust": "dust",
-}
-
 
 @dataclass
 class _FetchOutcome:
-    source_id: str
+    instance_id: str
+    name: str
+    kind: str
     items: list[RawItem]
     error: str | None = None
     configured: bool = True
@@ -68,23 +58,23 @@ class _FetchOutcome:
 
 
 async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None) -> SyncResult:
+    del settings  # connections carry their own settings
     started_at = datetime.now(UTC)
     started = time.perf_counter()
-    sources = await build_configured_sources(db, settings)
+
+    connected = await build_connected(db)
     if only is not None:
-        sources = [s for s in sources if s.id == only]
-        if not sources:
+        connected = [c for c in connected if only in (c.instance.id, c.instance.kind)]
+        if not connected:
             raise ValueError(f"Unknown source: {only}")
 
     # Concurrently: these are independent network calls, and run in series the sync takes
     # as long as every source added together. _fetch never raises, so gather is safe.
-    outcomes = list(await asyncio.gather(*(_fetch(source) for source in sources)))
+    outcomes = list(await asyncio.gather(*(_fetch(c) for c in connected)))
 
-    fetched: list[RawItem] = []
-    for outcome in outcomes:
-        fetched.extend(outcome.items)
+    fetched = [(o.instance_id, item) for o in outcomes for item in o.items]
 
-    refreshed = {o.source_id for o in outcomes if o.authoritative}
+    refreshed = {o.instance_id for o in outcomes if o.authoritative}
     kept = await _stored_items_to_keep(db, refreshed)
 
     added, updated = await _persist(db, _merge(kept, fetched))
@@ -94,36 +84,45 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
     await db.commit()
 
     return SyncResult(
-        sources_synced=[o.source_id for o in outcomes if o.authoritative],
+        sources_synced=[o.name for o in outcomes if o.authoritative],
         tasks_added=added,
         tasks_updated=updated,
         duration_seconds=duration,
-        errors=[f"{o.source_id}: {o.error}" for o in outcomes if o.error],
+        errors=[f"{o.name}: {o.error}" for o in outcomes if o.error],
         results=[
-            SyncSourceResult(source=o.source_id, items_fetched=len(o.items), error=o.error) for o in outcomes
+            SyncSourceResult(source=o.name, items_fetched=len(o.items), error=o.error) for o in outcomes
         ],
     )
 
 
-async def _fetch(source: Source) -> _FetchOutcome:
+async def _fetch(connected: Connected) -> _FetchOutcome:
+    instance, source = connected.instance, connected.source
+    common = {"instance_id": instance.id, "name": instance.name, "kind": instance.kind}
     if not source.is_configured():
-        return _FetchOutcome(source.id, [], configured=False)
+        return _FetchOutcome(**common, items=[], configured=False)
     try:
-        return _FetchOutcome(source.id, await source.fetch())
-    except Exception as exc:  # one broken source must not fail the others
-        log.warning("source_fetch_failed", source=source.id, error=str(exc))
-        return _FetchOutcome(source.id, [], error=str(exc))
+        return _FetchOutcome(**common, items=await source.fetch())
+    except Exception as exc:  # one broken connection must not fail the others
+        log.warning("source_fetch_failed", instance=instance.id, error=str(exc))
+        return _FetchOutcome(**common, items=[], error=str(exc))
 
 
-def _merge(kept: list[RawItem], fetched: list[RawItem]) -> list[RawItem]:
-    by_id = {item.id: item for item in kept}
-    by_id.update({item.id: item for item in fetched})
+def _merge(
+    kept: list[tuple[str | None, RawItem]], fetched: list[tuple[str | None, RawItem]]
+) -> list[tuple[str | None, RawItem]]:
+    by_id = {item.id: (instance_id, item) for instance_id, item in kept}
+    by_id.update({item.id: (instance_id, item) for instance_id, item in fetched})
     return list(by_id.values())
 
 
-async def _stored_items_to_keep(db: AsyncSession, refreshed: set[str]) -> list[RawItem]:
+async def _stored_items_to_keep(db: AsyncSession, refreshed: set[str]) -> list[tuple[str | None, RawItem]]:
+    """Items from connections this run didn't authoritatively refresh.
+
+    Keyed by connection rather than by kind: with two GitHub accounts connected, one of
+    them erroring must not drop the other's items.
+    """
     rows = (await db.execute(select(Item))).scalars().all()
-    return [_row_to_raw(row) for row in rows if OWNER_BY_ITEM_SOURCE.get(row.source) not in refreshed]
+    return [(row.instance_id, _row_to_raw(row)) for row in rows if row.instance_id not in refreshed]
 
 
 def _row_to_raw(row: Item) -> RawItem:
@@ -143,8 +142,9 @@ def _row_to_raw(row: Item) -> RawItem:
     )
 
 
-async def _persist(db: AsyncSession, items: list[RawItem]) -> tuple[int, int]:
-    await _upsert_items(db, items)
+async def _persist(db: AsyncSession, owned: list[tuple[str | None, RawItem]]) -> tuple[int, int]:
+    items = [item for _, item in owned]
+    await _upsert_items(db, owned)
     await _clear_stale_proposals(db)
 
     # Best title source first, then oldest first: whichever item ends up creating a task
@@ -203,11 +203,11 @@ async def _task_views(db: AsyncSession) -> list[TaskView]:
     ]
 
 
-async def _upsert_items(db: AsyncSession, items: list[RawItem]) -> None:
+async def _upsert_items(db: AsyncSession, owned: list[tuple[str | None, RawItem]]) -> None:
     existing = {row.id: row for row in (await db.execute(select(Item))).scalars().all()}
-    incoming = {item.id for item in items}
+    incoming = {item.id for _, item in owned}
 
-    for raw in items:
+    for instance_id, raw in owned:
         payload = {
             **raw.extra,
             "title": raw.title,
@@ -222,6 +222,7 @@ async def _upsert_items(db: AsyncSession, items: list[RawItem]) -> None:
                 Item(
                     id=raw.id,
                     source=raw.source,
+                    instance_id=instance_id,
                     label=raw.label,
                     url=raw.url,
                     context=raw.context,
@@ -236,6 +237,7 @@ async def _upsert_items(db: AsyncSession, items: list[RawItem]) -> None:
             row.url = raw.url
             row.context = raw.context
             row.extra = payload
+            row.instance_id = instance_id
             # New activity un-triages it: catch-up should resurface a thread that moved
             # since you last dealt with it.
             if raw.occurred_at > row.occurred_at:
@@ -387,14 +389,15 @@ def _write_log(
     started_at: datetime,
     duration: float,
 ) -> None:
-    errors = [f"{o.source_id}: {o.error}" for o in outcomes if o.error]
+    errors = [f"{o.name}: {o.error}" for o in outcomes if o.error]
     db.add(
         SyncLog(
             started_at=started_at,
             finished_at=datetime.now(UTC),
             sources=[
                 {
-                    "source": o.source_id,
+                    "source": o.name,
+                    "kind": o.kind,
                     "items_fetched": len(o.items),
                     "configured": o.configured,
                     "error": o.error,

@@ -136,6 +136,23 @@ class Task(Base):
         return [link.item for link in attached]
 
 
+class SourceInstance(Base):
+    """One connected source: a GitHub account, a Slack workspace, a folder of todos.
+
+    A kind ("github") can be connected more than once, because people have a work account
+    and a personal one. Config and credentials are keyed by this row's id, not by kind, so
+    two connections of the same kind never see each other's settings.
+    """
+
+    __tablename__ = "source_instances"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    kind: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
+
+
 class Item(Base):
     """One thing from one source."""
 
@@ -144,6 +161,9 @@ class Item(Base):
     # Stable across syncs: "{source}:{external_id}".
     id: Mapped[str] = mapped_column(String, primary_key=True)
     source: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    # Which connection fetched it. Nullable because a connection can be deleted while its
+    # items are still attached to tasks.
+    instance_id: Mapped[str | None] = mapped_column(String, index=True)
     label: Mapped[str] = mapped_column(Text, nullable=False)
     url: Mapped[str | None] = mapped_column(Text)
     context: Mapped[str | None] = mapped_column(Text)

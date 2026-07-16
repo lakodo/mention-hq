@@ -261,3 +261,35 @@ class TestSlack:
         )
 
         assert (await slack.fetch())[0].label.endswith("…")
+
+
+class TestSlackSessionToken:
+    def test_an_app_token_needs_no_cookie(self):
+        assert SlackSource({"user_token": "xoxp-abc"}).is_configured() is True
+
+    def test_a_session_token_without_a_cookie_is_not_configured(self):
+        source = SlackSource({"user_token": "xoxc-abc"})
+        assert source.is_configured() is False, "the xoxc token is useless without the d cookie"
+
+    def test_a_session_token_with_its_cookie_is_configured(self):
+        assert SlackSource({"user_token": "xoxc-abc", "cookie": "xoxd-xyz"}).is_configured() is True
+
+    def test_the_cookie_is_sent_url_encoded_on_the_d_cookie(self):
+        source = SlackSource({"user_token": "xoxc-abc", "cookie": "xoxd-a b/c%d"})
+        headers = source._headers()
+        assert headers["Cookie"] == "d=xoxd-a%20b%2Fc%25d"
+
+    def test_an_app_token_sends_no_cookie(self):
+        assert "Cookie" not in SlackSource({"user_token": "xoxp-abc"})._headers()
+
+    @respx.mock
+    async def test_a_session_token_actually_searches(self):
+        source = SlackSource({"user_token": "xoxc-abc", "cookie": "xoxd-xyz", "user_id": "U1"})
+        route = respx.get("https://slack.com/api/search.messages").mock(
+            return_value=httpx.Response(200, json=SLACK_SEARCH)
+        )
+
+        items = await source.fetch()
+
+        assert len(items) == 1
+        assert route.calls[0].request.headers["Cookie"] == "d=xoxd-xyz"
