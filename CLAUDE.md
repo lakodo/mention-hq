@@ -87,6 +87,12 @@ task back:sync        # sync from the CLI, no UI
 
 # Specific Guidelines
 
+- **`backend/hq.db` is the user's data, not a scratchpad.** Never drive a manual test
+  against the default database: syncing a source writes tasks, items and config into it,
+  and a demo folder full of invented branches then looks like the user's real work. Point
+  `DATABASE_URL` at a throwaway file and run the API on another port:
+  `DATABASE_URL=sqlite+aiosqlite:////tmp/hq-probe.db uv run uvicorn app.main:app --port 8011`.
+  Same for `app.name` and source config — both live in that database.
 - Python >3.11 typing: `list[]`, `dict[]`, `X | None`. Don't import from `typing` for these.
 - **Comments and docstrings: the default is none.** Add one only when it brings information
   the code cannot: a non-obvious constraint, a gotcha, a rationale. The Why, not the How.
