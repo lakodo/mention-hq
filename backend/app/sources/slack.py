@@ -20,6 +20,12 @@ MAX_LABEL_CHARS = 100
 
 # Slack has no CLI to read a token from, but it does take a manifest — which spares the
 # user picking scopes out of a long list and getting it subtly wrong.
+#
+# The reactions scopes are provisioned ahead of the feature that uses them: adding a Slack
+# app scope means another round of admin approval, so the scopes an HQ user is likely to
+# want are gathered into the one manifest they get approved. search:read is used today;
+# reactions:write/read back marking a thread handled from the board, which is the one place
+# HQ writes to a source at all.
 MANIFEST = """\
 display_information:
   name: Personal HQ
@@ -29,6 +35,8 @@ oauth_config:
   scopes:
     user:
       - search:read
+      - reactions:write
+      - reactions:read
 settings:
   org_deploy_enabled: false
   socket_mode_enabled: false
@@ -41,12 +49,9 @@ class SlackSource(Source):
     name = "Slack"
     description = "Threads you wrote in or were mentioned in"
     setup = (
-        "Two ways in. If you can install an app: create one from the manifest below, install "
-        "it, and paste the User OAuth Token (xoxp-). If your workspace requires admin approval "
-        "you can't get, use your browser session instead — paste the xoxc- token and the xoxd- "
-        "cookie your logged-in Slack already holds. The session route is your own login, needs "
-        "no approval, but breaks when you log out of Slack and may run against your workspace's "
-        "policy — that's your call."
+        "Create an app from the manifest below, install it to your workspace, then paste the "
+        "User OAuth Token (xoxp-) from OAuth & Permissions. If installing needs admin approval, "
+        "the manifest is what you send them to approve. A bot token (xoxb-) cannot search."
     )
     setup_url = "https://api.slack.com/apps?new_app=1"
     manifest = MANIFEST
@@ -54,19 +59,11 @@ class SlackSource(Source):
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
             key="user_token",
-            label="Token",
+            label="User token",
             kind="secret",
-            placeholder="xoxp-… or xoxc-…",
-            help="An app user token (xoxp-), or your browser session token (xoxc-). Not a bot token (xoxb-).",
+            placeholder="xoxp-…",
+            help="A user token with the search:read scope. A bot token (xoxb-) cannot search.",
             help_url="https://api.slack.com/apps",
-        ),
-        ConfigField(
-            key="cookie",
-            label="Session cookie",
-            kind="secret",
-            required=False,
-            placeholder="xoxd-…",
-            help="Only for a session (xoxc-) token: the `d` cookie from your browser. Leave blank for xoxp-.",
         ),
         ConfigField(
             key="user_id",
@@ -78,30 +75,15 @@ class SlackSource(Source):
     ]
 
     def is_configured(self) -> bool:
-        token = self.get("user_token")
-        if not token:
-            return False
-        # A session token is useless without the cookie that authenticates it.
-        if token.startswith("xoxc-"):
-            return bool(self.get("cookie"))
-        return True
+        return bool(self.get("user_token"))
 
     def detail(self) -> str:
         if not self.is_configured():
             return "Not configured"
-        via = "browser session" if self.get("user_token").startswith("xoxc-") else "app token"
-        return f"Own messages + items, last {SEARCH_WINDOW_DAYS} days · {via}"
+        return f"Own messages + items, last {SEARCH_WINDOW_DAYS} days"
 
     def _headers(self) -> dict[str, str]:
-        headers = {"Authorization": f"Bearer {self.get('user_token')}"}
-        cookie = self.get("cookie")
-        if cookie:
-            # A session token is authenticated by its paired `d` cookie, not the header
-            # alone. The value copied from the browser's cookie store is already a valid
-            # cookie value — re-encoding it would double-escape what Slack set. Strip a
-            # `d=` prefix in case the whole "d=xoxd-…" pair was pasted.
-            headers["Cookie"] = f"d={cookie.removeprefix('d=')}"
-        return headers
+        return {"Authorization": f"Bearer {self.get('user_token')}"}
 
     async def _call(self, client: httpx.AsyncClient, method: str, params: dict) -> dict:
         response = await client.get(f"{API_ROOT}/{method}", headers=self._headers(), params=params)
