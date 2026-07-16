@@ -63,6 +63,8 @@ export interface ConfigField {
   required: boolean;
   placeholder: string;
   help: string;
+  /** Where this value comes from, "" when the field speaks for itself. */
+  help_url: string;
   /** For secrets this is a mask like "••••••••1234", never the value itself. */
   value: string | null;
   is_set: boolean;
@@ -70,15 +72,55 @@ export interface ConfigField {
 
 export type SourceConnectionStatus = 'connected' | 'error' | 'unconfigured';
 
+/** A source you can add. Drives the Add-a-source picker. */
+export interface SourceKind {
+  kind: string;
+  name: string;
+  description: string;
+  setup: string;
+  setup_url: string;
+  manifest: string;
+  manifest_hint: string;
+  detectable: boolean;
+  needs_credentials: boolean;
+}
+
+/** One source the user added. Several may share a kind, told apart by `name`. */
 export interface SourceStatus {
   id: string;
+  kind: string;
   name: string;
+  position: number;
   description: string;
   status: SourceConnectionStatus;
   detail: string;
   last_checked_at: string | null;
   error: string | null;
   fields: ConfigField[];
+  setup: string;
+  setup_url: string;
+  manifest: string;
+  manifest_hint: string;
+  detectable: boolean;
+}
+
+export interface SourceCreate {
+  kind: string;
+  name?: string;
+}
+
+export interface SourcePatch {
+  name?: string;
+  position?: number;
+}
+
+/** What a local CLI knew. Secrets it found are saved, never returned. */
+export interface Detection {
+  available: boolean;
+  detail: string;
+  applied: Record<string, string>;
+  choices: Record<string, string[]>;
+  source: SourceStatus | null;
 }
 
 export interface SyncLogSource {

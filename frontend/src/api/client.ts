@@ -6,7 +6,11 @@ import type {
   BucketCreate,
   BucketPatch,
   BucketSuggestion,
+  Detection,
   ItemWithLinks,
+  SourceCreate,
+  SourceKind,
+  SourcePatch,
   SourceStatus,
   SyncLogEntry,
   SyncResult,
@@ -138,13 +142,37 @@ export async function patchSettings(appName: string): Promise<AppSettings> {
   return data;
 }
 
+export async function fetchSourceKinds(): Promise<SourceKind[]> {
+  const { data } = await api.get<SourceKind[]>('/admin/source-kinds');
+  return data;
+}
+
 export async function fetchSources(): Promise<SourceStatus[]> {
   const { data } = await api.get<SourceStatus[]>('/admin/sources');
   return data;
 }
 
+export async function addSource(payload: SourceCreate): Promise<SourceStatus> {
+  const { data } = await api.post<SourceStatus>('/admin/sources', payload);
+  return data;
+}
+
+export async function patchSource(id: string, patch: SourcePatch): Promise<SourceStatus> {
+  const { data } = await api.patch<SourceStatus>(`/admin/sources/${seg(id)}`, patch);
+  return data;
+}
+
+export async function removeSource(id: string): Promise<void> {
+  await api.delete(`/admin/sources/${seg(id)}`);
+}
+
 export async function testSource(id: string): Promise<SourceStatus> {
   const { data } = await api.post<SourceStatus>(`/admin/sources/${seg(id)}/test`);
+  return data;
+}
+
+export async function detectSource(id: string): Promise<Detection> {
+  const { data } = await api.post<Detection>(`/admin/sources/${seg(id)}/detect`);
   return data;
 }
 
@@ -154,11 +182,6 @@ export async function putSourceConfig(
   values: Record<string, string>,
 ): Promise<SourceStatus> {
   const { data } = await api.put<SourceStatus>(`/admin/sources/${seg(id)}/config`, { values });
-  return data;
-}
-
-export async function clearSourceConfig(id: string): Promise<SourceStatus> {
-  const { data } = await api.delete<SourceStatus>(`/admin/sources/${seg(id)}/config`);
   return data;
 }
 

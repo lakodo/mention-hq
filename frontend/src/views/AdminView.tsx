@@ -1,13 +1,20 @@
 import {
   ActionIcon,
+  Anchor,
   Badge,
   Box,
+  Code,
+  CopyButton,
   Button,
   Card,
   Center,
   Group,
   Loader,
+  Menu,
+  Modal,
   PasswordInput,
+  ScrollArea,
+  Select,
   Stack,
   Text,
   TextInput,
@@ -15,18 +22,28 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconChevronDown, IconChevronUp, IconTrash } from '@tabler/icons-react';
+import {
+  IconChevronDown,
+  IconChevronUp,
+  IconPencil,
+  IconPlus,
+  IconTrash,
+} from '@tabler/icons-react';
 import { useState } from 'react';
 import { CONNECTION_META, UNCATEGORIZED } from '../constants';
 import { errorMessage } from '../api/client';
 import {
   useAIStatus,
+  useAddSource,
   useBuckets,
-  useClearSourceConfig,
   useCreateBucket,
   useDeleteBucket,
+  useDetectSource,
   useReassignBuckets,
+  useRemoveSource,
+  useRenameSource,
   useSettings,
+  useSourceKinds,
   useSources,
   useTestSource,
   useUpdateAIKey,
@@ -35,7 +52,7 @@ import {
   useUpdateSourceConfig,
 } from '../api/hooks';
 import { formatAgo } from '../lib/time';
-import type { Bucket, ConfigField, SourceStatus } from '../types';
+import type { Bucket, ConfigField, Detection, SourceKind, SourceStatus } from '../types';
 
 function fail(error: unknown) {
   notifications.show({ title: 'Action failed', message: errorMessage(error), color: 'red' });
@@ -304,6 +321,144 @@ function BucketsSection() {
   );
 }
 
+interface ManifestProps {
+  manifest: string;
+  hint: string;
+}
+
+/** A config blob the user pastes into the other service — must be trivially copyable. */
+function Manifest({ manifest, hint }: ManifestProps) {
+  if (!manifest) return null;
+  return (
+    <Box mt={8}>
+      <Group justify="space-between" mb={4} wrap="nowrap">
+        <Text fz="xs" c="dimmed">
+          {hint}
+        </Text>
+        <CopyButton value={manifest} timeout={1500}>
+          {({ copied, copy }) => (
+            <Button size="compact-xs" variant={copied ? 'light' : 'default'} onClick={copy}>
+              {copied ? 'Copied' : 'Copy'}
+            </Button>
+          )}
+        </CopyButton>
+      </Group>
+      <ScrollArea.Autosize mah={220} type="auto">
+        <Code block fz="xs">
+          {manifest}
+        </Code>
+      </ScrollArea.Autosize>
+    </Box>
+  );
+}
+
+interface SetupHelpProps {
+  setup: string;
+  url: string;
+  label?: string;
+}
+
+/** The answer to "where do I even get this token" — on the card, not in a doc. */
+function SetupHelp({ setup, url, label = 'How to get this' }: SetupHelpProps) {
+  if (!setup && !url) return null;
+  return (
+    <Text fz="xs" c="dimmed" mt={6}>
+      {setup}
+      {url && (
+        <>
+          {setup && ' '}
+          <Anchor href={url} target="_blank" rel="noreferrer" fz="xs">
+            {label}
+          </Anchor>
+        </>
+      )}
+    </Text>
+  );
+}
+
+function AddSourceControl() {
+  const { data: kinds } = useSourceKinds();
+  const add = useAddSource();
+  const [picked, setPicked] = useState<SourceKind | null>(null);
+  const [name, setName] = useState('');
+
+  const pick = (kind: SourceKind) => {
+    setPicked(kind);
+    setName(kind.name);
+  };
+
+  const submit = () => {
+    if (!picked) return;
+    add.mutate(
+      { kind: picked.kind, name: name.trim() },
+      {
+        onSuccess: (source) => {
+          setPicked(null);
+          ok('Source added', `${source.name} is ready to set up.`);
+        },
+        onError: fail,
+      },
+    );
+  };
+
+  return (
+    <>
+      <Menu position="bottom-end" withArrow>
+        <Menu.Target>
+          <Button size="xs" leftSection={<IconPlus size={14} />}>
+            Add a source
+          </Button>
+        </Menu.Target>
+        <Menu.Dropdown style={{ maxWidth: 320 }}>
+          {(kinds ?? []).map((kind) => (
+            <Menu.Item key={kind.kind} onClick={() => pick(kind)}>
+              <Text fz="sm" fw={600}>
+                {kind.name}
+              </Text>
+              <Text fz="xs" c="dimmed">
+                {kind.description}
+              </Text>
+            </Menu.Item>
+          ))}
+        </Menu.Dropdown>
+      </Menu>
+
+      <Modal
+        opened={picked !== null}
+        onClose={() => setPicked(null)}
+        title={picked ? `Add ${picked.name}` : ''}
+        centered
+      >
+        {picked && (
+          <Stack gap="sm">
+            <Text fz="xs" c="dimmed">
+              {picked.description}
+            </Text>
+            <TextInput
+              size="xs"
+              label="Name"
+              description="How you'll tell this one apart from another of the same kind."
+              placeholder={picked.name}
+              value={name}
+              onChange={(e) => setName(e.currentTarget.value)}
+            />
+            <SetupHelp setup={picked.setup} url={picked.setup_url} />
+            <Manifest manifest={picked.manifest} hint={picked.manifest_hint} />
+            <Group justify="flex-end" gap={6}>
+              <Button size="xs" variant="default" onClick={() => setPicked(null)}>
+                Cancel
+              </Button>
+              <Button size="xs" disabled={!name.trim()} loading={add.isPending} onClick={submit}>
+                Add
+              </Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
+    </>
+  );
+}
+
 interface SourceCardProps {
   source: SourceStatus;
 }
@@ -315,12 +470,19 @@ interface SourceCardProps {
 function SourceCard({ source }: SourceCardProps) {
   const test = useTestSource();
   const save = useUpdateSourceConfig();
-  const clear = useClearSourceConfig();
+  const detect = useDetectSource();
+  const rename = useRenameSource();
+  const remove = useRemoveSource();
 
   // Only the keys the user actually edited are sent — an untouched secret must not be cleared.
   const [edits, setEdits] = useState<Record<string, string>>({});
+  const [detection, setDetection] = useState<Detection | null>(null);
+  const [draftName, setDraftName] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+
   const meta = CONNECTION_META[source.status] ?? CONNECTION_META.unconfigured;
   const dirty = Object.keys(edits).length > 0;
+  const choices = detection?.available ? detection.choices : {};
 
   const fieldValue = (field: ConfigField): string =>
     edits[field.key] ?? (field.kind === 'secret' ? '' : (field.value ?? ''));
@@ -340,41 +502,132 @@ function SourceCard({ source }: SourceCardProps) {
       },
     };
 
-    if (field.kind === 'secret') {
+    // `help` is already the input's description; the link is what it can't carry.
+    const help = field.help_url ? (
+      <SetupHelp setup="" url={field.help_url} label="Create a token" />
+    ) : undefined;
+
+    // A tool that knows the options turns a "type it exactly right" field into a pick.
+    const options = choices[field.key];
+    if (options) {
       return (
-        <PasswordInput
+        <Select
           key={field.key}
-          {...common}
-          placeholder={field.is_set ? (field.value ?? '••••••••') : field.placeholder}
-          description={
-            field.is_set ? `Stored${field.help ? ` · ${field.help}` : ''}` : common.description
-          }
+          size="xs"
+          label={field.label}
+          description={field.help || undefined}
+          required={field.required}
+          placeholder="Pick one"
+          data={options}
+          value={fieldValue(field) || null}
+          onChange={(value) => setEdits((prev) => ({ ...prev, [field.key]: value ?? '' }))}
         />
       );
     }
-    return <TextInput key={field.key} {...common} />;
+
+    if (field.kind === 'secret') {
+      return (
+        <Box key={field.key}>
+          <PasswordInput
+            {...common}
+            placeholder={field.is_set ? (field.value ?? '••••••••') : field.placeholder}
+            description={
+              field.is_set ? `Stored${field.help ? ` · ${field.help}` : ''}` : common.description
+            }
+          />
+          {help}
+        </Box>
+      );
+    }
+    return (
+      <Box key={field.key}>
+        <TextInput {...common} />
+        {help}
+      </Box>
+    );
+  };
+
+  const submitName = () => {
+    const next = (draftName ?? '').trim();
+    if (!next || next === source.name) {
+      setDraftName(null);
+      return;
+    }
+    rename.mutate(
+      { id: source.id, patch: { name: next } },
+      {
+        onSuccess: (updated) => {
+          setDraftName(null);
+          ok('Renamed', `Now called ${updated.name}.`);
+        },
+        onError: fail,
+      },
+    );
   };
 
   return (
     <Card withBorder radius="md" p="md" data-testid={`source-card-${source.id}`}>
       <Group gap={10} mb={4} wrap="nowrap">
-        <Text fw={700} fz="sm" style={{ flex: 1 }}>
-          {source.name}
-        </Text>
+        {draftName === null ? (
+          <>
+            <Text fw={700} fz="sm" style={{ flex: 1 }}>
+              {source.name}
+            </Text>
+            <Tooltip label="Rename" withArrow>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                color="gray"
+                aria-label={`Rename ${source.name}`}
+                onClick={() => setDraftName(source.name)}
+              >
+                <IconPencil size={14} />
+              </ActionIcon>
+            </Tooltip>
+          </>
+        ) : (
+          <>
+            <TextInput
+              size="xs"
+              aria-label={`Name for ${source.name}`}
+              value={draftName}
+              onChange={(e) => setDraftName(e.currentTarget.value)}
+              style={{ flex: 1 }}
+            />
+            <Button size="xs" loading={rename.isPending} onClick={submitName}>
+              Rename
+            </Button>
+          </>
+        )}
         <Badge size="sm" color={meta.color} variant="light">
           {meta.label}
         </Badge>
       </Group>
 
-      <Text fz="xs" c="dimmed">
-        {source.description}
-      </Text>
+      <Group gap={6} mb={2}>
+        <Badge size="xs" variant="default">
+          {source.kind}
+        </Badge>
+        <Text fz="xs" c="dimmed">
+          {source.description}
+        </Text>
+      </Group>
+
       <Text fz="xs" mt={4}>
         {source.detail}
       </Text>
       {source.error && (
         <Text fz="xs" c="red" mt={4}>
           {source.error}
+        </Text>
+      )}
+
+      <SetupHelp setup={source.setup} url={source.setup_url} />
+      <Manifest manifest={source.manifest} hint={source.manifest_hint} />
+
+      {detection && (
+        <Text fz="xs" mt={6} c={detection.available ? 'teal' : 'orange'}>
+          {detection.detail}
         </Text>
       )}
 
@@ -392,44 +645,44 @@ function SourceCard({ source }: SourceCardProps) {
         </Text>
         <Group gap={6}>
           {source.fields.length > 0 && (
-            <>
-              <Button
-                size="xs"
-                disabled={!dirty}
-                loading={save.isPending}
-                onClick={() =>
-                  save.mutate(
-                    { id: source.id, values: edits },
-                    {
-                      onSuccess: () => {
-                        setEdits({});
-                        ok('Saved', `${source.name} configuration updated.`);
-                      },
-                      onError: fail,
-                    },
-                  )
-                }
-              >
-                Save
-              </Button>
-              <Button
-                size="xs"
-                variant="subtle"
-                color="red"
-                loading={clear.isPending}
-                onClick={() =>
-                  clear.mutate(source.id, {
+            <Button
+              size="xs"
+              disabled={!dirty}
+              loading={save.isPending}
+              onClick={() =>
+                save.mutate(
+                  { id: source.id, values: edits },
+                  {
                     onSuccess: () => {
                       setEdits({});
-                      ok('Cleared', `${source.name} configuration removed.`);
+                      ok('Saved', `${source.name} configuration updated.`);
                     },
                     onError: fail,
-                  })
-                }
-              >
-                Clear
-              </Button>
-            </>
+                  },
+                )
+              }
+            >
+              Save
+            </Button>
+          )}
+          {source.detectable && (
+            <Button
+              size="xs"
+              variant="light"
+              loading={detect.isPending}
+              onClick={() =>
+                detect.mutate(source.id, {
+                  onSuccess: (result) => {
+                    setDetection(result);
+                    // What the tool filled in server-side wins over a half-typed guess.
+                    if (result.available) setEdits({});
+                  },
+                  onError: fail,
+                })
+              }
+            >
+              Detect
+            </Button>
           )}
           <Button
             size="xs"
@@ -449,6 +702,47 @@ function SourceCard({ source }: SourceCardProps) {
           >
             Test connection
           </Button>
+          <Tooltip label="Remove" withArrow>
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              aria-label={`Remove ${source.name}`}
+              onClick={() => setConfirming(true)}
+            >
+              <IconTrash size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Modal
+            opened={confirming}
+            onClose={() => setConfirming(false)}
+            title={`Remove ${source.name}?`}
+            centered
+          >
+            <Stack gap="sm">
+              <Text fz="sm">
+                Its credentials are deleted with it. Items it already brought in stay on their
+                tasks.
+              </Text>
+              <Group gap={6} justify="flex-end">
+                <Button size="xs" variant="default" onClick={() => setConfirming(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="xs"
+                  color="red"
+                  loading={remove.isPending}
+                  onClick={() =>
+                    remove.mutate(source.id, {
+                      onSuccess: () => ok('Removed', `${source.name} is gone.`),
+                      onError: fail,
+                    })
+                  }
+                >
+                  Remove
+                </Button>
+              </Group>
+            </Stack>
+          </Modal>
         </Group>
       </Group>
     </Card>
@@ -457,19 +751,35 @@ function SourceCard({ source }: SourceCardProps) {
 
 function SourcesSection() {
   const { data: sources, isLoading } = useSources();
-  const connected = (sources ?? []).filter((s) => s.status === 'connected').length;
+  const rows = [...(sources ?? [])].sort((a, b) => a.position - b.position);
+  const connected = rows.filter((s) => s.status === 'connected').length;
 
   return (
     <Box>
-      <Group align="baseline" gap={10} mb="sm">
-        <Title order={5}>Connected sources</Title>
-        <Text fz="xs" c="dimmed">
-          {connected}/{sources?.length ?? 0} connected
-        </Text>
+      <Group justify="space-between" mb="sm">
+        <Group align="baseline" gap={10}>
+          <Title order={5}>Connected sources</Title>
+          {rows.length > 0 && (
+            <Text fz="xs" c="dimmed">
+              {connected}/{rows.length} connected
+            </Text>
+          )}
+        </Group>
+        <AddSourceControl />
       </Group>
 
       {isLoading ? (
         <Loader size="sm" />
+      ) : rows.length === 0 ? (
+        <Card withBorder radius="md" p="lg">
+          <Text fz="sm" fw={600}>
+            No sources yet
+          </Text>
+          <Text fz="xs" c="dimmed" mt={4}>
+            Add a source to start pulling in items. You can add several of the same kind — two
+            GitHub accounts, three todo folders.
+          </Text>
+        </Card>
       ) : (
         <Box
           style={{
@@ -478,7 +788,7 @@ function SourcesSection() {
             gap: 14,
           }}
         >
-          {(sources ?? []).map((source) => (
+          {rows.map((source) => (
             <SourceCard key={source.id} source={source} />
           ))}
         </Box>

@@ -4,6 +4,8 @@ import {
   makeBuckets,
   makeCatchupItems,
   makeSettings,
+  makeSourceFields,
+  makeSourceKinds,
   makeSources,
   makeSyncLog,
   makeTasks,
@@ -12,7 +14,9 @@ import type {
   AIStatus,
   AppSettings,
   Bucket,
+  Detection,
   ItemWithLinks,
+  SourceKind,
   SourceStatus,
   SyncLogEntry,
   Task,
@@ -26,6 +30,9 @@ interface Db {
   buckets: Bucket[];
   catchup: ItemWithLinks[];
   sources: SourceStatus[];
+  sourceKinds: SourceKind[];
+  /** What a local CLI would answer, per kind. A test overwrites it to steer detection. */
+  detections: Record<string, Detection>;
   syncLog: SyncLogEntry[];
   settings: AppSettings;
   ai: AIStatus;
@@ -36,16 +43,38 @@ export const db: Db = {
   buckets: [],
   catchup: [],
   sources: [],
+  sourceKinds: [],
+  detections: {},
   syncLog: [],
   settings: makeSettings(),
   ai: makeAIStatus(),
 };
+
+/** Mirrors the backend's `new_instance_id`: config is keyed by it, so it must match. */
+function instanceId(kind: string, name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return slug ? `${kind}-${slug}` : kind;
+}
 
 export function resetDb(): void {
   db.tasks = makeTasks();
   db.buckets = makeBuckets();
   db.catchup = makeCatchupItems();
   db.sources = makeSources();
+  db.sourceKinds = makeSourceKinds();
+  db.detections = {
+    github: {
+      available: true,
+      detail: 'Read your GitHub CLI login.',
+      applied: { token: 'saved', username: '9hgg' },
+      choices: { org: ['acme', 'widgets'] },
+      source: null,
+    },
+  };
   db.syncLog = makeSyncLog();
   db.settings = makeSettings();
   db.ai = makeAIStatus();
@@ -255,7 +284,85 @@ export const handlers = [
     return HttpResponse.json(db.settings);
   }),
 
+  http.get(`${BASE}/admin/source-kinds`, () => HttpResponse.json(db.sourceKinds)),
+
   http.get(`${BASE}/admin/sources`, () => HttpResponse.json(db.sources)),
+
+  http.post(`${BASE}/admin/sources`, async ({ request }) => {
+    const body = (await request.json()) as { kind: string; name?: string };
+    const kind = db.sourceKinds.find((k) => k.kind === body.kind);
+    if (!kind) return HttpResponse.json({ detail: `Unknown kind: ${body.kind}` }, { status: 400 });
+
+    const name = body.name?.trim() || kind.name;
+    const id = instanceId(body.kind, name);
+    if (db.sources.some((s) => s.id === id)) {
+      return HttpResponse.json(
+        { detail: `You already have a source called ${name}` },
+        { status: 409 },
+      );
+    }
+
+    const source: SourceStatus = {
+      id,
+      kind: kind.kind,
+      name,
+      position: db.sources.length + 1,
+      description: kind.description,
+      status: 'unconfigured',
+      detail: 'Not configured',
+      last_checked_at: null,
+      error: null,
+      fields: makeSourceFields(kind.kind),
+      setup: kind.setup,
+      setup_url: kind.setup_url,
+      manifest: kind.manifest,
+      manifest_hint: kind.manifest_hint,
+      detectable: kind.detectable,
+    };
+    db.sources.push(source);
+    return HttpResponse.json(source, { status: 201 });
+  }),
+
+  http.patch(`${BASE}/admin/sources/:id`, async ({ params, request }) => {
+    const source = db.sources.find((s) => s.id === params.id);
+    if (!source) return notFound(`No source: ${String(params.id)}`);
+    const patch = (await request.json()) as { name?: string; position?: number };
+    if (patch.name?.trim()) source.name = patch.name.trim();
+    if (patch.position !== undefined) source.position = patch.position;
+    return HttpResponse.json(source);
+  }),
+
+  http.delete(`${BASE}/admin/sources/:id`, ({ params }) => {
+    const source = db.sources.find((s) => s.id === params.id);
+    if (!source) return notFound(`No source: ${String(params.id)}`);
+    db.sources = db.sources.filter((s) => s.id !== params.id);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.post(`${BASE}/admin/sources/:id/detect`, ({ params }) => {
+    const source = db.sources.find((s) => s.id === params.id);
+    if (!source) return notFound(`No source: ${String(params.id)}`);
+    const detection = db.detections[source.kind];
+    if (!detection) {
+      return HttpResponse.json({
+        available: false,
+        detail: 'Nothing to detect for this source.',
+        applied: {},
+        choices: {},
+        source: null,
+      });
+    }
+    if (!detection.available) return HttpResponse.json(detection);
+
+    // Detection saves what it found, so the source comes back already filled in.
+    for (const field of source.fields) {
+      const applied = detection.applied[field.key];
+      if (applied === undefined) continue;
+      field.is_set = true;
+      field.value = field.kind === 'secret' ? '••••••••cli1' : applied;
+    }
+    return HttpResponse.json({ ...detection, source });
+  }),
 
   http.post(`${BASE}/admin/sources/:id/test`, ({ params }) => {
     const source = db.sources.find((s) => s.id === params.id);
@@ -284,18 +391,6 @@ export const handlers = [
       ? 'connected'
       : 'unconfigured';
     source.detail = source.status === 'connected' ? 'Configured' : 'Not configured';
-    return HttpResponse.json(source);
-  }),
-
-  http.delete(`${BASE}/admin/sources/:id/config`, ({ params }) => {
-    const source = db.sources.find((s) => s.id === params.id);
-    if (!source) return notFound(`Source not found: ${String(params.id)}`);
-    for (const field of source.fields) {
-      field.value = null;
-      field.is_set = false;
-    }
-    source.status = 'unconfigured';
-    source.detail = 'Not configured';
     return HttpResponse.json(source);
   }),
 

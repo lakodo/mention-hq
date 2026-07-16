@@ -2,7 +2,9 @@ import type {
   AIStatus,
   AppSettings,
   Bucket,
+  ConfigField,
   ItemWithLinks,
+  SourceKind,
   SourceStatus,
   SyncLogEntry,
   Task,
@@ -157,59 +159,156 @@ export function makeCatchupItems(): ItemWithLinks[] {
   ];
 }
 
-export function makeSources(): SourceStatus[] {
+const GITHUB_SETUP = 'Press Detect if you use the GitHub CLI, or create a personal access token.';
+const GITHUB_SETUP_URL = 'https://github.com/settings/tokens/new';
+
+export function makeSourceKinds(): SourceKind[] {
   return [
     {
-      id: 'github',
+      kind: 'github',
       name: 'GitHub',
+      description: 'Your open pull requests and assigned issues',
+      setup: GITHUB_SETUP,
+      setup_url: GITHUB_SETUP_URL,
+      manifest: '',
+      manifest_hint: '',
+      detectable: true,
+      needs_credentials: true,
+    },
+    {
+      kind: 'slack',
+      name: 'Slack',
+      description: 'Threads that name you',
+      setup: 'Create an app, add the search:read user scope, copy the User OAuth Token.',
+      setup_url: 'https://api.slack.com/apps',
+      manifest:
+        'display_information:\n  name: Personal HQ\noauth_config:\n  scopes:\n    user:\n      - search:read',
+      manifest_hint: 'Slack \u2192 Create an app \u2192 From a manifest \u2192 paste this',
+      detectable: false,
+      needs_credentials: true,
+    },
+    {
+      kind: 'todo',
+      name: 'Todo list',
+      description: 'Lines you have not ticked off yet',
+      setup: 'No credentials — it reads a folder on this machine.',
+      setup_url: '',
+      manifest: '',
+      manifest_hint: '',
+      detectable: false,
+      needs_credentials: false,
+    },
+  ];
+}
+
+/** Fields as the backend hands them over: a fresh source has nothing filled in. */
+export function makeSourceFields(kind: string): ConfigField[] {
+  if (kind === 'github') {
+    return [
+      {
+        key: 'token',
+        label: 'Personal access token',
+        kind: 'secret',
+        required: true,
+        placeholder: 'ghp_…',
+        help: 'Needs the `repo` scope.',
+        help_url: GITHUB_SETUP_URL,
+        value: null,
+        is_set: false,
+      },
+      {
+        key: 'username',
+        label: 'Username',
+        kind: 'text',
+        required: true,
+        placeholder: 'your-username',
+        help: '',
+        help_url: '',
+        value: null,
+        is_set: false,
+      },
+      {
+        key: 'org',
+        label: 'Organisation',
+        kind: 'text',
+        required: false,
+        placeholder: 'acme',
+        help: '',
+        help_url: '',
+        value: null,
+        is_set: false,
+      },
+    ];
+  }
+  if (kind === 'slack') {
+    return [
+      {
+        key: 'token',
+        label: 'User token',
+        kind: 'secret',
+        required: true,
+        placeholder: 'xoxp-…',
+        help: '',
+        help_url: '',
+        value: null,
+        is_set: false,
+      },
+    ];
+  }
+  return [
+    {
+      key: 'path',
+      label: 'Folder',
+      kind: 'text',
+      required: true,
+      placeholder: '~/todos',
+      help: '',
+      help_url: '',
+      value: null,
+      is_set: false,
+    },
+  ];
+}
+
+export function makeSources(): SourceStatus[] {
+  const github = makeSourceFields('github');
+  const slack = makeSourceFields('slack');
+  slack[0] = { ...slack[0], value: '••••••••1234', is_set: true };
+
+  return [
+    {
+      id: 'github-work-github',
+      kind: 'github',
+      name: 'Work GitHub',
+      position: 1,
       description: 'Your open pull requests and assigned issues',
       status: 'unconfigured',
       detail: 'Not configured',
       last_checked_at: null,
       error: null,
-      fields: [
-        {
-          key: 'token',
-          label: 'Personal access token',
-          kind: 'secret',
-          required: true,
-          placeholder: 'ghp_…',
-          help: 'Needs the `repo` scope.',
-          value: null,
-          is_set: false,
-        },
-        {
-          key: 'username',
-          label: 'Username',
-          kind: 'text',
-          required: true,
-          placeholder: 'your-username',
-          help: '',
-          value: null,
-          is_set: false,
-        },
-      ],
+      fields: github,
+      setup: GITHUB_SETUP,
+      setup_url: GITHUB_SETUP_URL,
+      manifest: '',
+      manifest_hint: '',
+      detectable: true,
     },
     {
-      id: 'slack',
+      id: 'slack-slack',
+      kind: 'slack',
       name: 'Slack',
+      position: 2,
       description: 'Threads that name you',
       status: 'connected',
       detail: '4 channels watched',
       last_checked_at: minutesAgo(4),
       error: null,
-      fields: [
-        {
-          key: 'token',
-          label: 'User token',
-          kind: 'secret',
-          required: true,
-          placeholder: 'xoxp-…',
-          help: '',
-          value: '••••••••1234',
-          is_set: true,
-        },
-      ],
+      fields: slack,
+      setup: 'Create an app, add the search:read user scope, copy the User OAuth Token.',
+      setup_url: 'https://api.slack.com/apps',
+      manifest: 'display_information:\n  name: Personal HQ',
+      manifest_hint: 'Slack \u2192 From a manifest \u2192 paste this',
+      detectable: false,
     },
   ];
 }

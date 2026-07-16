@@ -6,29 +6,33 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import {
-  clearSourceConfig,
+  addSource,
   confirmLinks,
   createBucket,
   createTask,
   createTaskFromItem,
   deleteBucket,
   deleteTask,
+  detectSource,
   fetchAIStatus,
   fetchBuckets,
   fetchCatchup,
   fetchSettings,
+  fetchSourceKinds,
   fetchSources,
   fetchSyncStatus,
   fetchTask,
   fetchTasks,
   patchBucket,
   patchSettings,
+  patchSource,
   patchTask,
   postSync,
   putAIKey,
   putSourceConfig,
   reassignBuckets,
   rejectLink,
+  removeSource,
   suggestBucket,
   testSource,
   triageItem,
@@ -40,7 +44,11 @@ import type {
   BucketCreate,
   BucketPatch,
   BucketSuggestion,
+  Detection,
   ItemWithLinks,
+  SourceCreate,
+  SourceKind,
+  SourcePatch,
   SourceStatus,
   SyncLogEntry,
   SyncResult,
@@ -57,6 +65,7 @@ export const queryKeys = {
   catchup: () => ['catchup'] as const,
   syncStatus: () => ['sync', 'status'] as const,
   sources: () => ['admin', 'sources'] as const,
+  sourceKinds: () => ['admin', 'source-kinds'] as const,
   settings: () => ['admin', 'settings'] as const,
   ai: () => ['admin', 'ai'] as const,
 };
@@ -87,6 +96,10 @@ export function useSyncStatus(limit?: number): UseQueryResult<SyncLogEntry[]> {
 
 export function useSources(): UseQueryResult<SourceStatus[]> {
   return useQuery({ queryKey: queryKeys.sources(), queryFn: fetchSources });
+}
+
+export function useSourceKinds(): UseQueryResult<SourceKind[]> {
+  return useQuery({ queryKey: queryKeys.sourceKinds(), queryFn: fetchSourceKinds });
 }
 
 export function useSettings(): UseQueryResult<AppSettings> {
@@ -286,6 +299,13 @@ export function useUpdateSettings(): UseMutationResult<AppSettings, Error, strin
   });
 }
 
+function useInvalidateSources() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: queryKeys.sources() });
+  };
+}
+
 function useWriteSourceStatus() {
   const qc = useQueryClient();
   return (result: SourceStatus) => {
@@ -316,9 +336,34 @@ export function useUpdateSourceConfig(): UseMutationResult<
   });
 }
 
-export function useClearSourceConfig(): UseMutationResult<SourceStatus, Error, string> {
+export function useAddSource(): UseMutationResult<SourceStatus, Error, SourceCreate> {
+  const invalidate = useInvalidateSources();
+  return useMutation({ mutationFn: addSource, onSuccess: invalidate });
+}
+
+export function useRenameSource(): UseMutationResult<
+  SourceStatus,
+  Error,
+  { id: string; patch: SourcePatch }
+> {
   const write = useWriteSourceStatus();
-  return useMutation({ mutationFn: clearSourceConfig, onSuccess: write });
+  return useMutation({ mutationFn: ({ id, patch }) => patchSource(id, patch), onSuccess: write });
+}
+
+export function useRemoveSource(): UseMutationResult<void, Error, string> {
+  const invalidate = useInvalidateSources();
+  return useMutation({ mutationFn: removeSource, onSuccess: invalidate });
+}
+
+/** Detection saves what it found server-side, so the refreshed source comes back with it. */
+export function useDetectSource(): UseMutationResult<Detection, Error, string> {
+  const write = useWriteSourceStatus();
+  return useMutation({
+    mutationFn: detectSource,
+    onSuccess: (detection) => {
+      if (detection.source) write(detection.source);
+    },
+  });
 }
 
 export function useUpdateAIKey(): UseMutationResult<AIStatus, Error, string> {
