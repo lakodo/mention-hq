@@ -32,7 +32,7 @@ async def attach(db: AsyncSession, mention_id: str, task_ids: list[str]) -> Ment
             db.add(TaskMention(task_id=task_id, mention_id=mention_id, linked_by="manual"))
     mention.triaged = True
     await db.commit()
-    return await _require_mention(db, mention_id)
+    return await _reload(db, mention_id)
 
 
 async def detach(db: AsyncSession, mention_id: str, task_id: str) -> Mention:
@@ -42,7 +42,7 @@ async def detach(db: AsyncSession, mention_id: str, task_id: str) -> Mention:
     if link is not None:
         await db.delete(link)
     await db.commit()
-    return await _require_mention(db, mention_id)
+    return await _reload(db, mention_id)
 
 
 async def create_task_from_mention(db: AsyncSession, mention_id: str, title: str, bucket: str | None) -> Task:
@@ -70,14 +70,17 @@ async def create_task_from_mention(db: AsyncSession, mention_id: str, title: str
     mention.triaged = True
 
     await db.commit()
-    return await db.get(Task, task.id)
+    # Same staleness trap as _reload: the link row was inserted directly, so the task's
+    # freshly-initialised (empty) mentions collection would be returned as-is.
+    stmt = select(Task).where(Task.id == task.id).execution_options(populate_existing=True)
+    return (await db.execute(stmt)).scalars().one()
 
 
 async def mark_triaged(db: AsyncSession, mention_id: str, triaged: bool = True) -> Mention:
     mention = await _require_mention(db, mention_id)
     mention.triaged = triaged
     await db.commit()
-    return await _require_mention(db, mention_id)
+    return await _reload(db, mention_id)
 
 
 async def _require_mention(db: AsyncSession, mention_id: str) -> Mention:
@@ -85,3 +88,14 @@ async def _require_mention(db: AsyncSession, mention_id: str) -> Mention:
     if mention is None:
         raise LookupError(f"Mention not found: {mention_id}")
     return mention
+
+
+async def _reload(db: AsyncSession, mention_id: str) -> Mention:
+    """Re-read a mention and its links after a write.
+
+    The identity map still holds the `tasks` collection as it was *before* the write, so
+    returning the same object would answer an attach with the links from before it.
+    populate_existing forces the relationship to be re-read.
+    """
+    stmt = select(Mention).where(Mention.id == mention_id).execution_options(populate_existing=True)
+    return (await db.execute(stmt)).scalars().one()

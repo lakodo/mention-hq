@@ -15,6 +15,11 @@ from app.services.buckets import UNCATEGORIZED, load_matcher
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
+async def _load(db: AsyncSession, task_id: str) -> Task | None:
+    stmt = select(Task).where(Task.id == task_id).execution_options(populate_existing=True)
+    return (await db.execute(stmt)).scalars().one_or_none()
+
+
 @router.get("", response_model=list[TaskOut])
 async def list_tasks(
     db: AsyncSession = Depends(get_db),
@@ -68,7 +73,9 @@ async def create_task(payload: TaskCreate, db: AsyncSession = Depends(get_db)) -
     )
     db.add(task)
     await db.commit()
-    return await db.get(Task, task.id)
+    # `mentions` on a just-added instance is unloaded rather than empty, so serialising it
+    # would trigger a lazy load — which raises under async. Re-select to populate it.
+    return await _load(db, task.id)
 
 
 @router.get("/{task_id}", response_model=TaskOut)
@@ -100,8 +107,7 @@ async def patch_task(task_id: str, patch: TaskPatch, db: AsyncSession = Depends(
         task.status = patch.status
 
     await db.commit()
-    await db.refresh(task)
-    return task
+    return await _load(db, task_id)
 
 
 @router.delete("/{task_id}", status_code=204)

@@ -12,11 +12,18 @@ working form for it, with secret fields handled as secrets.
 from __future__ import annotations
 
 import abc
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import ClassVar, Literal
 
 TITLE_PRIORITY = ["linear", "issue", "pr", "markdown", "todo", "branch", "dust", "slack"]
+
+# Mention ids travel in URL paths (/catchup/{id}/attach), and a path segment cannot hold a
+# slash — so a branch called "joris/pay-88" or a repo like "alan-eu/apps#1201" would 404.
+# Ids are therefore restricted to RFC 3986 unreserved characters plus ':' at construction,
+# rather than leaving every route to remember to encode them.
+_URL_UNSAFE = re.compile(r"[^A-Za-z0-9._~:-]")
 
 STATUS_PRIORITY = ["in_progress", "open", "merged", "done"]
 
@@ -51,10 +58,20 @@ class RawMention:
 
     @property
     def id(self) -> str:
-        return f"{self.source}:{self.external_id}"
+        return f"{self.source}:{url_safe(self.external_id)}"
 
     def task_title(self) -> str:
         return self.title or self.label
+
+
+def url_safe(value: str) -> str:
+    """Make an external id safe to put in a URL path segment.
+
+    Collisions are conceivable in theory (`a/b` and `a~b` both become `a~b`) but not in
+    practice: the inputs are repo paths, branch names and channel ids, where `~` doesn't
+    appear. Readability matters more here — these ids show up in logs and URLs.
+    """
+    return _URL_UNSAFE.sub("~", value)
 
 
 class Source(abc.ABC):

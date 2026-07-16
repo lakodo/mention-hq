@@ -24,6 +24,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -171,15 +172,24 @@ class AppConfig(Base):
 
 
 class SyncLog(Base):
+    """One row per sync run, not per source.
+
+    Grouping is global — a task can be built from a GitHub PR *and* a Slack thread — so
+    "how many tasks did Slack add" has no answer. Task counts belong to the run; only
+    the mention count and the error are per-source, and those live in `sources`.
+    """
+
     __tablename__ = "sync_log"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    source: Mapped[str] = mapped_column(String, nullable=False)
     started_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # [{"source": "github", "mentions_fetched": 3, "error": null}, ...]
+    sources: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
     mentions_fetched: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     tasks_added: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     tasks_updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duration_seconds: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     error: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (Index("ix_sync_log_started_at", "started_at"),)

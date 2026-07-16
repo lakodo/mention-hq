@@ -57,6 +57,7 @@ class _FetchOutcome:
 
 
 async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None) -> SyncResult:
+    started_at = datetime.now(UTC)
     started = time.perf_counter()
     sources = await build_configured_sources(db, settings)
     if only is not None:
@@ -75,14 +76,15 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
 
     added, updated = await _persist(db, _merge(kept, fetched))
 
-    await _write_logs(db, outcomes, added, updated)
+    duration = round(time.perf_counter() - started, 2)
+    _write_log(db, outcomes, added, updated, started_at, duration)
     await db.commit()
 
     return SyncResult(
         sources_synced=[o.source_id for o in outcomes if o.authoritative],
         tasks_added=added,
         tasks_updated=updated,
-        duration_seconds=round(time.perf_counter() - started, 2),
+        duration_seconds=duration,
         errors=[f"{o.source_id}: {o.error}" for o in outcomes if o.error],
         results=[
             SyncSourceResult(source=o.source_id, mentions_fetched=len(o.mentions), error=o.error)
@@ -273,17 +275,32 @@ async def _drop_orphan_tasks(db: AsyncSession, resolved: Links) -> None:
         await db.execute(delete(Task).where(Task.id.in_(orphans)))
 
 
-async def _write_logs(db: AsyncSession, outcomes: list[_FetchOutcome], added: int, updated: int) -> None:
-    now = datetime.now(UTC)
-    for outcome in outcomes:
-        db.add(
-            SyncLog(
-                source=outcome.source_id,
-                started_at=now,
-                finished_at=now,
-                mentions_fetched=len(outcome.mentions),
-                tasks_added=added,
-                tasks_updated=updated,
-                error=outcome.error,
-            )
+def _write_log(
+    db: AsyncSession,
+    outcomes: list[_FetchOutcome],
+    added: int,
+    updated: int,
+    started_at: datetime,
+    duration: float,
+) -> None:
+    errors = [f"{o.source_id}: {o.error}" for o in outcomes if o.error]
+    db.add(
+        SyncLog(
+            started_at=started_at,
+            finished_at=datetime.now(UTC),
+            sources=[
+                {
+                    "source": o.source_id,
+                    "mentions_fetched": len(o.mentions),
+                    "configured": o.configured,
+                    "error": o.error,
+                }
+                for o in outcomes
+            ],
+            mentions_fetched=sum(len(o.mentions) for o in outcomes),
+            tasks_added=added,
+            tasks_updated=updated,
+            duration_seconds=duration,
+            error="; ".join(errors) or None,
         )
+    )

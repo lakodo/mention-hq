@@ -175,14 +175,24 @@ class SyncRequest(BaseModel):
     source: str | None = None
 
 
+class SyncLogSourceOut(BaseModel):
+    source: str
+    mentions_fetched: int = 0
+    configured: bool = True
+    error: str | None = None
+
+
 class SyncLogOut(BaseModel):
+    """One entry per sync run — task counts belong to the run, not to any one source."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    source: str
     started_at: datetime
     finished_at: datetime | None
+    sources: list[SyncLogSourceOut]
     mentions_fetched: int
     tasks_added: int
     tasks_updated: int
+    duration_seconds: float
     error: str | None

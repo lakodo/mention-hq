@@ -28,6 +28,8 @@ async def db() -> AsyncIterator[AsyncSession]:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # expire_on_commit=False mirrors app.database.SessionLocal — with it left on, objects
+    # expire at commit and every attribute read becomes lazy IO, which fails under async.
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with session_factory() as session:
         yield session

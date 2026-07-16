@@ -185,7 +185,8 @@ async def test_manual_attach_survives_resync(db, settings, use_sources, mention)
     await sync_all(db, settings)
 
     links = (await db.execute(select(TaskMention).where(TaskMention.task_id == task_a.id))).scalars().all()
-    assert {link.mention_id for link in links} == {"pr:r#1", "todo:t1"}
+    # "r#1" becomes "r~1": ids are made URL-safe at construction (see url_safe).
+    assert {link.mention_id for link in links} == {"pr:r~1", "todo:t1"}
 
 
 async def test_detach_is_not_undone_by_resync(db, settings, use_sources, mention):
@@ -210,15 +211,28 @@ async def test_detach_is_not_undone_by_resync(db, settings, use_sources, mention
     assert {m.id for m in task.mentions} == {"linear:1"}
 
 
-async def test_sync_writes_a_log_row(db, settings, use_sources, mention):
+async def test_sync_writes_one_log_row_per_run(db, settings, use_sources, mention):
     from app.models import SyncLog
 
     use_sources(FakeSource([mention("pr", "r#1")]))
     await sync_all(db, settings)
 
     logs = (await db.execute(select(SyncLog))).scalars().all()
-    assert [log.source for log in logs] == ["github"]
+    assert len(logs) == 1, "one row per run, not per source"
     assert logs[0].error is None
+    assert logs[0].tasks_added == 1
+    assert logs[0].sources == [{"source": "github", "mentions_fetched": 1, "configured": True, "error": None}]
+
+
+async def test_sync_log_records_a_source_error_without_failing_the_run(db, settings, use_sources):
+    from app.models import SyncLog
+
+    use_sources(FakeSource([], fail=True))
+    await sync_all(db, settings)
+
+    log = (await db.execute(select(SyncLog))).scalars().one()
+    assert "GitHub is down" in log.error
+    assert log.sources[0]["error"] == "GitHub is down"
 
 
 async def test_unknown_source_is_rejected(db, settings, use_sources, mention):
