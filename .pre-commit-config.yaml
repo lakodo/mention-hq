@@ -27,17 +27,19 @@ repos:
       # --- backend ---
       # Scoped to the staged files: a repo-wide --fix rewrites files you didn't touch and
       # leaves unrelated changes in the tree, which then block the commit.
+      # ${@#backend/} strips the prefix: pre-commit passes repo-relative paths, and these
+      # run from inside backend/.
       - id: ruff-format
         name: "backend:  format (ruff)"
         language: system
-        entry: bash -c 'cd backend && uv run ruff format "$@" && git add -u' --
+        entry: bash -c 'cd backend && uv run ruff format "${@#backend/}" && cd .. && git add -u' --
         types: [python]
         files: ^backend/
 
       - id: ruff-lint
         name: "backend:  lint (ruff)"
         language: system
-        entry: bash -c 'cd backend && uv run ruff check --fix "$@" && git add -u' --
+        entry: bash -c 'cd backend && uv run ruff check --fix "${@#backend/}" && cd .. && git add -u' --
         types: [python]
         files: ^backend/
 
