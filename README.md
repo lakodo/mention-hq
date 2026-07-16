@@ -31,12 +31,47 @@ task setup          # installs backend + frontend, creates and migrates the data
 task dev            # backend on :8000, frontend on :5173
 ```
 
-Work from inside `devbox shell` (or let direnv activate it). The git hooks call `uv`,
-`yarn` and `ruff` from that environment, so a `git commit` in a plain shell fails on hooks
-that cannot find their tools. `task hooks` installs them.
+Work from inside `devbox shell` (or let direnv activate it). Node, yarn, uv and ruff come
+from devbox and are not on your global PATH — outside it, `yarn dev` and `git commit` both
+fail on missing tools rather than on anything being wrong. `task hooks` installs the git
+hooks.
 
 Then open http://localhost:5173, go to **Admin**, and connect a source. Nothing is
 configured out of the box and nothing is assumed about how you work.
+
+### Running one side at a time
+
+`task dev` runs both, interleaving their logs. To watch one, use two terminals:
+
+```bash
+task back:dev     # terminal 1 — http://localhost:8000, API docs at /docs
+task front:dev    # terminal 2 — http://localhost:5173, needs the backend up
+```
+
+The frontend is only a client: it holds no data and talks to the backend from your browser.
+If the UI loads but every panel is empty, the backend isn't running.
+
+The backend needs no frontend at all. **http://localhost:8000/docs** is a full interactive
+UI for every endpoint — connect a source, sync, read the board — which is the quickest way
+to see what the app does, and the way to tell a frontend bug from a backend one.
+
+### Frontend on its own
+
+```bash
+task front:deps       # yarn install
+task front:dev        # dev server on :5173, hot reload
+task front:test       # vitest, once
+task front:test-watch # vitest, watching
+task front:lint
+task front:typecheck
+task front:build      # type-check and production build
+```
+
+It expects the API at `http://localhost:8000`. Point it elsewhere with `VITE_API_URL`:
+
+```bash
+VITE_API_URL=http://localhost:8011 task front:dev
+```
 
 No credentials go in a file. You paste tokens into Admin and they are stored in your OS
 keychain (Keychain on macOS, Credential Locker on Windows, Secret Service on Linux). The
