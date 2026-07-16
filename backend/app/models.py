@@ -1,19 +1,16 @@
 """SQLAlchemy ORM models.
 
-The core idea: a **task** is a subject you need to handle. It is mentioned across many
-**sources** — a PR, a Slack thread, a Linear issue, a local todo.
+The vocabulary, used consistently across the codebase:
 
-A mention can belong to **several** tasks, not one. A Slack thread arguing about both the
-refund bug and the webhook retry is genuinely about both, and forcing it to pick loses
-information. So tasks and mentions are many-to-many through `task_mentions`.
+  Item   — one thing from one source: a PR, a Slack thread, a todo line, a branch.
+  Task   — a subject you handle. Items attach to it.
+  Bucket — a topic column on the board, grouping tasks.
 
-Links come from two places, and they must not fight:
-  - sync recomputes automatic links every run (see services/grouping.py);
-  - the user attaches and detaches by hand in the catch-up screen.
+An item can attach to several tasks: a chat thread that argues about two subjects is
+about both, and making it pick one loses information.
 
-`link_overrides` records the user's *intent* permanently, and every sync replays it over
-the freshly computed automatic links. That is why a manual attach survives a resync, and
-why a detached mention doesn't silently come back.
+`app/engine/` proposes links; it never decides. A proposal is a Link in the `proposed`
+state, which the user confirms or rejects in catch-up.
 """
 
 from __future__ import annotations
@@ -31,7 +28,6 @@ from sqlalchemy import (
     String,
     Text,
     TypeDecorator,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -40,11 +36,10 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 class UTCDateTime(TypeDecorator):
     """A datetime column that is always timezone-aware UTC in Python.
 
-    SQLite has no timezone type: it stores what you give it and hands back a *naive*
-    datetime. Sync compares stored timestamps against freshly-fetched aware ones, and
-    naive-vs-aware comparison raises TypeError — so without this every second sync
-    would crash. Normalising on the way in and out keeps that bug impossible rather
-    than relying on every call site to remember.
+    SQLite has no timezone type: it stores what it is given and returns a naive datetime.
+    Sync compares stored timestamps against freshly-fetched aware ones, and comparing
+    naive to aware raises TypeError. Normalising in both directions here keeps that
+    impossible, rather than relying on every call site to remember.
     """
 
     impl = DateTime(timezone=True)
@@ -67,31 +62,44 @@ class Base(DeclarativeBase):
     pass
 
 
-class TaskMention(Base):
-    """Materialised link. Rebuilt every sync from grouping + link_overrides."""
+PROPOSED = "proposed"
+CONFIRMED = "confirmed"
+REJECTED = "rejected"
 
-    __tablename__ = "task_mentions"
+
+class Link(Base):
+    """An item attached to a task, and how much we believe in it.
+
+    The state records who decided:
+
+      proposed  — an engine's guess. Rebuilt from scratch on every sync, so an engine is
+                  free to change its mind. Shows on the board and lands in catch-up.
+      confirmed — the user said yes. Sync never touches it.
+      rejected  — the user said no.
+
+    Rejections are kept as rows so an engine cannot re-propose a dismissed link: without
+    them "no" would only hold until the next sync.
+    """
+
+    __tablename__ = "links"
 
     task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True)
-    mention_id: Mapped[str] = mapped_column(ForeignKey("mentions.id", ondelete="CASCADE"), primary_key=True)
-    # "auto" — inferred by grouping; "manual" — the user said so.
-    linked_by: Mapped[str] = mapped_column(String, nullable=False, default="auto")
+    item_id: Mapped[str] = mapped_column(ForeignKey("items.id", ondelete="CASCADE"), primary_key=True)
+    state: Mapped[str] = mapped_column(String, nullable=False, default=PROPOSED, index=True)
+    # Which engine proposed it, and why — shown in catch-up so a proposal is arguable
+    # rather than magic.
+    engine: Mapped[str | None] = mapped_column(String)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
+    task: Mapped[Task] = relationship(lazy="selectin", overlaps="links")
+    item: Mapped[Item] = relationship(lazy="selectin", back_populates="links", overlaps="links")
 
-class LinkOverride(Base):
-    """A user decision about one mention/task pair, replayed over every future sync."""
-
-    __tablename__ = "link_overrides"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    mention_id: Mapped[str] = mapped_column(String, nullable=False)
-    task_id: Mapped[str] = mapped_column(String, nullable=False)
-    # "attach" — force the link on; "detach" — force it off even if grouping infers it.
-    action: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
-
-    __table_args__ = (UniqueConstraint("mention_id", "task_id", name="uq_link_override_pair"),)
+    @property
+    def is_user_decision(self) -> bool:
+        return self.state in (CONFIRMED, REJECTED)
 
 
 class Task(Base):
@@ -105,51 +113,66 @@ class Task(Base):
     status: Mapped[str] = mapped_column(String, nullable=False, default="open")
     tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     unread: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    # "auto" tasks are derived from mentions and vanish when their mentions do.
-    # "manual" tasks were created by the user and outlive their mentions.
+    # "auto" tasks are derived from items and vanish when their items do.
+    # "manual" tasks were created by the user and outlive their items.
     origin: Mapped[str] = mapped_column(String, nullable=False, default="auto")
     title_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     synced_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
 
-    mentions: Mapped[list[Mention]] = relationship(
-        secondary="task_mentions",
-        back_populates="tasks",
+    links: Mapped[list[Link]] = relationship(
+        cascade="all, delete-orphan",
         lazy="selectin",
-        order_by="Mention.occurred_at.desc()",
+        primaryjoin="Task.id == Link.task_id",
     )
 
     __table_args__ = (Index("ix_tasks_bucket", "bucket"),)
 
+    @property
+    def items(self) -> list[Item]:
+        """Items actually on this task — a rejected link is not an attachment."""
+        attached = [link for link in self.links if link.state != REJECTED]
+        attached.sort(key=lambda link: link.item.occurred_at, reverse=True)
+        return [link.item for link in attached]
 
-class Mention(Base):
-    __tablename__ = "mentions"
 
-    # Stable across syncs: "{source}:{external_id}", e.g. "pr:alan-eu/alan-apps#1201".
+class Item(Base):
+    """One thing from one source."""
+
+    __tablename__ = "items"
+
+    # Stable across syncs: "{source}:{external_id}".
     id: Mapped[str] = mapped_column(String, primary_key=True)
     source: Mapped[str] = mapped_column(String, nullable=False, index=True)
     label: Mapped[str] = mapped_column(Text, nullable=False)
     url: Mapped[str | None] = mapped_column(Text)
     context: Mapped[str | None] = mapped_column(Text)
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
-    # False until the user has dealt with it in the catch-up screen. Drives that inbox.
+    # False until you've ruled on this item in catch-up. Drives that inbox.
     triaged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
     extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
-    tasks: Mapped[list[Task]] = relationship(
-        secondary="task_mentions", back_populates="mentions", lazy="selectin"
+    links: Mapped[list[Link]] = relationship(
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        primaryjoin="Item.id == Link.item_id",
+        back_populates="item",
     )
 
-    __table_args__ = (Index("ix_mentions_occurred_at", "occurred_at"),)
+    __table_args__ = (Index("ix_items_occurred_at", "occurred_at"),)
+
+    @property
+    def tasks(self) -> list[Task]:
+        return [link.task for link in self.links if link.state != REJECTED]
 
 
 class Bucket(Base):
-    """A topic column on the board.
+    """A topic column on the board, grouping tasks.
 
-    There are no built-in buckets: HQ cannot know what you work on, and guessing would fill
-    the board with someone else's taxonomy. You create them in Admin; until then everything
-    lands in the implicit "Uncategorized" bucket, which is not a row here.
+    Buckets are user-defined: HQ cannot know what someone works on, and a wrong guess fills
+    the board with a taxonomy that isn't theirs. A task matching no bucket falls to
+    "Uncategorized", which is implicit and has no row here.
     """
 
     __tablename__ = "buckets"
@@ -176,7 +199,7 @@ class SyncLog(Base):
 
     Grouping is global — a task can be built from a GitHub PR *and* a Slack thread — so
     "how many tasks did Slack add" has no answer. Task counts belong to the run; only
-    the mention count and the error are per-source, and those live in `sources`.
+    the item count and the error are per-source, and those live in `sources`.
     """
 
     __tablename__ = "sync_log"
@@ -184,9 +207,9 @@ class SyncLog(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     started_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
-    # [{"source": "github", "mentions_fetched": 3, "error": null}, ...]
+    # [{"source": "github", "items_fetched": 3, "error": null}, ...]
     sources: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
-    mentions_fetched: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    items_fetched: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     tasks_added: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     tasks_updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     duration_seconds: Mapped[float] = mapped_column(Float, default=0, nullable=False)

@@ -34,8 +34,7 @@ exist. Decide where it belongs.
 
 Prefer an existing bucket. Only propose a new one when the task clearly belongs to an \
 ongoing area of work that none of the existing buckets covers, and that you'd expect to \
-recur. A bucket is a lasting theme like "Payments" or "Onboarding", not a restatement of \
-one task.
+recur. A bucket is a lasting area of work, not a restatement of one task.
 
 If you cannot place it confidently, say so and leave it uncategorised. A wrong bucket is \
 worse than no bucket: it hides work in a column the person isn't looking at."""
@@ -112,8 +111,8 @@ async def suggest_bucket(db: AsyncSession, task: Task) -> BucketSuggestion:
     matcher = await load_matcher(db)
     existing = [rule.name for rule in matcher.rules]
 
-    sources = sorted({mention.source for mention in task.mentions})
-    mention_lines = "\n".join(f"- [{m.source}] {m.label}" for m in task.mentions[:8])
+    sources = sorted({item.source for item in task.items})
+    mention_lines = "\n".join(f"- [{m.source}] {m.label}" for m in task.items[:8])
 
     prompt = f"""Existing buckets: {", ".join(existing) if existing else "none yet"}
 

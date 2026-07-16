@@ -7,7 +7,7 @@ from typing import ClassVar
 
 import httpx
 
-from app.sources.base import ConfigField, RawMention, Source
+from app.sources.base import ConfigField, RawItem, Source
 from app.sources.keys import all_reference_keys
 
 API_URL = "https://api.linear.app/graphql"
@@ -98,16 +98,16 @@ class LinearSource(Source):
         data = await self._post(client, VIEWER_QUERY)
         return data["viewer"]["id"]
 
-    async def fetch(self) -> list[RawMention]:
+    async def fetch(self) -> list[RawItem]:
         if not self.is_configured():
             return []
         async with httpx.AsyncClient(timeout=20) as client:
             user_id = await self._user_id(client)
             data = await self._post(client, MY_ISSUES_QUERY, {"userId": user_id})
-        return [_to_mention(node) for node in data["issues"]["nodes"]]
+        return [_to_item(node) for node in data["issues"]["nodes"]]
 
 
-def _to_mention(node: dict) -> RawMention:
+def _to_item(node: dict) -> RawItem:
     identifier = node["identifier"]
     labels = [label["name"] for label in node.get("labels", {}).get("nodes", [])]
     state = node.get("state") or {}
@@ -117,7 +117,7 @@ def _to_mention(node: dict) -> RawMention:
     if node.get("branchName"):
         identity.add(node["branchName"].upper())
 
-    return RawMention(
+    return RawItem(
         source="linear",
         external_id=node["id"],
         label=node["title"],

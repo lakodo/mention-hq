@@ -1,7 +1,7 @@
-"""Extraction of the keys that let grouping link mentions across sources.
+"""Extraction of the keys that let engines link items across sources.
 
 Two kinds of key matter in practice:
-  - Linear-style issue refs ("PAY-88"), which show up in branch names, PR titles and Slack.
+  - tracker issue keys (LETTERS-123), which show up in branch names, PR titles and chat.
   - GitHub PR/issue refs, both as URLs and as "#1201" shorthand.
 """
 

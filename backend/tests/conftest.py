@@ -8,10 +8,10 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.database import get_db
+from app.database import enable_sqlite_foreign_keys, get_db
 from app.main import app
 from app.models import Base
-from app.sources.base import RawMention
+from app.sources.base import RawItem
 
 
 @pytest_asyncio.fixture
@@ -25,6 +25,8 @@ async def db() -> AsyncIterator[AsyncSession]:
         poolclass=StaticPool,
         connect_args={"check_same_thread": False},
     )
+    # Mirror production: without the pragma, SQLite silently ignores every FK cascade.
+    enable_sqlite_foreign_keys(engine)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -53,11 +55,11 @@ def now() -> datetime:
 
 
 @pytest.fixture
-def mention(now):
-    def _make(source: str, external_id: str, **kwargs) -> RawMention:
+def item(now):
+    def _make(source: str, external_id: str, **kwargs) -> RawItem:
         kwargs.setdefault("label", f"{source} {external_id}")
         kwargs.setdefault("occurred_at", now - timedelta(minutes=10))
-        return RawMention(source=source, external_id=external_id, **kwargs)
+        return RawItem(source=source, external_id=external_id, **kwargs)
 
     return _make
 

@@ -1,5 +1,5 @@
 from __future__ import annotations
 
-from app.sources.base import ConfigField, RawMention, Source, SourceNotConfigured
+from app.sources.base import ConfigField, RawItem, Source, SourceNotConfigured
 
-__all__ = ["ConfigField", "RawMention", "Source", "SourceNotConfigured"]
+__all__ = ["ConfigField", "RawItem", "Source", "SourceNotConfigured"]

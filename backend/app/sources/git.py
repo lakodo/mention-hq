@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import ClassVar
 
-from app.sources.base import ConfigField, RawMention, Source, SourceNotConfigured
+from app.sources.base import ConfigField, RawItem, Source, SourceNotConfigured
 from app.sources.keys import all_reference_keys
 
 DEFAULT_MAX_AGE_DAYS = 30
@@ -28,7 +28,7 @@ class GitSource(Source):
             key="branch_prefix",
             label="Your branch prefix",
             required=False,
-            placeholder="joris/",
+            placeholder="your-name/",
             help="Branches with this prefix are always included, however old",
         ),
         ConfigField(
@@ -59,19 +59,19 @@ class GitSource(Source):
             if not (Path(repo) / ".git").exists():
                 raise SourceNotConfigured(f"Not a git repository: {repo}")
 
-    async def fetch(self) -> list[RawMention]:
+    async def fetch(self) -> list[RawItem]:
         if not self.is_configured():
             return []
         results = await asyncio.gather(
             *(self._fetch_repo(repo) for repo in self._repos), return_exceptions=True
         )
-        mentions: list[RawMention] = []
+        items: list[RawItem] = []
         for result in results:
             if not isinstance(result, BaseException):
-                mentions.extend(result)
-        return mentions
+                items.extend(result)
+        return items
 
-    async def _fetch_repo(self, repo_path: str) -> list[RawMention]:
+    async def _fetch_repo(self, repo_path: str) -> list[RawItem]:
         proc = await asyncio.create_subprocess_exec(
             "git",
             "-C",
@@ -91,7 +91,7 @@ class GitSource(Source):
         cutoff = datetime.now(UTC) - timedelta(days=self._max_age_days)
         prefix = self.get("branch_prefix")
 
-        mentions = []
+        items = []
         for line in stdout.decode().splitlines():
             if "\t" not in line:
                 continue
@@ -99,18 +99,18 @@ class GitSource(Source):
             committed = datetime.fromisoformat(raw_date.strip()).astimezone(UTC)
             if not (prefix and branch.startswith(prefix)) and committed < cutoff:
                 continue
-            mentions.append(
-                RawMention(
+            items.append(
+                RawItem(
                     source="branch",
                     external_id=f"{repo_name}:{branch}",
                     label=f"[{repo_name}] {branch}",
                     occurred_at=committed,
                     context=repo_name,
                     status="in_progress",
-                    # Branch names carry the ticket ref in most conventions
-                    # (joris/pay-88-refunds), which is the cheapest link we get.
+                    # Most branch-naming conventions embed the ticket ref, which is the
+                    # cheapest cross-source link available.
                     reference_keys=all_reference_keys(branch.upper()),
                     extra={"repo_path": repo_path, "repo_name": repo_name, "branch": branch},
                 )
             )
-        return mentions
+        return items

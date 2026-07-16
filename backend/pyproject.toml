@@ -20,6 +20,7 @@ dependencies = [
   # for headless machines with no Secret Service.
   "keyring>=25.4",
   "cryptography>=43",
+  "rapidfuzz>=3.14.5",
 ]
 
 [dependency-groups]

@@ -10,7 +10,7 @@ from typing import ClassVar
 
 import httpx
 
-from app.sources.base import ConfigField, RawMention, Source
+from app.sources.base import ConfigField, RawItem, Source
 from app.sources.keys import all_reference_keys
 
 API_ROOT = "https://slack.com/api"
@@ -45,7 +45,7 @@ class SlackSource(Source):
     def detail(self) -> str:
         if not self.is_configured():
             return "Not configured"
-        return f"Own messages + mentions, last {SEARCH_WINDOW_DAYS} days"
+        return f"Own messages + items, last {SEARCH_WINDOW_DAYS} days"
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.get('user_token')}"}
@@ -72,10 +72,10 @@ class SlackSource(Source):
         payload = await self._call(client, "auth.test", {})
         return payload["user_id"]
 
-    async def fetch(self) -> list[RawMention]:
+    async def fetch(self) -> list[RawItem]:
         if not self.is_configured():
             return []
-        by_id: dict[str, RawMention] = {}
+        by_id: dict[str, RawItem] = {}
         async with httpx.AsyncClient(timeout=20) as client:
             user_id = await self._user_id(client)
             queries = [f"from:<@{user_id}>", f"to:<@{user_id}>"]
@@ -86,9 +86,9 @@ class SlackSource(Source):
                     {"query": f"{query} after:{_after_date()}", "count": 50, "sort": "timestamp"},
                 )
                 for match in payload.get("messages", {}).get("matches", []):
-                    mention = _to_mention(match)
+                    item = _to_item(match)
                     # The same thread surfaces once per matching message; keep one per thread.
-                    by_id.setdefault(mention.id, mention)
+                    by_id.setdefault(item.id, item)
         return list(by_id.values())
 
 
@@ -98,7 +98,7 @@ def _after_date() -> str:
     return (datetime.now(UTC) - timedelta(days=SEARCH_WINDOW_DAYS)).strftime("%Y-%m-%d")
 
 
-def _to_mention(match: dict) -> RawMention:
+def _to_item(match: dict) -> RawItem:
     channel = match.get("channel", {}) or {}
     channel_name = channel.get("name") or channel.get("id") or "dm"
     text = (match.get("text") or "").strip()
@@ -107,7 +107,7 @@ def _to_mention(match: dict) -> RawMention:
 
     label = text[:MAX_LABEL_CHARS] + ("…" if len(text) > MAX_LABEL_CHARS else "")
 
-    return RawMention(
+    return RawItem(
         source="slack",
         external_id=f"{channel.get('id', 'unknown')}:{thread_ts}",
         label=label or "(no text)",

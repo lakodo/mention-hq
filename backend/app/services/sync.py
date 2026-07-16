@@ -1,14 +1,18 @@
-"""Sync orchestration: fetch every source, group into tasks, persist.
+"""Sync: fetch every source, run each item through the engine, persist.
 
-Grouping runs across *all* sources at once, not per source — a PR only merges with its
-Slack thread if both are on the table. So a partial sync (`source=github`) still reads the
-other sources' stored mentions back out of the DB before regrouping.
+The engine sees every task at once, not just the ones from this source — a PR can only be
+proposed against a task built from a Slack thread if that task is on the table. So a
+partial sync (`?source=github`) still reads the other sources' stored items back out of
+the DB first.
+
+Order matters and is deliberate. Items are processed best-title-source first (a Linear
+issue makes a better task title than a Slack message), so that when an item has to create
+a task, the task gets the best name available.
 """
 
 from __future__ import annotations
 
 import time
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -16,18 +20,18 @@ import structlog
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import engine as engine_registry
 from app.config import Settings
-from app.models import Mention, SyncLog, Task, TaskMention
+from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, SyncLog, Task
 from app.schemas import SyncResult, SyncSourceResult
 from app.services.buckets import load_matcher
-from app.services.grouping import group_mentions
-from app.services.links import Links, apply_overrides, load_overrides
 from app.services.sources_factory import build_configured_sources
-from app.sources.base import RawMention, Source
+from app.sources.base import STATUS_PRIORITY, TITLE_PRIORITY, RawItem, Source
 
 log = structlog.get_logger(__name__)
 
-OWNER_BY_MENTION_SOURCE = {
+# Which source adapter owns each kind of item — "pr" and "issue" both come from GitHub.
+OWNER_BY_ITEM_SOURCE = {
     "pr": "github",
     "issue": "github",
     "linear": "linear",
@@ -42,7 +46,7 @@ OWNER_BY_MENTION_SOURCE = {
 @dataclass
 class _FetchOutcome:
     source_id: str
-    mentions: list[RawMention]
+    items: list[RawItem]
     error: str | None = None
     configured: bool = True
 
@@ -50,7 +54,7 @@ class _FetchOutcome:
     def authoritative(self) -> bool:
         """Whether this run can be trusted to have the full picture for the source.
 
-        A source that errored still has valid mentions in the DB from last time; dropping
+        A source that errored still has valid items in the DB from last time; dropping
         them because GitHub 500'd once would empty the board.
         """
         return self.configured and self.error is None
@@ -67,12 +71,12 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
 
     outcomes = [await _fetch(source) for source in sources]
 
-    fetched: list[RawMention] = []
+    fetched: list[RawItem] = []
     for outcome in outcomes:
-        fetched.extend(outcome.mentions)
+        fetched.extend(outcome.items)
 
     refreshed = {o.source_id for o in outcomes if o.authoritative}
-    kept = await _stored_mentions_to_keep(db, refreshed)
+    kept = await _stored_items_to_keep(db, refreshed)
 
     added, updated = await _persist(db, _merge(kept, fetched))
 
@@ -87,8 +91,7 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
         duration_seconds=duration,
         errors=[f"{o.source_id}: {o.error}" for o in outcomes if o.error],
         results=[
-            SyncSourceResult(source=o.source_id, mentions_fetched=len(o.mentions), error=o.error)
-            for o in outcomes
+            SyncSourceResult(source=o.source_id, items_fetched=len(o.items), error=o.error) for o in outcomes
         ],
     )
 
@@ -103,68 +106,70 @@ async def _fetch(source: Source) -> _FetchOutcome:
         return _FetchOutcome(source.id, [], error=str(exc))
 
 
-def _merge(kept: list[RawMention], fetched: list[RawMention]) -> list[RawMention]:
-    by_id = {m.id: m for m in kept}
-    by_id.update({m.id: m for m in fetched})
+def _merge(kept: list[RawItem], fetched: list[RawItem]) -> list[RawItem]:
+    by_id = {item.id: item for item in kept}
+    by_id.update({item.id: item for item in fetched})
     return list(by_id.values())
 
 
-async def _stored_mentions_to_keep(db: AsyncSession, refreshed: set[str]) -> list[RawMention]:
-    """Stored mentions from sources this run didn't authoritatively refresh.
-
-    They're read back so grouping still sees every source at once: a partial `?source=github`
-    sync must still be able to merge a PR with the Slack thread that references it.
-    """
-    rows = (await db.execute(select(Mention))).scalars().all()
-    return [_row_to_raw(row) for row in rows if OWNER_BY_MENTION_SOURCE.get(row.source) not in refreshed]
+async def _stored_items_to_keep(db: AsyncSession, refreshed: set[str]) -> list[RawItem]:
+    rows = (await db.execute(select(Item))).scalars().all()
+    return [_row_to_raw(row) for row in rows if OWNER_BY_ITEM_SOURCE.get(row.source) not in refreshed]
 
 
-def _row_to_raw(row: Mention) -> RawMention:
-    return RawMention(
+def _row_to_raw(row: Item) -> RawItem:
+    return RawItem(
         source=row.source,
         external_id=row.id.split(":", 1)[1],
         label=row.label,
         occurred_at=row.occurred_at,
         url=row.url,
         context=row.context,
+        title=row.extra.get("title"),
+        status=row.extra.get("status"),
+        tags=row.extra.get("tags", []),
         identity_keys=set(row.extra.get("identity_keys", [])),
         reference_keys=set(row.extra.get("reference_keys", [])),
         extra=row.extra,
     )
 
 
-async def _persist(db: AsyncSession, mentions: list[RawMention]) -> tuple[int, int]:
-    grouped = group_mentions(mentions)
+async def _persist(db: AsyncSession, items: list[RawItem]) -> tuple[int, int]:
+    await _upsert_items(db, items)
+    await _clear_stale_proposals(db)
 
-    await _upsert_mentions(db, mentions)
+    # Best title source first, then oldest first: whichever item ends up creating a task
+    # should be the one that names it best.
+    ordered = sorted(items, key=lambda i: (_rank(TITLE_PRIORITY, i.source), i.occurred_at))
 
-    auto_links: Links = defaultdict(set)
-    for group in grouped:
-        auto_links[group.id] = {m.id for m in group.mentions}
+    matcher = await load_matcher(db)
+    added = updated = 0
+    for raw in ordered:
+        created = await _route(db, raw, matcher)
+        added += int(created)
 
-    attached, detached = await load_overrides(db)
-    resolved = apply_overrides(auto_links, attached, detached)
-
-    added, updated = await _upsert_tasks(db, grouped, resolved)
-    await _rebuild_links(db, resolved, attached)
-    await _drop_orphan_tasks(db, resolved)
+    updated = await _refresh_tasks(db, {i.id: i for i in items}, matcher)
+    await _drop_orphan_tasks(db)
     return added, updated
 
 
-async def _upsert_mentions(db: AsyncSession, mentions: list[RawMention]) -> None:
-    existing = {m.id: m for m in (await db.execute(select(Mention))).scalars().all()}
-    incoming = {m.id for m in mentions}
+async def _upsert_items(db: AsyncSession, items: list[RawItem]) -> None:
+    existing = {row.id: row for row in (await db.execute(select(Item))).scalars().all()}
+    incoming = {item.id for item in items}
 
-    for raw in mentions:
+    for raw in items:
         payload = {
             **raw.extra,
+            "title": raw.title,
+            "status": raw.status,
+            "tags": raw.tags,
             "identity_keys": sorted(raw.identity_keys),
             "reference_keys": sorted(raw.reference_keys),
         }
         row = existing.get(raw.id)
         if row is None:
             db.add(
-                Mention(
+                Item(
                     id=raw.id,
                     source=raw.source,
                     label=raw.label,
@@ -181,98 +186,148 @@ async def _upsert_mentions(db: AsyncSession, mentions: list[RawMention]) -> None
             row.url = raw.url
             row.context = raw.context
             row.extra = payload
-            # New activity un-triages it: the catch-up screen should resurface a thread
-            # that moved since you last dealt with it.
+            # New activity un-triages it: catch-up should resurface a thread that moved
+            # since you last dealt with it.
             if raw.occurred_at > row.occurred_at:
                 row.triaged = False
             row.occurred_at = raw.occurred_at
 
     gone = set(existing) - incoming
     if gone:
-        await db.execute(delete(Mention).where(Mention.id.in_(gone)))
+        await db.execute(delete(Item).where(Item.id.in_(gone)))
     await db.flush()
 
 
-async def _upsert_tasks(db: AsyncSession, grouped, resolved: Links) -> tuple[int, int]:
-    matcher = await load_matcher(db)
-    existing = {t.id: t for t in (await db.execute(select(Task))).scalars().all()}
-    added = updated = 0
+async def _clear_stale_proposals(db: AsyncSession) -> None:
+    """Proposals are the engine's to rebuild; decisions are not ours to touch."""
+    await db.execute(delete(Link).where(Link.state == PROPOSED))
+    await db.flush()
 
-    for group in grouped:
-        if group.id not in resolved:
-            continue
-        bucket = matcher.assign(group.title, group.tags)
-        task = existing.get(group.id)
 
-        if task is None:
+async def _route(db: AsyncSession, raw: RawItem, matcher) -> bool:
+    """Send one item through the engine. Returns True if it had to create a task."""
+    decided = await _decided_links(db, raw.id)
+    if any(state == CONFIRMED for state in decided.values()):
+        # You already placed this item. The engine has nothing to add.
+        return False
+
+    tasks = (await db.execute(select(Task))).scalars().all()
+    candidates = [t for t in tasks if decided.get(t.id) != REJECTED]
+
+    proposals = engine_registry.propose(raw, candidates)
+    if proposals:
+        for proposal, source_engine in proposals:
             db.add(
-                Task(
-                    id=group.id,
-                    title=group.title,
-                    bucket=bucket,
-                    status=group.status,
-                    tags=group.tags,
-                    unread=True,
-                    origin="auto",
-                    updated_at=group.updated_at,
-                    synced_at=datetime.now(UTC),
+                Link(
+                    task_id=proposal.task_id,
+                    item_id=raw.id,
+                    state=PROPOSED,
+                    engine=source_engine.id,
+                    confidence=proposal.confidence,
+                    reason=proposal.reason,
                 )
             )
-            added += 1
+        await db.flush()
+        return False
+
+    # Nowhere to attach: the item becomes its own task. Rejecting a link says "not this
+    # task", not "not anywhere", so a rejection falls through to here rather than leaving
+    # the item with no home at all.
+    await _create_task_for(db, raw, matcher)
+    return True
+
+
+async def _decided_links(db: AsyncSession, item_id: str) -> dict[str, str]:
+    rows = (
+        (await db.execute(select(Link).where(Link.item_id == item_id, Link.state.in_([CONFIRMED, REJECTED]))))
+        .scalars()
+        .all()
+    )
+    return {row.task_id: row.state for row in rows}
+
+
+async def _create_task_for(db: AsyncSession, raw: RawItem, matcher) -> Task:
+    title = raw.task_title()
+    task = Task(
+        id=raw.id,
+        title=title,
+        bucket=matcher.assign(title, raw.tags),
+        status=raw.status or "open",
+        tags=sorted(raw.tags),
+        unread=True,
+        origin="auto",
+        updated_at=raw.occurred_at,
+        synced_at=datetime.now(UTC),
+    )
+    db.add(task)
+    await db.flush()
+    # An item that had to invent a task obviously belongs to it — that isn't a guess.
+    db.add(
+        Link(
+            task_id=task.id,
+            item_id=raw.id,
+            state=CONFIRMED,
+            engine=None,
+            confidence=1.0,
+            reason="This item created the task",
+            decided_at=datetime.now(UTC),
+        )
+    )
+    await db.flush()
+    return task
+
+
+async def _refresh_tasks(db: AsyncSession, by_id: dict[str, RawItem], matcher) -> int:
+    """Recompute each task's title, status, tags and bucket from the items on it."""
+    tasks = (await db.execute(select(Task))).scalars().all()
+    updated = 0
+
+    for task in tasks:
+        attached = [by_id[item.id] for item in task.items if item.id in by_id]
+        if not attached:
             continue
 
-        changed = task.status != group.status
-        if not task.title_override:
-            changed = changed or task.title != group.title
-            task.title = group.title
-        task.status = group.status
-        task.tags = sorted(set(task.tags) | set(group.tags)) if task.origin == "manual" else group.tags
+        lead = min(attached, key=lambda i: _rank(TITLE_PRIORITY, i.source))
+        statuses = [i.status for i in attached if i.status]
+        status = min(statuses, key=lambda s: _rank(STATUS_PRIORITY, s)) if statuses else task.status
+        tags = sorted({tag for i in attached for tag in i.tags})
+        newest = max(i.occurred_at for i in attached)
+
+        changed = task.status != status
+        if not task.title_override and task.title != lead.task_title():
+            task.title = lead.task_title()
+            changed = True
+        task.status = status
+        task.tags = tags
         if not task.bucket_override:
-            task.bucket = bucket
+            task.bucket = matcher.assign(task.title, tags)
         # New activity on a read task makes it unread again — resurfacing subjects that
         # moved is the whole point of the board.
-        if group.updated_at > task.updated_at:
+        if newest > task.updated_at:
             task.unread = True
             changed = True
-        task.updated_at = group.updated_at
+        task.updated_at = newest
         task.synced_at = datetime.now(UTC)
         updated += int(changed)
 
     await db.flush()
-    return added, updated
+    return updated
 
 
-async def _rebuild_links(db: AsyncSession, resolved: Links, attached: Links) -> None:
-    await db.execute(delete(TaskMention))
-    await db.flush()
-
-    known_tasks = {t.id for t in (await db.execute(select(Task))).scalars().all()}
-    known_mentions = {m.id for m in (await db.execute(select(Mention))).scalars().all()}
-
-    for task_id, mention_ids in resolved.items():
-        if task_id not in known_tasks:
-            continue
-        for mention_id in mention_ids:
-            # An override can name a mention that no longer exists (deleted PR, edited
-            # todo). Skip rather than fail the whole sync on a dangling reference.
-            if mention_id not in known_mentions:
-                continue
-            db.add(
-                TaskMention(
-                    task_id=task_id,
-                    mention_id=mention_id,
-                    linked_by="manual" if mention_id in attached.get(task_id, set()) else "auto",
-                )
-            )
-    await db.flush()
-
-
-async def _drop_orphan_tasks(db: AsyncSession, resolved: Links) -> None:
-    """Auto tasks exist only to hold mentions; manual ones are the user's and stay."""
-    rows = (await db.execute(select(Task))).scalars().all()
-    orphans = [t.id for t in rows if t.origin == "auto" and not resolved.get(t.id)]
+async def _drop_orphan_tasks(db: AsyncSession) -> None:
+    """Auto tasks exist only to hold items; manual ones are yours and stay."""
+    tasks = (await db.execute(select(Task))).scalars().all()
+    orphans = [t.id for t in tasks if t.origin == "auto" and not t.items]
     if orphans:
         await db.execute(delete(Task).where(Task.id.in_(orphans)))
+        await db.flush()
+
+
+def _rank(order: list[str], value: str) -> int:
+    try:
+        return order.index(value)
+    except ValueError:
+        return len(order)
 
 
 def _write_log(
@@ -291,13 +346,13 @@ def _write_log(
             sources=[
                 {
                     "source": o.source_id,
-                    "mentions_fetched": len(o.mentions),
+                    "items_fetched": len(o.items),
                     "configured": o.configured,
                     "error": o.error,
                 }
                 for o in outcomes
             ],
-            mentions_fetched=sum(len(o.mentions) for o in outcomes),
+            items_fetched=sum(len(o.items) for o in outcomes),
             tasks_added=added,
             tasks_updated=updated,
             duration_seconds=duration,

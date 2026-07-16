@@ -7,7 +7,7 @@ from typing import ClassVar
 
 import httpx
 
-from app.sources.base import ConfigField, RawMention, Source
+from app.sources.base import ConfigField, RawItem, Source
 from app.sources.keys import all_reference_keys, github_key
 
 API_ROOT = "https://api.github.com"
@@ -25,8 +25,8 @@ class GitHubSource(Source):
             placeholder="ghp_…",
             help="Needs the `repo` scope. Create one at github.com/settings/tokens",
         ),
-        ConfigField(key="username", label="Username", placeholder="joris-guerry"),
-        ConfigField(key="org", label="Organisation", placeholder="alan-eu"),
+        ConfigField(key="username", label="Username", placeholder="your-username"),
+        ConfigField(key="org", label="Organisation", placeholder="your-org"),
     ]
 
     def detail(self) -> str:
@@ -47,7 +47,7 @@ class GitHubSource(Source):
             response = await client.get(f"{API_ROOT}/user", headers=self._headers())
             response.raise_for_status()
 
-    async def fetch(self) -> list[RawMention]:
+    async def fetch(self) -> list[RawItem]:
         if not self.is_configured():
             return []
         username, org = self.get("username"), self.get("org")
@@ -55,7 +55,7 @@ class GitHubSource(Source):
             (f"is:pr author:{username} org:{org} is:open", "pr"),
             (f"is:issue assignee:{username} org:{org} is:open", "issue"),
         ]
-        mentions: list[RawMention] = []
+        items: list[RawItem] = []
         async with httpx.AsyncClient(timeout=20) as client:
             for query, kind in queries:
                 response = await client.get(
@@ -65,21 +65,21 @@ class GitHubSource(Source):
                 )
                 response.raise_for_status()
                 for raw in response.json().get("items", []):
-                    mentions.append(_to_mention(raw, kind))
-        return mentions
+                    items.append(_to_item(raw, kind))
+        return items
 
 
-def _to_mention(raw: dict, kind: str) -> RawMention:
+def _to_item(raw: dict, kind: str) -> RawItem:
     repo = _repo_from_url(raw.get("repository_url", "")) or "unknown/unknown"
     number = raw["number"]
     labels = [label["name"] for label in raw.get("labels", [])]
     body = raw.get("body") or ""
 
     identity = github_key(repo, number)
-    # A PR body citing "PAY-88" or "#1201" is the strongest cross-source link we get.
+    # A ticket or issue reference in the body is the strongest cross-source link available.
     references = all_reference_keys(raw["title"], body, default_repo=repo) - {identity}
 
-    return RawMention(
+    return RawItem(
         source=kind,
         external_id=f"{repo}#{number}",
         label=raw["title"],

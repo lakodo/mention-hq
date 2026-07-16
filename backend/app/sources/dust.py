@@ -1,6 +1,6 @@
 """Dust conversations.
 
-Stub. The design shows Dust mentions ("Conversation: latency root-cause exploration"),
+Stub. The design shows Dust items ("Conversation: latency root-cause exploration"),
 but we have no API spec for it yet, so this reports itself unconfigured and returns
 nothing rather than guessing at an endpoint shape. Fill in `fetch`/`check` once the
 Dust API is pinned down; the rest of the pipeline already handles the "dust" source.
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from app.sources.base import ConfigField, RawMention, Source, SourceNotConfigured
+from app.sources.base import ConfigField, RawItem, Source, SourceNotConfigured
 
 
 class DustSource(Source):
@@ -30,5 +30,5 @@ class DustSource(Source):
     async def check(self) -> None:
         raise SourceNotConfigured("Dust integration is not implemented yet")
 
-    async def fetch(self) -> list[RawMention]:
+    async def fetch(self) -> list[RawItem]:
         return []

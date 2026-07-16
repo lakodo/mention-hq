@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Mention, Task, TaskMention
+from app.models import REJECTED, Item, Link, Task
 from app.schemas import TaskCreate, TaskOut, TaskPatch
 from app.services.buckets import UNCATEGORIZED, load_matcher
 
@@ -41,9 +41,9 @@ async def list_tasks(
     if source:
         stmt = stmt.where(
             Task.id.in_(
-                select(TaskMention.task_id)
-                .join(Mention, Mention.id == TaskMention.mention_id)
-                .where(Mention.source == source)
+                select(Link.task_id)
+                .join(Item, Item.id == Link.item_id)
+                .where(Item.source == source, Link.state != REJECTED)
             )
         )
     stmt = stmt.order_by(Task.updated_at.desc())
@@ -73,8 +73,8 @@ async def create_task(payload: TaskCreate, db: AsyncSession = Depends(get_db)) -
     )
     db.add(task)
     await db.commit()
-    # `mentions` on a just-added instance is unloaded rather than empty, so serialising it
-    # would trigger a lazy load — which raises under async. Re-select to populate it.
+    # A relationship on a just-added instance is unloaded rather than empty, so
+    # serialising it would trigger a lazy load, which raises under async.
     return await _load(db, task.id)
 
 
@@ -116,8 +116,8 @@ async def delete_task(task_id: str, db: AsyncSession = Depends(get_db)) -> None:
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if task.origin != "manual":
-        # An auto task would just come back on the next sync; detaching its mentions in
-        # the catch-up screen is the honest way to make it go away.
+        # An auto task is rebuilt by the next sync from the items on it. Rejecting those
+        # links in catch-up is what actually makes it go away.
         raise HTTPException(status_code=400, detail="Only manually created tasks can be deleted")
     await db.delete(task)
     await db.commit()

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar
 
-from app.sources.base import ConfigField, RawMention, Source
+from app.sources.base import ConfigField, RawItem, Source
 from app.sources.keys import all_reference_keys
 
 H1_RE = re.compile(r"^#\s+(?P<title>.+?)\s*$", re.MULTILINE)
@@ -17,7 +17,7 @@ H1_RE = re.compile(r"^#\s+(?P<title>.+?)\s*$", re.MULTILINE)
 class MarkdownSource(Source):
     id = "markdown"
     name = "Markdown docs"
-    description = "Local docs and specs, attached to the subjects they mention"
+    description = "Local docs and specs, attached to the subjects they item"
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
             key="globs",
@@ -30,20 +30,20 @@ class MarkdownSource(Source):
     def detail(self) -> str:
         return " · ".join(self.get_list("globs")) or "Not configured"
 
-    async def fetch(self) -> list[RawMention]:
-        mentions = []
+    async def fetch(self) -> list[RawItem]:
+        items = []
         for pattern in self.get_list("globs"):
             for raw_path in glob.glob(pattern, recursive=True):
                 path = Path(raw_path)
                 if not path.is_file():
                     continue
-                mention = _read_doc(path)
-                if mention:
-                    mentions.append(mention)
-        return mentions
+                item = _read_doc(path)
+                if item:
+                    items.append(item)
+        return items
 
 
-def _read_doc(path: Path) -> RawMention | None:
+def _read_doc(path: Path) -> RawItem | None:
     try:
         content = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -56,7 +56,7 @@ def _read_doc(path: Path) -> RawMention | None:
     # backlog would otherwise merge unrelated subjects into one giant task.
     head = content[:2000]
 
-    return RawMention(
+    return RawItem(
         source="markdown",
         external_id=str(path),
         label=title,

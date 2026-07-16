@@ -1,7 +1,8 @@
-"""The catch-up inbox: untriaged mentions, and attaching them to tasks.
+"""Catch-up: the inbox of items you haven't ruled on yet.
 
-Attaching writes a permanent override rather than just a link row, so the decision
-survives the next sync rebuilding every automatic link.
+Everything here writes a decision — a Link in the confirmed or rejected state — which sync
+then treats as untouchable. That is the whole contract between you and the engine: it
+guesses as often as it likes, you answer once, and your answer sticks.
 """
 
 from __future__ import annotations
@@ -12,90 +13,111 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Mention, Task, TaskMention
+from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, Task
 from app.services.buckets import load_matcher
-from app.services.links import ATTACH, DETACH, record_override
 
 
-async def untriaged(db: AsyncSession, limit: int = 100) -> list[Mention]:
-    stmt = select(Mention).where(Mention.triaged.is_(False)).order_by(Mention.occurred_at.desc()).limit(limit)
+async def untriaged(db: AsyncSession, limit: int = 100) -> list[Item]:
+    stmt = select(Item).where(Item.triaged.is_(False)).order_by(Item.occurred_at.desc()).limit(limit)
     return list((await db.execute(stmt)).scalars().all())
 
 
-async def attach(db: AsyncSession, mention_id: str, task_ids: list[str]) -> Mention:
-    mention = await _require_mention(db, mention_id)
+async def confirm(db: AsyncSession, item_id: str, task_ids: list[str]) -> Item:
+    """Attach an item to one or more tasks, for good."""
+    item = await _require_item(db, item_id)
     for task_id in task_ids:
         if await db.get(Task, task_id) is None:
             raise LookupError(f"Task not found: {task_id}")
-        await record_override(db, mention_id, task_id, ATTACH)
-        if await db.get(TaskMention, {"task_id": task_id, "mention_id": mention_id}) is None:
-            db.add(TaskMention(task_id=task_id, mention_id=mention_id, linked_by="manual"))
-    mention.triaged = True
+        await _decide(db, item_id, task_id, CONFIRMED)
+    item.triaged = True
     await db.commit()
-    return await _reload(db, mention_id)
+    return await _reload(db, item_id)
 
 
-async def detach(db: AsyncSession, mention_id: str, task_id: str) -> Mention:
-    await _require_mention(db, mention_id)  # 404s before we write an override
-    await record_override(db, mention_id, task_id, DETACH)
-    link = await db.get(TaskMention, {"task_id": task_id, "mention_id": mention_id})
-    if link is not None:
-        await db.delete(link)
+async def reject(db: AsyncSession, item_id: str, task_id: str) -> Item:
+    """Say no to a link. Remembered, so the engine can't propose it again."""
+    await _require_item(db, item_id)
+    await _decide(db, item_id, task_id, REJECTED)
     await db.commit()
-    return await _reload(db, mention_id)
+    return await _reload(db, item_id)
 
 
-async def create_task_from_mention(db: AsyncSession, mention_id: str, title: str, bucket: str | None) -> Task:
-    mention = await _require_mention(db, mention_id)
+async def _decide(db: AsyncSession, item_id: str, task_id: str, state: str) -> None:
+    link = await db.get(Link, {"task_id": task_id, "item_id": item_id})
+    if link is None:
+        db.add(
+            Link(
+                task_id=task_id,
+                item_id=item_id,
+                state=state,
+                engine=None,
+                confidence=1.0,
+                reason="You said so",
+                decided_at=datetime.now(UTC),
+            )
+        )
+        return
+    # A decision overwrites an engine proposal, and a later decision overwrites an
+    # earlier one — the most recent answer always wins.
+    link.state = state
+    link.decided_at = datetime.now(UTC)
+    if link.engine is None:
+        link.reason = "You said so"
+
+
+async def create_task_from_item(db: AsyncSession, item_id: str, title: str, bucket: str | None) -> Task:
+    item = await _require_item(db, item_id)
     matcher = await load_matcher(db)
 
+    resolved_title = title.strip() or item.label
     task = Task(
         id=f"task:{uuid.uuid4().hex[:12]}",
-        title=title.strip() or mention.label,
-        bucket=bucket or matcher.assign(title, []),
+        title=resolved_title,
+        bucket=bucket or matcher.assign(resolved_title, []),
         bucket_override=bucket is not None,
         status="open",
         tags=[],
         unread=False,
         origin="manual",
         title_override=True,
-        updated_at=mention.occurred_at,
+        updated_at=item.occurred_at,
         synced_at=datetime.now(UTC),
     )
     db.add(task)
     await db.flush()
 
-    await record_override(db, mention_id, task.id, ATTACH)
-    db.add(TaskMention(task_id=task.id, mention_id=mention_id, linked_by="manual"))
-    mention.triaged = True
-
+    await _decide(db, item_id, task.id, CONFIRMED)
+    item.triaged = True
     await db.commit()
-    # Same staleness trap as _reload: the link row was inserted directly, so the task's
-    # freshly-initialised (empty) mentions collection would be returned as-is.
+
     stmt = select(Task).where(Task.id == task.id).execution_options(populate_existing=True)
     return (await db.execute(stmt)).scalars().one()
 
 
-async def mark_triaged(db: AsyncSession, mention_id: str, triaged: bool = True) -> Mention:
-    mention = await _require_mention(db, mention_id)
-    mention.triaged = triaged
+async def mark_triaged(db: AsyncSession, item_id: str, triaged: bool = True) -> Item:
+    item = await _require_item(db, item_id)
+    item.triaged = triaged
     await db.commit()
-    return await _reload(db, mention_id)
+    return await _reload(db, item_id)
 
 
-async def _require_mention(db: AsyncSession, mention_id: str) -> Mention:
-    mention = await db.get(Mention, mention_id)
-    if mention is None:
-        raise LookupError(f"Mention not found: {mention_id}")
-    return mention
+async def proposals_for(db: AsyncSession, item_id: str) -> list[Link]:
+    stmt = select(Link).where(Link.item_id == item_id, Link.state == PROPOSED)
+    return list((await db.execute(stmt)).scalars().all())
 
 
-async def _reload(db: AsyncSession, mention_id: str) -> Mention:
-    """Re-read a mention and its links after a write.
+async def _require_item(db: AsyncSession, item_id: str) -> Item:
+    item = await db.get(Item, item_id)
+    if item is None:
+        raise LookupError(f"Item not found: {item_id}")
+    return item
 
-    The identity map still holds the `tasks` collection as it was *before* the write, so
-    returning the same object would answer an attach with the links from before it.
-    populate_existing forces the relationship to be re-read.
+
+async def _reload(db: AsyncSession, item_id: str) -> Item:
+    """Re-read an item and its links after a write.
+
+    The identity map still holds the links as they were *before* the write, so returning
+    the same object would answer a confirm with the state from before it.
     """
-    stmt = select(Mention).where(Mention.id == mention_id).execution_options(populate_existing=True)
+    stmt = select(Item).where(Item.id == item_id).execution_options(populate_existing=True)
     return (await db.execute(stmt)).scalars().one()

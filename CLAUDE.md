@@ -1,111 +1,118 @@
 # Personal HQ
 
-Local web app aggregating your activity across GitHub, Linear, Slack, Dust and local files
-(git branches, todos, markdown docs) into topic buckets, so you can regain context on a subject fast.
+A local web app that aggregates your activity across GitHub, Linear, Slack, Dust and local
+files (git branches, todo files, markdown docs) and groups it into topics, so you can regain
+context on a subject fast.
 
-## Working rules
+# Vocabulary
 
-These come first because they apply to every change in this repo.
+Three words, used consistently in code, API, UI and commits. Never mix them.
 
-### Don't paraphrase code
+- **Item** — one thing from one source: a PR, a Slack thread, a todo line, a branch.
+- **Task** — a subject you handle. Items attach to it. An item can attach to several tasks.
+- **Bucket** — a topic column on the board. Groups tasks. Created by the user.
 
-The default is **no comment and no docstring**. Add one only when it carries information the code
-cannot: the *Why* — a non-obvious constraint, a gotcha, a rationale. A comment restating what the
-next line plainly does is noise, and it rots.
+Reads as **Bucket > Task > Item**.
 
-```python
-# Bad — restates the code
-# Loop over the mentions and merge them
-for mention in mentions: ...
-
-# Good — explains a constraint the code can't show
-# Slack search returns the same thread once per matching message; dedupe on thread_ts.
-```
-
-A comment must never narrate change history ("changed to fix…", "now does X instead of Y",
-"as discussed"). That belongs in the commit message.
-
-### Commits
-
-- Follow the **Commitizen / Conventional Commits** convention: `type(scope): subject`.
-  Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `ci`, `build`, `style`.
-  Scopes used here: `backend`, `frontend`, `sync`, `sources`, `db`, `tooling`.
-- Subject in the imperative mood, lowercase, no trailing period: `feat(sources): add linear source`.
-- **Never** append a `Co-Authored-By:` trailer.
-- Write the *Why* in plain language — lead with the problem or impact in one clear sentence,
-  keep jargon to what actually adds value.
-
-### Pull requests
-
-Always open PRs in **draft** (`gh pr create --draft`); the user marks them ready themselves.
-
-### Before committing
-
-Hooks run lint + tests on staged files only. Run the same checks yourself first, scoped to the
-files you touched — never repo-wide auto-fix, which pollutes the tree with unrelated rewrites.
-
-## Architecture
-
-**A task is a subject; a mention is one appearance of it in one source.** One task, many mentions.
-This is the single most important idea in the codebase, and the main way it departs from
-`todos/personal-hq-specs.md` (stale — the design in `tierces/` supersedes it).
-
-A PR, a Slack thread and a local todo that all concern the same refund bug are three
-`mentions` rows linked to one `tasks` row. Sources never create tasks directly: they emit
-`RawMention`s carrying identity/reference keys, and `services/grouping.py` merges them via
-union-find into tasks. That keeps grouping logic in one testable place instead of smeared
-across eight source adapters.
-
-**A mention can belong to several tasks.** A thread that argues about two subjects is about
-both, so `task_mentions` is many-to-many. Sync recomputes automatic links every run, then
-replays the user's `link_overrides` on top — that separation is what lets sync be
-destructive about its own guesses without ever destroying a human's.
+# Folders
 
 ```
-backend/app/
-  models.py            Task, Mention, SyncLog
-  sources/             one adapter per source; each returns list[RawMention]
-  services/grouping.py mentions -> tasks (union-find over identity/reference keys)
-  services/sync.py     orchestrates sources, persists, preserves manual overrides
-  routers/             tasks, buckets, sync, admin
-frontend/src/
-  views/               Board, Timeline, Log, Admin, ItemDetail
-  hooks/               TanStack Query wrappers
+hq/
+|-- backend/          # FastAPI + SQLAlchemy (async, SQLite). See backend/README.md.
+|   |-- app/
+|   |   |-- engine/   # proposes which task an incoming item attaches to
+|   |   |-- models.py # Task, Item, Link, Bucket, AppConfig, SyncLog
+|   |   |-- routers/  # tasks, buckets, catchup, sync, admin
+|   |   |-- security/ # secret storage (OS keychain)
+|   |   |-- services/ # sync, catchup, buckets, app_config, ai
+|   |   |-- sources/  # one adapter per source; each declares its own config fields
+|   |-- alembic/      # migrations
+|   |-- tests/
+|-- frontend/         # React 19 + Vite + Mantine (stock theme) + TanStack Query
+|-- tierces/          # design handoff bundle from Claude Design (read-only reference)
+|-- todos/            # the original spec (superseded by tierces/)
 ```
 
-## Stack
+# Architecture
 
-- **Backend**: Python 3.11, FastAPI, SQLAlchemy 2 async + aiosqlite, Alembic, `uv` for deps.
-- **Frontend**: React 19, TypeScript, Vite, Mantine 8 (stock theme), TanStack Query v5, `yarn` for deps.
-- **Tests**: pytest + pytest-asyncio + respx (backend), vitest + testing-library + msw (frontend).
+**Sources never create tasks.** A source adapter emits `RawItem`s and nothing else. Each
+declares its own `fields`, which is what lets the Admin panel render a setup form for a
+source it has never heard of.
 
-## Commands
+**The engine proposes; the user decides.** Every incoming item goes through
+`app/engine/`, which returns `Proposal`s (task + confidence + reason). Engines are chosen
+per source in `engine/registry.py`, because sources differ in what they can honestly claim:
+a tracker issue names a subject, a chat message only ever points at one. A source with no
+entry proposes nothing.
 
-Everything runs through [go-task](https://taskfile.dev) — `task --list` shows them all.
-Prefer these over raw `uv`/`yarn` invocations so the steps stay in one place.
+**A `Link` carries the decision.** `proposed` is an engine's guess and is rebuilt on every
+sync. `confirmed` and `rejected` are the user's, and sync never touches them. Rejections
+persist so an engine cannot re-propose something already dismissed.
+
+**Grouping is global.** The engine sees every task, not just those from the item's source,
+so a partial sync still reads other sources' stored items back out of the DB first.
+
+# Linting & Formatting
+
+Backend: ruff (`task back:lint`, `task back:format`). Line length 110, target py311,
+rules E/F/I/UP/B/SIM/C4/RUF — config in `backend/pyproject.toml`.
+Frontend: eslint + prettier (`task front:lint`).
+
+Scope both to the files you touched. A repo-wide `--fix` rewrites files you didn't touch
+and leaves unrelated changes in the tree, which then block the commit.
+
+# Tests
+
+Backend: pytest + pytest-asyncio + respx (`task back:test`). Frontend: vitest +
+testing-library + msw (`task front:test`).
+
+Service-level tests don't exercise routing or serialisation — anything that touches an
+endpoint needs a test that goes over HTTP.
+
+# Commands
+
+Everything runs through [go-task](https://taskfile.dev); `task --list` shows them all.
+Tools come from devbox, so run `devbox shell` (or let direnv do it) first.
 
 ```bash
 task setup            # install backend + frontend, create and migrate the DB
-task dev              # run API (:8000) and UI (:5173) together
+task dev              # API (:8000) and UI (:5173)
 task check            # what CI runs: lint, typecheck, migration drift, tests
 
-task back:dev         # API only
-task back:test -- -k grouping
-task back:db-migrate -- "add tags to tasks"   # autogenerate a migration
+task back:test -- -k engine
+task back:db-migrate -- "add links table"   # autogenerate a migration
 task back:db-check    # fail if models drifted from migrations
-task back:db-reset    # nuke and rebuild the local DB
 task back:sync        # sync from the CLI, no UI
-
-task front:dev
-task front:test
-task front:lint
 ```
 
-## Conventions
+# Specific Guidelines
 
-- **Migrations are required.** Schema changes go through Alembic (`uv run alembic revision --autogenerate -m "..."`);
-  never edit the DB by hand and never rely on `create_all` outside tests.
-- Sources must degrade gracefully: missing credentials means the source reports itself
-  unconfigured in `/admin/sources`, it does not fail the whole sync.
-- No writes back to sources. HQ reads; it never creates a Linear issue or posts to Slack.
-- Secrets live in `.env` (gitignored). `.env.example` documents every key.
+- Python >3.11 typing: `list[]`, `dict[]`, `X | None`. Don't import from `typing` for these.
+- **Comments and docstrings: the default is none.** Add one only when it brings information
+  the code cannot: a non-obvious constraint, a gotcha, a rationale. The Why, not the How.
+- **A comment describes the code as it is now.** Never the history behind it, never the
+  project's own trajectory. `# changed to fix…`, `# now does X instead of Y`,
+  `# as discussed`, `# none ship`, `# this used to be a mention` are all wrong: a future
+  reader has none of that context and shouldn't need it. That belongs in the commit message.
+- Migrations are required. Schema changes go through Alembic
+  (`task back:db-migrate -- "…"`); never edit the DB by hand, never rely on `create_all`
+  outside tests. Migrations must not import application code — they outlive it.
+- Sources degrade gracefully: missing credentials means the source reports itself
+  unconfigured in `/admin/sources`, it does not fail the sync.
+- HQ reads; it never writes back to a source. No creating Linear issues, no posting to Slack.
+- Secrets live in the OS keychain via `app/security/secrets.py` — never in the database, in
+  `.env`, or in a log line. The API returns masked hints only.
+- Ids travel in URL paths, so they are restricted to URL-safe characters at construction
+  (`sources/base.py:url_safe`).
+- No default buckets, and no vendor names in bucket keywords. HQ cannot know what someone
+  works on, and a wrong guess fills the board with a taxonomy that isn't theirs.
+
+# Commits
+
+- Commitizen / Conventional Commits: `type(scope): subject`.
+  Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `ci`, `build`, `style`.
+  Scopes: `backend`, `frontend`, `engine`, `sources`, `db`, `tooling`.
+- Subject in the imperative, lowercase, no trailing period.
+- **Never** append a `Co-Authored-By:` trailer.
+- Write the Why in plain language — lead with the problem or impact in one clear sentence.
+- PRs open in **draft** (`gh pr create --draft`).

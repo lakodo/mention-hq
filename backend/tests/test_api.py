@@ -1,7 +1,7 @@
 """HTTP-level tests.
 
-The service tests call functions directly, which means they can't see routing bugs — ids
-with slashes in them 404'd for a while precisely because nothing exercised the URL.
+Service-level tests call functions directly and so cannot catch routing or serialisation
+bugs. Anything reachable over an endpoint is exercised through the URL here.
 """
 
 from __future__ import annotations
@@ -10,15 +10,15 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.models import Bucket, Mention, Task, TaskMention
-from app.sources.base import RawMention, url_safe
+from app.models import CONFIRMED, PROPOSED, REJECTED, Bucket, Item, Link, Task
+from app.sources.base import RawItem, url_safe
 
 
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        ("joris/pay-88-refunds", "joris~pay-88-refunds"),
-        ("alan-eu/alan-apps#1201", "alan-eu~alan-apps~1201"),
+        ("owner/branch-name", "owner~branch-name"),
+        ("org/repo#1201", "org~repo~1201"),
         ("C01ABC:1712.0001", "C01ABC:1712.0001"),
         ("plain", "plain"),
     ],
@@ -27,15 +27,15 @@ def test_url_safe_strips_path_breaking_characters(raw, expected):
     assert url_safe(raw) == expected
 
 
-def test_mention_id_is_url_safe():
-    mention = RawMention(
+def test_item_id_is_url_safe():
+    item = RawItem(
         source="branch",
-        external_id="repo:joris/pay-88",
+        external_id="repo:owner/feature",
         label="x",
         occurred_at=datetime.now(UTC),
     )
-    assert "/" not in mention.id
-    assert mention.id == "branch:repo:joris~pay-88"
+    assert "/" not in item.id
+    assert item.id == "branch:repo:owner~feature"
 
 
 async def _make_task(db, task_id="task:1", title="A task", bucket="Uncategorized") -> Task:
@@ -54,73 +54,71 @@ async def _make_task(db, task_id="task:1", title="A task", bucket="Uncategorized
     return task
 
 
-async def _make_mention(db, mention_id="branch:repo:joris~pay-88") -> Mention:
-    mention = Mention(
-        id=mention_id,
+async def _make_item(db, item_id="branch:repo:owner~feature") -> Item:
+    item = Item(
+        id=item_id,
         source="branch",
-        label="[repo] joris/pay-88",
+        label="[repo] owner/feature",
         url=None,
         context="repo",
         occurred_at=datetime.now(UTC),
         extra={},
     )
-    db.add(mention)
+    db.add(item)
     await db.flush()
-    return mention
+    return item
 
 
 async def test_health(client):
     assert (await client.get("/health")).json() == {"status": "ok"}
 
 
-async def test_no_buckets_ship_with_the_app(client):
+async def test_a_fresh_install_has_no_buckets(client):
     assert (await client.get("/buckets")).json() == []
 
 
 async def test_bucket_crud(client, db):
-    created = await client.post("/buckets", json={"name": "Payments", "keywords": ["refund"]})
+    created = await client.post("/buckets", json={"name": "Infra", "keywords": ["deploy"]})
     assert created.status_code == 201
     assert created.json()["count"] == 0
 
-    duplicate = await client.post("/buckets", json={"name": "Payments"})
+    duplicate = await client.post("/buckets", json={"name": "Infra"})
     assert duplicate.status_code == 409
 
     reserved = await client.post("/buckets", json={"name": "Uncategorized"})
     assert reserved.status_code == 400
 
-    patched = await client.patch("/buckets/Payments", json={"keywords": ["refund", "invoice"]})
-    assert patched.json()["keywords"] == ["refund", "invoice"]
+    patched = await client.patch("/buckets/Infra", json={"keywords": ["deploy", "ci"]})
+    assert patched.json()["keywords"] == ["deploy", "ci"]
 
 
 async def test_deleting_a_bucket_rehomes_its_tasks_rather_than_deleting_them(client, db):
-    db.add(Bucket(name="Payments", keywords=[], position=1))
-    await _make_task(db, bucket="Payments")
+    db.add(Bucket(name="Infra", keywords=[], position=1))
+    await _make_task(db, bucket="Infra")
     await db.commit()
 
-    assert (await client.delete("/buckets/Payments")).status_code == 204
-
-    task = (await client.get("/tasks/task:1")).json()
-    assert task["bucket"] == "Uncategorized"
+    assert (await client.delete("/buckets/Infra")).status_code == 204
+    assert (await client.get("/tasks/task:1")).json()["bucket"] == "Uncategorized"
 
 
 async def test_reassign_applies_new_keywords(client, db):
-    await _make_task(db, title="Refund flow throws")
-    db.add(Bucket(name="Payments", keywords=["refund"], position=1))
-    await db.commit()
-
-    await client.post("/buckets/reassign")
-    assert (await client.get("/tasks/task:1")).json()["bucket"] == "Payments"
-
-
-async def test_reassign_leaves_manual_buckets_alone(client, db):
-    task = await _make_task(db, title="Refund flow throws")
-    task.bucket = "Infra"
-    task.bucket_override = True
-    db.add(Bucket(name="Payments", keywords=["refund"], position=1))
+    await _make_task(db, title="Terraform apply hangs")
+    db.add(Bucket(name="Infra", keywords=["terraform"], position=1))
     await db.commit()
 
     await client.post("/buckets/reassign")
     assert (await client.get("/tasks/task:1")).json()["bucket"] == "Infra"
+
+
+async def test_reassign_leaves_a_hand_picked_bucket_alone(client, db):
+    task = await _make_task(db, title="Terraform apply hangs")
+    task.bucket = "Elsewhere"
+    task.bucket_override = True
+    db.add(Bucket(name="Infra", keywords=["terraform"], position=1))
+    await db.commit()
+
+    await client.post("/buckets/reassign")
+    assert (await client.get("/tasks/task:1")).json()["bucket"] == "Elsewhere"
 
 
 async def test_patch_task_marks_bucket_as_overridden(client, db):
@@ -140,75 +138,119 @@ async def test_patch_unknown_task_404s(client):
     assert (await client.patch("/tasks/nope", json={"unread": False})).status_code == 404
 
 
-async def test_attach_a_mention_whose_id_contains_a_slash(client, db):
-    """The routing regression: branch ids used to 404 because of the slash."""
+async def test_confirm_an_item_whose_id_contains_a_slash(client, db):
+    """Branch ids contain a slash, which a URL path segment cannot carry unescaped."""
     await _make_task(db)
-    mention = await _make_mention(db)
+    item = await _make_item(db)
     await db.commit()
 
-    response = await client.post(f"/catchup/{mention.id}/attach", json={"task_ids": ["task:1"]})
+    response = await client.post(f"/catchup/{item.id}/confirm", json={"task_ids": ["task:1"]})
     assert response.status_code == 200, response.text
     assert response.json()["triaged"] is True
-    assert [t["id"] for t in response.json()["tasks"]] == ["task:1"]
+    assert [link["task"]["id"] for link in response.json()["links"]] == ["task:1"]
 
 
-async def test_one_mention_attaches_to_several_tasks(client, db):
-    await _make_task(db, "task:1", "Refund bug")
-    await _make_task(db, "task:2", "CI migration")
-    mention = await _make_mention(db)
+async def test_one_item_confirms_onto_several_tasks(client, db):
+    await _make_task(db, "task:1", "One subject")
+    await _make_task(db, "task:2", "Another subject")
+    item = await _make_item(db)
     await db.commit()
 
-    response = await client.post(f"/catchup/{mention.id}/attach", json={"task_ids": ["task:1", "task:2"]})
-    assert {t["id"] for t in response.json()["tasks"]} == {"task:1", "task:2"}
+    response = await client.post(f"/catchup/{item.id}/confirm", json={"task_ids": ["task:1", "task:2"]})
+    links = response.json()["links"]
+    assert {link["task"]["id"] for link in links} == {"task:1", "task:2"}
+    assert {link["state"] for link in links} == {CONFIRMED}
 
 
-async def test_attaching_to_an_unknown_task_404s(client, db):
-    mention = await _make_mention(db)
+async def test_confirming_onto_an_unknown_task_404s(client, db):
+    item = await _make_item(db)
     await db.commit()
-    response = await client.post(f"/catchup/{mention.id}/attach", json={"task_ids": ["nope"]})
+    response = await client.post(f"/catchup/{item.id}/confirm", json={"task_ids": ["nope"]})
     assert response.status_code == 404
 
 
-async def test_detach_removes_the_link(client, db):
+async def test_rejecting_a_proposal_records_the_decision(client, db):
     await _make_task(db)
-    mention = await _make_mention(db)
-    db.add(TaskMention(task_id="task:1", mention_id=mention.id, linked_by="auto"))
+    item = await _make_item(db)
+    db.add(
+        Link(
+            task_id="task:1",
+            item_id=item.id,
+            state=PROPOSED,
+            engine="keys",
+            confidence=0.9,
+            reason="…",
+        )
+    )
     await db.commit()
 
-    response = await client.delete(f"/catchup/{mention.id}/attach/task:1")
-    assert response.json()["tasks"] == []
+    response = await client.post(f"/catchup/{item.id}/reject/task:1")
+    assert response.status_code == 200, response.text
+    assert [link["state"] for link in response.json()["links"]] == [REJECTED]
+
+
+async def test_a_proposal_is_exposed_with_its_reasoning(client, db):
+    await _make_task(db)
+    item = await _make_item(db)
+    db.add(
+        Link(
+            task_id="task:1",
+            item_id=item.id,
+            state=PROPOSED,
+            engine="title-similarity",
+            confidence=0.72,
+            reason='Title looks like "A task" (90% similar)',
+        )
+    )
+    await db.commit()
+
+    link = (await client.get("/catchup")).json()[0]["links"][0]
+    assert link["state"] == PROPOSED
+    assert link["engine"] == "title-similarity"
+    assert link["confidence"] == 0.72
+    assert "similar" in link["reason"]
 
 
 async def test_catchup_lists_only_untriaged(client, db):
-    mention = await _make_mention(db)
+    item = await _make_item(db)
     await db.commit()
     assert len((await client.get("/catchup")).json()) == 1
 
-    await client.post(f"/catchup/{mention.id}/triage", json={"triaged": True})
+    await client.post(f"/catchup/{item.id}/triage", json={"triaged": True})
     assert (await client.get("/catchup")).json() == []
 
 
-async def test_new_task_from_a_mention(client, db):
-    mention = await _make_mention(db)
+async def test_new_task_from_an_item(client, db):
+    item = await _make_item(db)
     await db.commit()
 
-    response = await client.post(f"/catchup/{mention.id}/new-task", json={"title": "Fix the refund flow"})
+    response = await client.post(f"/catchup/{item.id}/new-task", json={"title": "A new subject"})
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["title"] == "Fix the refund flow"
+    assert body["title"] == "A new subject"
     assert body["origin"] == "manual"
-    assert [m["id"] for m in body["mentions"]] == [mention.id]
+    assert [i["id"] for i in body["items"]] == [item.id]
 
 
 async def test_filter_tasks_by_source(client, db):
     await _make_task(db, "task:1")
     await _make_task(db, "task:2", title="Unrelated")
-    mention = await _make_mention(db)
-    db.add(TaskMention(task_id="task:1", mention_id=mention.id, linked_by="auto"))
+    item = await _make_item(db)
+    db.add(Link(task_id="task:1", item_id=item.id, state=CONFIRMED))
     await db.commit()
 
     assert [t["id"] for t in (await client.get("/tasks?source=branch")).json()] == ["task:1"]
     assert (await client.get("/tasks?source=slack")).json() == []
+
+
+async def test_a_rejected_link_does_not_put_the_item_on_the_task(client, db):
+    await _make_task(db)
+    item = await _make_item(db)
+    db.add(Link(task_id="task:1", item_id=item.id, state=REJECTED))
+    await db.commit()
+
+    assert (await client.get("/tasks/task:1")).json()["items"] == []
+    assert (await client.get("/tasks?source=branch")).json() == []
 
 
 async def test_manual_task_can_be_deleted_but_auto_cannot(client, db):
@@ -234,10 +276,9 @@ async def test_admin_reports_source_fields_without_leaking_secrets(client, isola
 async def test_app_name_is_configurable(client):
     assert (await client.get("/admin/settings")).json()["app_name"] == "Personal HQ"
 
-    await client.patch("/admin/settings", json={"app_name": "Jojo HQ"})
-    assert (await client.get("/admin/settings")).json()["app_name"] == "Jojo HQ"
+    await client.patch("/admin/settings", json={"app_name": "My HQ"})
+    assert (await client.get("/admin/settings")).json()["app_name"] == "My HQ"
 
 
 async def test_sync_rejects_an_unknown_source(client):
-    response = await client.post("/sync", json={"source": "nope"})
-    assert response.status_code == 400
+    assert (await client.post("/sync", json={"source": "nope"})).status_code == 400

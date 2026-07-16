@@ -1,12 +1,12 @@
 """Source adapter interface.
 
-Sources never create tasks. They emit `RawMention`s, and `services/grouping.py` decides
-which mentions describe the same subject. That keeps the grouping heuristics in one
-testable place rather than smeared across eight adapters.
+Sources never create tasks. They emit `RawItem`s, and `app/engine/` proposes where each
+one attaches. That keeps attachment heuristics in one testable place rather than smeared
+across eight adapters.
 
-Each source also declares its own `fields`, which is what lets the Admin panel render a
-setup form for a source it has never heard of: add an adapter here and the UI grows a
-working form for it, with secret fields handled as secrets.
+Each source declares its own `fields`, which is what lets the Admin panel render a setup
+form for a source it has never heard of: add an adapter here and the UI grows a working
+form for it, with secret fields handled as secrets.
 """
 
 from __future__ import annotations
@@ -19,10 +19,10 @@ from typing import ClassVar, Literal
 
 TITLE_PRIORITY = ["linear", "issue", "pr", "markdown", "todo", "branch", "dust", "slack"]
 
-# Mention ids travel in URL paths (/catchup/{id}/attach), and a path segment cannot hold a
-# slash — so a branch called "joris/pay-88" or a repo like "alan-eu/apps#1201" would 404.
-# Ids are therefore restricted to RFC 3986 unreserved characters plus ':' at construction,
-# rather than leaving every route to remember to encode them.
+# Item ids travel in URL paths, and a path segment cannot hold a slash — which branch
+# names and repo-qualified ids both contain. Ids are restricted to RFC 3986 unreserved
+# characters plus ':' at construction, rather than leaving every route to remember to
+# encode them.
 _URL_UNSAFE = re.compile(r"[^A-Za-z0-9._~:-]")
 
 STATUS_PRIORITY = ["in_progress", "open", "merged", "done"]
@@ -39,7 +39,7 @@ class ConfigField:
 
 
 @dataclass
-class RawMention:
+class RawItem:
     source: str
     external_id: str
     label: str
@@ -49,10 +49,10 @@ class RawMention:
     title: str | None = None
     status: str | None = None
     tags: list[str] = field(default_factory=list)
-    # Keys naming *this* mention, e.g. {"PAY-88"} for a Linear issue.
+    # Keys naming this item, such as the issue key of a tracker issue.
     identity_keys: set[str] = field(default_factory=set)
-    # Keys this mention points at, e.g. a PR body citing "PAY-88". Grouping merges a
-    # mention into a task when its references hit another mention's identity.
+    # Keys this item points at, such as a ticket cited in a PR body. An engine proposes a
+    # link when one item's references hit another's identity.
     reference_keys: set[str] = field(default_factory=set)
     extra: dict = field(default_factory=dict)
 
@@ -97,7 +97,7 @@ class Source(abc.ABC):
         return all(self.get(f.key) for f in self.fields if f.required)
 
     @abc.abstractmethod
-    async def fetch(self) -> list[RawMention]: ...
+    async def fetch(self) -> list[RawItem]: ...
 
     def detail(self) -> str:
         return ""

@@ -18,7 +18,7 @@ class TaskRef(BaseModel):
     bucket: str
 
 
-class MentionOut(BaseModel):
+class ItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -30,8 +30,21 @@ class MentionOut(BaseModel):
     triaged: bool
 
 
-class MentionWithTasks(MentionOut):
-    tasks: list[TaskRef] = []
+class LinkOut(BaseModel):
+    """One item's attachment to one task, and who decided it."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    task: TaskRef
+    # "proposed" (an engine's guess) | "confirmed" (you said yes) | "rejected" (you said no)
+    state: str
+    engine: str | None
+    confidence: float
+    reason: str | None
+
+
+class ItemWithLinks(ItemOut):
+    links: list[LinkOut] = []
 
 
 class TaskOut(BaseModel):
@@ -45,7 +58,7 @@ class TaskOut(BaseModel):
     unread: bool
     origin: str
     updated_at: datetime
-    mentions: list[MentionOut]
+    items: list[ItemOut]
 
 
 class TaskPatch(BaseModel):
@@ -62,11 +75,11 @@ class TaskCreate(BaseModel):
     tags: list[str] = []
 
 
-class AttachRequest(BaseModel):
+class ConfirmRequest(BaseModel):
     task_ids: list[str] = Field(min_length=1)
 
 
-class CreateTaskFromMentionRequest(BaseModel):
+class CreateTaskFromItemRequest(BaseModel):
     title: str
     bucket: str | None = None
 
@@ -156,7 +169,7 @@ class AppSettingsPatch(BaseModel):
 
 class SyncSourceResult(BaseModel):
     source: str
-    mentions_fetched: int = 0
+    items_fetched: int = 0
     tasks_added: int = 0
     tasks_updated: int = 0
     error: str | None = None
@@ -177,7 +190,7 @@ class SyncRequest(BaseModel):
 
 class SyncLogSourceOut(BaseModel):
     source: str
-    mentions_fetched: int = 0
+    items_fetched: int = 0
     configured: bool = True
     error: str | None = None
 
@@ -191,7 +204,7 @@ class SyncLogOut(BaseModel):
     started_at: datetime
     finished_at: datetime | None
     sources: list[SyncLogSourceOut]
-    mentions_fetched: int
+    items_fetched: int
     tasks_added: int
     tasks_updated: int
     duration_seconds: float

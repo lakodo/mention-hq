@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar
 
-from app.sources.base import ConfigField, RawMention, Source, SourceNotConfigured
+from app.sources.base import ConfigField, RawItem, Source, SourceNotConfigured
 from app.sources.keys import all_reference_keys
 
 TODO_PATTERNS = [
@@ -46,32 +46,32 @@ class TodoSource(Source):
             paths.extend(Path(p) for p in glob.glob(pattern, recursive=True))
         return [p for p in paths if p.is_file()]
 
-    async def fetch(self) -> list[RawMention]:
-        mentions: list[RawMention] = []
+    async def fetch(self) -> list[RawItem]:
+        items: list[RawItem] = []
         for path in self._files():
-            mentions.extend(_scan_file(path))
-        return mentions
+            items.extend(_scan_file(path))
+        return items
 
 
-def _scan_file(path: Path) -> list[RawMention]:
+def _scan_file(path: Path) -> list[RawItem]:
     try:
         content = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return []
 
-    # Mention ids must survive edits elsewhere in the file, so they hash the todo text
+    # Ids must survive edits elsewhere in the file, so they hash the todo text
     # rather than the line number — otherwise inserting a line above re-creates every task.
     modified = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
     file_key = hashlib.sha1(str(path).encode()).hexdigest()[:8]
 
-    mentions = []
+    items = []
     for lineno, line in enumerate(content.splitlines(), start=1):
         text = _match_todo(line)
         if text is None:
             continue
         text_key = hashlib.sha1(text.encode()).hexdigest()[:8]
-        mentions.append(
-            RawMention(
+        items.append(
+            RawItem(
                 source="todo",
                 external_id=f"{file_key}:{text_key}",
                 label=text,
@@ -82,7 +82,7 @@ def _scan_file(path: Path) -> list[RawMention]:
                 extra={"file_path": str(path), "line_number": lineno},
             )
         )
-    return mentions
+    return items
 
 
 def _match_todo(line: str) -> str | None:
