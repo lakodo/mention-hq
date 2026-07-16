@@ -1,0 +1,84 @@
+version: "3"
+
+tasks:
+  deps:
+    desc: Install Python dependencies
+    cmds:
+      - uv sync
+
+  setup:
+    desc: Install dependencies and bring the database up to date
+    cmds:
+      - task: deps
+      - task: db-setup
+
+  dev:
+    desc: Run the API with autoreload on :8000
+    cmds:
+      - uv run uvicorn app.main:app --reload --port 8000
+
+  db-setup:
+    desc: Create the SQLite database and apply every migration
+    cmds:
+      - uv run alembic upgrade head
+      - echo "Database ready ✓"
+
+  db-migrate:
+    desc: 'Autogenerate a migration from model changes — task back:db-migrate -- "add foo"'
+    cmds:
+      - uv run alembic revision --autogenerate -m "{{.CLI_ARGS}}"
+      - echo "Review the generated file before committing it."
+
+  db-upgrade:
+    desc: Apply pending migrations
+    cmds:
+      - uv run alembic upgrade head
+
+  db-downgrade:
+    desc: Roll back the last migration
+    cmds:
+      - uv run alembic downgrade -1
+
+  db-check:
+    desc: Fail if the models have drifted from the migrations
+    cmds:
+      - uv run alembic upgrade head
+      - uv run alembic check
+
+  db-history:
+    desc: Show the migration history
+    cmds:
+      - uv run alembic history --indicate-current
+
+  db-reset:
+    desc: Delete the local database and rebuild it from scratch
+    prompt: This deletes backend/hq.db and every synced item. Continue?
+    cmds:
+      - rm -f hq.db
+      - task: db-setup
+
+  test:
+    desc: Run the backend tests
+    cmds:
+      - uv run pytest {{.CLI_ARGS}}
+
+  test-cov:
+    desc: Run the backend tests with a coverage report
+    cmds:
+      - uv run pytest --cov=app --cov-report=term-missing {{.CLI_ARGS}}
+
+  lint:
+    desc: Lint
+    cmds:
+      - uv run ruff check {{.CLI_ARGS | default "."}}
+
+  format:
+    desc: Format and autofix
+    cmds:
+      - uv run ruff format {{.CLI_ARGS | default "."}}
+      - uv run ruff check --fix {{.CLI_ARGS | default "."}}
+
+  sync:
+    desc: Trigger a sync from the command line, without the UI
+    cmds:
+      - uv run python -m app.cli sync {{.CLI_ARGS}}
