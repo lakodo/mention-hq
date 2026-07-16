@@ -17,7 +17,7 @@ H1_RE = re.compile(r"^#\s+(?P<title>.+?)\s*$", re.MULTILINE)
 class MarkdownSource(Source):
     id = "markdown"
     name = "Markdown docs"
-    description = "Local docs and specs, attached to the subjects they item"
+    description = "Local docs and specs, attached to the subjects they reference"
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
             key="globs",
