@@ -5,10 +5,13 @@ repos:
   - repo: local
     hooks:
       # --- hygiene ---
+      # Hooks here never run `git add`: pre-commit holds the index while they run, so a
+      # hook touching it fights for the lock. A hook that modifies a file fails, and
+      # pre-commit tells you to re-stage — which is also the honest report.
       - id: trailing-whitespace
         name: "global:   trim trailing whitespace"
         language: system
-        entry: bash -c 'for f in "$@"; do perl -pi -e "s/[ \t]+$//" "$f"; done; git add -u' --
+        entry: bash -c 'for f in "$@"; do perl -pi -e "s/[ \t]+$//" "$f"; done' --
         types: [text]
         exclude: \.md$
 
@@ -32,14 +35,14 @@ repos:
       - id: ruff-format
         name: "backend:  format (ruff)"
         language: system
-        entry: bash -c 'cd backend && uv run ruff format "${@#backend/}" && cd .. && git add -u' --
+        entry: bash -c 'cd backend && uv run ruff format "${@#backend/}"' --
         types: [python]
         files: ^backend/
 
       - id: ruff-lint
         name: "backend:  lint (ruff)"
         language: system
-        entry: bash -c 'cd backend && uv run ruff check --fix "${@#backend/}" && cd .. && git add -u' --
+        entry: bash -c 'cd backend && uv run ruff check --fix "${@#backend/}"' --
         types: [python]
         files: ^backend/
 
@@ -63,13 +66,13 @@ repos:
       - id: prettier
         name: "frontend: format (prettier)"
         language: system
-        entry: bash -c 'cd frontend && yarn prettier --write "${@#frontend/}" && cd .. && git add -u' --
+        entry: bash -c 'cd frontend && yarn prettier --write "${@#frontend/}"' --
         files: ^frontend/.*\.(ts|tsx|js|jsx|json|css|md)$
 
       - id: eslint
         name: "frontend: lint (eslint)"
         language: system
-        entry: bash -c 'cd frontend && yarn eslint --fix "${@#frontend/}" && cd .. && git add -u' --
+        entry: bash -c 'cd frontend && yarn eslint --fix "${@#frontend/}"' --
         files: ^frontend/.*\.(ts|tsx)$
 
       - id: tsc

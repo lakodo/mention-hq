@@ -5,7 +5,7 @@ See `base.py` for the contract and `registry.py` for which engines run per sourc
 
 from __future__ import annotations
 
-from app.engine.base import Engine, NullEngine, Proposal
+from app.engine.base import Engine, NullEngine, Proposal, TaskView
 from app.engine.keys import KeyEngine
 from app.engine.registry import ENGINES_BY_SOURCE, engines_for, propose
 from app.engine.similarity import TitleSimilarityEngine
@@ -16,6 +16,7 @@ __all__ = [
     "KeyEngine",
     "NullEngine",
     "Proposal",
+    "TaskView",
     "TitleSimilarityEngine",
     "engines_for",
     "propose",

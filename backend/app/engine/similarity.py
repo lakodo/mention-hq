@@ -15,8 +15,7 @@ import re
 
 from rapidfuzz import fuzz
 
-from app.engine.base import Engine, Proposal
-from app.models import Task
+from app.engine.base import Engine, Proposal, TaskView
 from app.sources.base import RawItem
 
 _TYPES = "feat|fix|chore|docs|refactor|test|perf|ci|build|style"
@@ -44,7 +43,7 @@ class TitleSimilarityEngine(Engine):
     id = "title-similarity"
     min_confidence = SIMILARITY_THRESHOLD * MAX_CONFIDENCE
 
-    def propose(self, item: RawItem, tasks: list[Task]) -> list[Proposal]:
+    def propose(self, item: RawItem, tasks: list[TaskView]) -> list[Proposal]:
         subject = normalise(item.task_title())
         if len(subject.split()) < 2:
             # One word is not enough to argue from.

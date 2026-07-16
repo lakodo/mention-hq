@@ -6,42 +6,19 @@ these tests are as much about what must *not* be proposed as what must.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import pytest
 
-from app.engine import KeyEngine, NullEngine, TitleSimilarityEngine, engines_for, propose
+from app.engine import KeyEngine, NullEngine, TaskView, TitleSimilarityEngine, engines_for, propose
 from app.engine.base import Proposal
 from app.engine.similarity import normalise
-from app.models import CONFIRMED, Item, Link, Task
 
 
-def make_task(task_id: str, title: str, items: list[Item] | None = None) -> Task:
-    task = Task(
+def make_task(task_id: str, title: str, identity=(), reference=()) -> TaskView:
+    return TaskView(
         id=task_id,
         title=title,
-        bucket="Uncategorized",
-        status="open",
-        tags=[],
-        unread=True,
-        origin="auto",
-        updated_at=datetime.now(UTC),
-    )
-    task.links = [
-        Link(task_id=task_id, item_id=item.id, state=CONFIRMED, item=item) for item in (items or [])
-    ]
-    return task
-
-
-def make_item(item_id: str, source: str = "linear", identity=(), reference=()) -> Item:
-    return Item(
-        id=item_id,
-        source=source,
-        label=item_id,
-        url=None,
-        context=None,
-        occurred_at=datetime.now(UTC),
-        extra={"identity_keys": list(identity), "reference_keys": list(reference)},
+        identity_keys=frozenset(identity),
+        reference_keys=frozenset(reference),
     )
 
 
@@ -62,27 +39,27 @@ def test_unknown_source_falls_back_to_proposing_nothing(item):
 
 class TestKeyEngine:
     def test_identity_match_is_certain(self, item):
-        task = make_task("t1", "Refund bug", [make_item("linear:1", identity=["PAY-88"])])
-        incoming = item("branch", "repo:joris~pay-88", identity_keys={"PAY-88"})
+        task = make_task("t1", "Refund bug", identity=["ENG-42"])
+        incoming = item("branch", "repo:owner~eng-42", identity_keys={"ENG-42"})
 
         proposals = KeyEngine().propose(incoming, [task])
         assert len(proposals) == 1
         assert proposals[0].confidence == 1.0
-        assert "PAY-88" in proposals[0].reason
+        assert "ENG-42" in proposals[0].reason
 
     def test_reference_match_is_strong_but_not_certain(self, item):
-        task = make_task("t1", "Refund bug", [make_item("linear:1", identity=["PAY-88"])])
-        incoming = item("slack", "C1:1", reference_keys={"PAY-88"})
+        task = make_task("t1", "Refund bug", identity=["ENG-42"])
+        incoming = item("slack", "C1:1", reference_keys={"ENG-42"})
 
         proposals = KeyEngine().propose(incoming, [task])
         assert proposals[0].confidence == 0.9
 
     def test_no_keys_means_no_opinion(self, item):
-        task = make_task("t1", "Refund bug", [make_item("linear:1", identity=["PAY-88"])])
+        task = make_task("t1", "Refund bug", identity=["ENG-42"])
         assert KeyEngine().propose(item("todo", "1"), [task]) == []
 
     def test_different_keys_do_not_match(self, item):
-        task = make_task("t1", "Refund bug", [make_item("linear:1", identity=["PAY-88"])])
+        task = make_task("t1", "Refund bug", identity=["ENG-42"])
         incoming = item("branch", "b", identity_keys={"AUTH-2"})
         assert KeyEngine().propose(incoming, [task]) == []
 
@@ -132,12 +109,12 @@ class TestRegistry:
         assert [type(e) for e in engines_for("slack")] == [KeyEngine]
 
     def test_strongest_claim_wins_when_engines_agree(self, item):
-        task = make_task("t1", "Stripe webhook handling", [make_item("linear:1", identity=["PAY-88"])])
+        task = make_task("t1", "Stripe webhook handling", identity=["ENG-42"])
         incoming = item(
             "pr",
             "r~1",
             title="Stripe webhook handling",
-            identity_keys={"PAY-88"},
+            identity_keys={"ENG-42"},
         )
 
         proposals = propose(incoming, [task])
@@ -147,9 +124,9 @@ class TestRegistry:
         assert source_engine.id == "keys"
 
     def test_proposals_are_ordered_by_confidence(self, item):
-        strong = make_task("t1", "Refund bug", [make_item("linear:1", identity=["PAY-88"])])
+        strong = make_task("t1", "Refund bug", identity=["ENG-42"])
         weak = make_task("t2", "Refund bug elsewhere")
-        incoming = item("pr", "r~1", title="Refund bug", reference_keys={"PAY-88"})
+        incoming = item("pr", "r~1", title="Refund bug", reference_keys={"ENG-42"})
 
         proposals = propose(incoming, [strong, weak])
         confidences = [p.confidence for p, _ in proposals]

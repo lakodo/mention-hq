@@ -10,10 +10,28 @@ someone notices it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from app.models import Task
 from app.sources.base import RawItem
+
+
+@dataclass(frozen=True)
+class TaskView:
+    """What an engine is allowed to see of a task.
+
+    Plain data, not an ORM row: engines are synchronous, and touching a lazy relationship
+    from one raises under async. A snapshot also keeps engines cheap to test and stops
+    them reaching for state they have no business reading.
+    """
+
+    id: str
+    title: str
+    identity_keys: frozenset[str] = field(default_factory=frozenset)
+    reference_keys: frozenset[str] = field(default_factory=frozenset)
+
+    @property
+    def keys(self) -> frozenset[str]:
+        return self.identity_keys | self.reference_keys
 
 
 @dataclass(frozen=True)
@@ -32,7 +50,7 @@ class Engine:
     # Below this, a proposal isn't worth the user's attention.
     min_confidence: float = 0.5
 
-    def propose(self, item: RawItem, tasks: list[Task]) -> list[Proposal]:
+    def propose(self, item: RawItem, tasks: list[TaskView]) -> list[Proposal]:
         return []
 
     def _keep(self, proposals: list[Proposal]) -> list[Proposal]:

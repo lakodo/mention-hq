@@ -12,6 +12,7 @@ a task, the task gets the best name available.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -22,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import engine as engine_registry
 from app.config import Settings
+from app.engine import TaskView
 from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, SyncLog, Task
 from app.schemas import SyncResult, SyncSourceResult
 from app.services.buckets import load_matcher
@@ -69,7 +71,9 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
         if not sources:
             raise ValueError(f"Unknown source: {only}")
 
-    outcomes = [await _fetch(source) for source in sources]
+    # Concurrently: these are independent network calls, and run in series the sync takes
+    # as long as every source added together. _fetch never raises, so gather is safe.
+    outcomes = list(await asyncio.gather(*(_fetch(source) for source in sources)))
 
     fetched: list[RawItem] = []
     for outcome in outcomes:
@@ -143,14 +147,55 @@ async def _persist(db: AsyncSession, items: list[RawItem]) -> tuple[int, int]:
     ordered = sorted(items, key=lambda i: (_rank(TITLE_PRIORITY, i.source), i.occurred_at))
 
     matcher = await load_matcher(db)
-    added = updated = 0
+    # Read once and carry through the loop. Re-reading per item would be a query per item
+    # against tables only this loop is writing to.
+    decisions = await _decisions_by_item(db)
+    views = await _task_views(db)
+
+    added = 0
     for raw in ordered:
-        created = await _route(db, raw, matcher)
-        added += int(created)
+        created = await _route(db, raw, views, decisions.get(raw.id, {}), matcher)
+        if created is not None:
+            views.append(created)
+            added += 1
 
     updated = await _refresh_tasks(db, {i.id: i for i in items}, matcher)
     await _drop_orphan_tasks(db)
     return added, updated
+
+
+async def _decisions_by_item(db: AsyncSession) -> dict[str, dict[str, str]]:
+    rows = (await db.execute(select(Link).where(Link.state.in_([CONFIRMED, REJECTED])))).scalars().all()
+    decisions: dict[str, dict[str, str]] = {}
+    for row in rows:
+        decisions.setdefault(row.item_id, {})[row.task_id] = row.state
+    return decisions
+
+
+async def _task_views(db: AsyncSession) -> list[TaskView]:
+    """Snapshot every task and the keys of the items on it, in two queries."""
+    tasks = (await db.execute(select(Task))).scalars().all()
+    rows = (
+        await db.execute(
+            select(Link.task_id, Item.extra).join(Item, Item.id == Link.item_id).where(Link.state != REJECTED)
+        )
+    ).all()
+
+    identity: dict[str, set[str]] = {}
+    reference: dict[str, set[str]] = {}
+    for task_id, extra in rows:
+        identity.setdefault(task_id, set()).update(extra.get("identity_keys", []))
+        reference.setdefault(task_id, set()).update(extra.get("reference_keys", []))
+
+    return [
+        TaskView(
+            id=task.id,
+            title=task.title,
+            identity_keys=frozenset(identity.get(task.id, ())),
+            reference_keys=frozenset(reference.get(task.id, ())),
+        )
+        for task in tasks
+    ]
 
 
 async def _upsert_items(db: AsyncSession, items: list[RawItem]) -> None:
@@ -204,14 +249,18 @@ async def _clear_stale_proposals(db: AsyncSession) -> None:
     await db.flush()
 
 
-async def _route(db: AsyncSession, raw: RawItem, matcher) -> bool:
-    """Send one item through the engine. Returns True if it had to create a task."""
-    decided = await _decided_links(db, raw.id)
+async def _route(
+    db: AsyncSession,
+    raw: RawItem,
+    tasks: list[TaskView],
+    decided: dict[str, str],
+    matcher,
+) -> TaskView | None:
+    """Send one item through the engine. Returns a view of the task it created, if any."""
     if any(state == CONFIRMED for state in decided.values()):
-        # You already placed this item. The engine has nothing to add.
-        return False
+        # The user already placed this item. The engine has nothing to add.
+        return None
 
-    tasks = (await db.execute(select(Task))).scalars().all()
     candidates = [t for t in tasks if decided.get(t.id) != REJECTED]
 
     proposals = engine_registry.propose(raw, candidates)
@@ -228,22 +277,12 @@ async def _route(db: AsyncSession, raw: RawItem, matcher) -> bool:
                 )
             )
         await db.flush()
-        return False
+        return None
 
     # Nowhere to attach: the item becomes its own task. Rejecting a link says "not this
     # task", not "not anywhere", so a rejection falls through to here rather than leaving
     # the item with no home at all.
-    await _create_task_for(db, raw, matcher)
-    return True
-
-
-async def _decided_links(db: AsyncSession, item_id: str) -> dict[str, str]:
-    rows = (
-        (await db.execute(select(Link).where(Link.item_id == item_id, Link.state.in_([CONFIRMED, REJECTED]))))
-        .scalars()
-        .all()
-    )
-    return {row.task_id: row.state for row in rows}
+    return await _create_task_for(db, raw, matcher)
 
 
 async def _create_task_for(db: AsyncSession, raw: RawItem, matcher) -> Task:
@@ -274,7 +313,12 @@ async def _create_task_for(db: AsyncSession, raw: RawItem, matcher) -> Task:
         )
     )
     await db.flush()
-    return task
+    return TaskView(
+        id=task.id,
+        title=task.title,
+        identity_keys=frozenset(raw.identity_keys),
+        reference_keys=frozenset(raw.reference_keys),
+    )
 
 
 async def _refresh_tasks(db: AsyncSession, by_id: dict[str, RawItem], matcher) -> int:

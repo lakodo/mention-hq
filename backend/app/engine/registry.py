@@ -9,10 +9,9 @@ A source absent from the map proposes nothing.
 
 from __future__ import annotations
 
-from app.engine.base import Engine, NullEngine, Proposal
+from app.engine.base import Engine, NullEngine, Proposal, TaskView
 from app.engine.keys import KeyEngine
 from app.engine.similarity import TitleSimilarityEngine
-from app.models import Task
 from app.sources.base import RawItem
 
 _KEYS = KeyEngine()
@@ -35,7 +34,7 @@ def engines_for(source: str) -> list[Engine]:
     return ENGINES_BY_SOURCE.get(source, [_NULL])
 
 
-def propose(item: RawItem, tasks: list[Task]) -> list[tuple[Proposal, Engine]]:
+def propose(item: RawItem, tasks: list[TaskView]) -> list[tuple[Proposal, Engine]]:
     """Run every engine for this item's source and keep the best proposal per task.
 
     Two engines proposing the same task isn't disagreement, it's corroboration — but
