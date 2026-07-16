@@ -96,11 +96,11 @@ class SlackSource(Source):
         headers = {"Authorization": f"Bearer {self.get('user_token')}"}
         cookie = self.get("cookie")
         if cookie:
-            # Slack authenticates a session token by the paired `d` cookie, not the header
-            # alone. urlencode because the raw value contains characters a header rejects.
-            from urllib.parse import quote
-
-            headers["Cookie"] = f"d={quote(cookie, safe='')}"
+            # A session token is authenticated by its paired `d` cookie, not the header
+            # alone. The value copied from the browser's cookie store is already a valid
+            # cookie value — re-encoding it would double-escape what Slack set. Strip a
+            # `d=` prefix in case the whole "d=xoxd-…" pair was pasted.
+            headers["Cookie"] = f"d={cookie.removeprefix('d=')}"
         return headers
 
     async def _call(self, client: httpx.AsyncClient, method: str, params: dict) -> dict:

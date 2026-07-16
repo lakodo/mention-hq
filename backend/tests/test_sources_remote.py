@@ -274,10 +274,14 @@ class TestSlackSessionToken:
     def test_a_session_token_with_its_cookie_is_configured(self):
         assert SlackSource({"user_token": "xoxc-abc", "cookie": "xoxd-xyz"}).is_configured() is True
 
-    def test_the_cookie_is_sent_url_encoded_on_the_d_cookie(self):
-        source = SlackSource({"user_token": "xoxc-abc", "cookie": "xoxd-a b/c%d"})
-        headers = source._headers()
-        assert headers["Cookie"] == "d=xoxd-a%20b%2Fc%25d"
+    def test_the_cookie_is_sent_verbatim_not_re_encoded(self):
+        """The value copied from the browser is already the correct cookie value."""
+        source = SlackSource({"user_token": "xoxc-abc", "cookie": "xoxd-8%2FxABC%3D"})
+        assert source._headers()["Cookie"] == "d=xoxd-8%2FxABC%3D"
+
+    def test_a_pasted_d_prefix_is_stripped(self):
+        source = SlackSource({"user_token": "xoxc-abc", "cookie": "d=xoxd-xyz"})
+        assert source._headers()["Cookie"] == "d=xoxd-xyz"
 
     def test_an_app_token_sends_no_cookie(self):
         assert "Cookie" not in SlackSource({"user_token": "xoxp-abc"})._headers()
