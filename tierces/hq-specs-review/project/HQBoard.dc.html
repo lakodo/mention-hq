@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+@keyframes hqSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes hqToast { 0% { opacity: 0; transform: translateY(-6px); } 10% { opacity: 1; transform: translateY(0); } 90% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes hqBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+</style>
+</helmet>
+<div style="{{ rootStyle }}">
+  <div style="{{ headerStyle }}">
+    <div style="{{ titleColStyle }}">
+      <div style="{{ titleStyle }}">{{ appName }}</div>
+      <sc-if value="{{ isItem }}" hint-placeholder-val="{{ false }}">
+        <span style="{{ backToBoardStyle }}" onClick="{{ setBoardRoute }}">&larr; Back to board</span>
+      </sc-if>
+      <sc-if value="{{ showToolbar }}" hint-placeholder-val="{{ true }}">
+        <div style="{{ subtitleStyle }}">{{ summaryLabel }}</div>
+      </sc-if>
+    </div>
+    <div style="{{ viewTabsStyle }}">
+      <span style="{{ boardTabStyle }}" onClick="{{ setBoardRoute }}">Board</span>
+      <span style="{{ timelineTabStyle }}" onClick="{{ setTimelineRoute }}">Timeline</span>
+      <span style="{{ logTabStyle }}" onClick="{{ setLogRoute }}">Log</span>
+      <span style="{{ adminTabStyle }}" onClick="{{ setAdminRoute }}">Admin</span>
+    </div>
+    <sc-if value="{{ showToolbar }}" hint-placeholder-val="{{ true }}">
+      <div style="{{ searchWrapStyle }}">
+        <span style="{{ searchIconStyle }}">&#128269;</span>
+        <input type="text" placeholder="Search… try item:infra or tag:ci" value="{{ searchValue }}" onChange="{{ searchHandler }}" style="{{ searchInputStyle }}"></input>
+      </div>
+    </sc-if>
+    <sc-if value="{{ showToolbar }}" hint-placeholder-val="{{ true }}">
+      <div style="{{ syncGroupStyle }}">
+        <span style="{{ lastSyncStyle }}">{{ lastSyncLabel }}</span>
+        <div style="{{ syncGroupDividerStyle }}"></div>
+        <div style="{{ autoSyncWrapStyle }}" onClick="{{ autoSyncToggleHandler }}">
+          <span style="{{ autoSyncTextStyle }}">{{ autoSyncLabel }}</span>
+          <div style="{{ autoSyncTrackStyle }}">
+            <div style="{{ autoSyncKnobStyle }}"></div>
+          </div>
+        </div>
+        <button style="{{ syncBtnStyle }}" onClick="{{ doSync }}">
+          <span style="{{ syncIconStyle }}">&#8635;</span>
+          <span>{{ syncLabel }}</span>
+        </button>
+      </div>
+    </sc-if>
+  </div>
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="{{ toastStyle }}">{{ toast }}</div>
+  </sc-if>
+
+  <sc-if value="{{ isBoard }}" hint-placeholder-val="{{ true }}">
+    <div style="{{ boardStyle }}">
+      <sc-for list="{{ buckets }}" as="bucket" hint-placeholder-count="5">
+        <div style="{{ bucket.colStyle }}">
+          <div style="{{ bucket.headerRowStyle }}" onClick="{{ bucket.toggleHandler }}">
+            <span style="{{ bucket.nameStyle }}">{{ bucket.name }}</span>
+            <span style="{{ bucket.countStyle }}">{{ bucket.count }}</span>
+          </div>
+          <sc-if value="{{ bucket.expanded }}" hint-placeholder-val="{{ true }}">
+            <div style="{{ bucket.listStyle }}">
+              <sc-for list="{{ bucket.items }}" as="item" hint-placeholder-count="3">
+                <div style="{{ item.cardStyle }}" onClick="{{ item.cardClickHandler }}">
+                  <div style="{{ item.topRowStyle }}">
+                    <div style="{{ item.sourceDotsRowStyle }}">
+                      <sc-for list="{{ item.sourceDots }}" as="d" hint-placeholder-count="2">
+                        <span style="{{ d.style }}"></span>
+                      </sc-for>
+                    </div>
+                    <span style="{{ item.mentionCountStyle }}">{{ item.mentionCountLabel }}</span>
+                    <span style="{{ item.whenStyle }}">{{ item.when }}</span>
+                  </div>
+                  <span style="{{ item.titleStyle }}">{{ item.title }}</span>
+                  <div style="{{ item.bottomRowStyle }}">
+                    <span style="{{ item.statusPillStyle }}">{{ item.statusLabel }}</span>
+                    <span style="{{ item.readToggleStyle }}" onClick="{{ item.readToggleHandler }}" title="Toggle read/unread">{{ item.unreadIcon }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isTimeline }}" hint-placeholder-val="{{ false }}">
+    <div style="{{ timelineWrapStyle }}">
+      <div style="{{ timelineCountStyle }}">{{ timelineCountLabel }}</div>
+      <sc-for list="{{ timelineRows }}" as="row" hint-placeholder-count="8">
+        <a href="#" style="{{ row.rowStyle }}" onClick="{{ row.rowClickHandler }}">
+          <span style="{{ row.dotStyle }}"></span>
+          <span style="{{ row.sourceLabelStyle }}">{{ row.sourceLabel }}</span>
+          <span style="{{ row.bucketBadgeStyle }}">{{ row.bucketLabel }}</span>
+          <span style="{{ row.titleStyle }}">{{ row.title }}<span style="{{ row.snippetStyle }}">{{ row.snippet }}</span></span>
+          <span style="{{ row.statusPillStyle }}">{{ row.statusLabel }}</span>
+          <span style="{{ row.whenStyle }}">{{ row.when }}</span>
+          <span style="{{ row.readToggleStyle }}" onClick="{{ row.readToggleClickHandler }}" title="Toggle read/unread">{{ row.unreadIcon }}</span>
+        </a>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isLog }}" hint-placeholder-val="{{ false }}">
+    <div style="{{ logPageStyle }}">
+      <div style="{{ logTermHeaderStyle }}">
+        <span>{{ logPromptLabel }}</span>
+      </div>
+      <div style="{{ logBodyStyle }}">
+        <sc-for list="{{ logLines }}" as="line" hint-placeholder-count="10">
+          <div style="{{ line.lineStyle }}">{{ line.text }}</div>
+        </sc-for>
+        <div style="{{ logCursorRowStyle }}">
+          <span>{{ logPromptLabel }}</span>
+          <span style="{{ logCursorStyle }}">&#9608;</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isItemView }}" hint-placeholder-val="{{ false }}">
+    <div style="{{ itemLayoutStyle }}">
+      <div style="{{ sidebarStyle }}">
+        <div style="{{ sidebarTopRowStyle }}">
+          <sc-if value="{{ sidebarExpanded }}" hint-placeholder-val="{{ true }}">
+            <div style="{{ sidebarSearchWrapStyle }}">
+              <span style="{{ searchIconStyle }}">&#128269;</span>
+              <input type="text" placeholder="Search items…" value="{{ sidebarQueryValue }}" onChange="{{ sidebarSearchHandler }}" style="{{ sidebarSearchInputStyle }}"></input>
+            </div>
+          </sc-if>
+          <span style="{{ sidebarCollapseBtnStyle }}" onClick="{{ sidebarToggleHandler }}" title="Collapse/expand">{{ sidebarCollapseIcon }}</span>
+        </div>
+        <span style="{{ sidebarGroupBtnStyle }}" onClick="{{ sidebarGroupToggleHandler }}" title="Group by tags">{{ sidebarGroupBtnLabel }}</span>
+        <div style="{{ sidebarListStyle }}">
+          <sc-if value="{{ sidebarGroupByTag }}" hint-placeholder-val="{{ false }}">
+            <sc-for list="{{ sidebarGroups }}" as="grp" hint-placeholder-count="3">
+              <sc-if value="{{ sidebarExpanded }}" hint-placeholder-val="{{ true }}">
+                <div style="{{ grp.headerStyle }}">{{ grp.label }}</div>
+              </sc-if>
+              <sc-for list="{{ grp.rows }}" as="sitem" hint-placeholder-count="3">
+                <div style="{{ sitem.rowStyle }}" onClick="{{ sitem.clickHandler }}" title="{{ sitem.title }}">
+                  <span style="{{ sitem.dotStyle }}"></span>
+                  <sc-if value="{{ sidebarExpanded }}" hint-placeholder-val="{{ true }}">
+                    <span style="{{ sitem.labelStyle }}">{{ sitem.title }}</span>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </sc-for>
+          </sc-if>
+          <sc-if value="{{ sidebarFlatList }}" hint-placeholder-val="{{ true }}">
+            <sc-for list="{{ sidebarItems }}" as="sitem" hint-placeholder-count="10">
+              <div style="{{ sitem.rowStyle }}" onClick="{{ sitem.clickHandler }}" title="{{ sitem.title }}">
+                <span style="{{ sitem.dotStyle }}"></span>
+                <sc-if value="{{ sidebarExpanded }}" hint-placeholder-val="{{ true }}">
+                  <span style="{{ sitem.labelStyle }}">{{ sitem.title }}</span>
+                </sc-if>
+              </div>
+            </sc-for>
+          </sc-if>
+        </div>
+      </div>
+      <div style="{{ itemDetailWrapStyle }}">
+        <sc-if value="{{ selectedItem }}" hint-placeholder-val="{{ true }}">
+          <div style="{{ itemDetailCardStyle }}">
+            <div style="{{ itemDetailTopRowStyle }}">
+              <span style="{{ selectedItem.dotStyle }}"></span>
+              <span style="{{ selectedItem.sourceLabelStyle }}">{{ selectedItem.sourceLabel }}</span>
+              <span style="{{ selectedItem.bucketBadgeStyle }}">{{ selectedItem.bucket }}</span>
+              <span style="{{ selectedItem.whenStyle }}">{{ selectedItem.when }}</span>
+            </div>
+            <div style="{{ selectedItem.titleBigStyle }}">{{ selectedItem.title }}</div>
+            <div style="{{ selectedItem.metaRowStyle }}">
+              <span style="{{ selectedItem.statusPillStyle }}">{{ selectedItem.statusLabel }}</span>
+              <sc-for list="{{ selectedItem.tagPills }}" as="tag" hint-placeholder-count="2">
+                <span style="{{ tag.style }}">{{ tag.label }}</span>
+              </sc-for>
+            </div>
+            <div style="{{ selectedItem.actionsRowStyle }}">
+              <span style="{{ selectedItem.readToggleBtnStyle }}" onClick="{{ selectedItem.readToggleHandler }}" title="Toggle read/unread">{{ selectedItem.unreadIcon }}</span>
+            </div>
+            <sc-if value="{{ selectedItem.hasSlack }}" hint-placeholder-val="{{ true }}">
+              <div style="{{ selectedItem.slackSectionStyle }}">
+                <div style="{{ selectedItem.slackSectionHeaderStyle }}">&#128172; Slack</div>
+                <sc-for list="{{ selectedItem.slackMentions }}" as="men" hint-placeholder-count="2">
+                  <a href="{{ men.href }}" target="_blank" style="{{ men.rowStyle }}">
+                    <span style="{{ men.dotStyle }}"></span>
+                    <div style="{{ men.bodyStyle }}">
+                      <span style="{{ men.sourceLabelStyle }}">{{ men.sourceLabel }}</span>
+                      <span style="{{ men.labelStyle }}">{{ men.label }}</span>
+                      <span style="{{ men.contextStyle }}">{{ men.context }}</span>
+                    </div>
+                    <span style="{{ men.whenStyle }}">{{ men.when }}</span>
+                  </a>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ selectedItem.hasOther }}" hint-placeholder-val="{{ true }}">
+              <div>
+                <div style="{{ selectedItem.sectionHeaderStyle }}">Other sources</div>
+                <div style="{{ selectedItem.otherSectionStyle }}">
+                  <sc-for list="{{ selectedItem.otherMentions }}" as="men" hint-placeholder-count="2">
+                    <a href="{{ men.href }}" target="_blank" style="{{ men.rowStyle }}">
+                      <span style="{{ men.dotStyle }}"></span>
+                      <div style="{{ men.bodyStyle }}">
+                        <span style="{{ men.sourceLabelStyle }}">{{ men.sourceLabel }}</span>
+                        <span style="{{ men.labelStyle }}">{{ men.label }}</span>
+                        <span style="{{ men.contextStyle }}">{{ men.context }}</span>
+                      </div>
+                      <span style="{{ men.whenStyle }}">{{ men.when }}</span>
+                    </a>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ false }}">
+    <div style="{{ adminWrapStyle }}">
+      <div style="{{ adminHeaderRowStyle }}">
+        <span style="{{ adminHeaderTitleStyle }}">Connected sources</span>
+        <span style="{{ adminHeaderSubStyle }}">{{ adminSummaryLabel }}</span>
+      </div>
+      <div style="{{ adminGridStyle }}">
+        <sc-for list="{{ adminSources }}" as="src" hint-placeholder-count="6">
+          <div style="{{ src.cardStyle }}">
+            <div style="{{ src.rowTopStyle }}">
+              <span style="{{ src.iconStyle }}">{{ src.icon }}</span>
+              <span style="{{ src.nameStyle }}">{{ src.name }}</span>
+              <span style="{{ src.statusPillStyle }}">{{ src.statusLabel }}</span>
+            </div>
+            <div style="{{ src.detailStyle }}">{{ src.detail }}</div>
+            <div style="{{ src.footRowStyle }}">
+              <span style="{{ src.checkedStyle }}">{{ src.checkedLabel }}</span>
+              <span style="{{ src.retestStyle }}" onClick="{{ src.retestHandler }}">Test connection</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1200, &quot;height&quot;: 800}, &quot;vibe&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;warm&quot;, &quot;options&quot;: [&quot;clean&quot;, &quot;dense&quot;, &quot;warm&quot;], &quot;tsType&quot;: &quot;string&quot;}}">
+const APP_NAME = 'Jojo HQ';
+const BUCKET_ORDER = ['Payments', 'Auth', 'Infra', 'AI', 'Onboarding', 'Uncategorized'];
+
+// A task is a subject to handle; it can be mentioned across multiple sources.
+// Slack is a source like any other, but gets visual priority since it's the
+// main place for feedback/discussion.
+function m(source, minsAgo, extra) { return { source, minsAgo, when: agoLabel(minsAgo), ...extra }; }
+function agoLabel(mins) {
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
+  return `${Math.round(mins / 1440)}d ago`;
+}
+
+const TASKS = [
+  { id: 'pay-1', title: 'Stripe webhook handling for invoice payments', bucket: 'Payments', status: 'open', tags: ['backend'], unread: true, mentions: [
+    m('pr', 120, { label: 'feat(payments): add Stripe webhook handler', url: 'https://github.com/alan-eu/alan-apps/pull/1201', context: '#1201' }),
+    m('slack', 95, { label: 'thread: webhook retries flaking on staging', url: 'https://alan.slack.com/archives/C01/p1', context: '#payments-eng, 6 replies' }),
+    m('todo', 7200, { label: 'Write tests for payments retry logic' }),
+  ]},
+  { id: 'pay-2', title: 'Refund flow throws on partial captures', bucket: 'Payments', status: 'in_progress', tags: ['bug'], unread: true, mentions: [
+    m('linear', 180, { label: 'Refund flow throws on partial captures', url: 'https://linear.app/alan/issue/PAY-88', context: 'PAY-88' }),
+    m('slack', 190, { label: 'can someone review the invoice PDF bug?', url: 'https://alan.slack.com/archives/C01/p2', context: '#payments-eng' }),
+    m('markdown', 1500, { label: 'Refunds runbook — partial capture edge cases', context: 'runbooks/payments.md §3' }),
+  ]},
+  { id: 'auth-1', title: 'Refresh token rotation on scope change', bucket: 'Auth', status: 'merged', tags: ['security'], unread: false, mentions: [
+    m('pr', 1440, { label: 'fix(auth): rotate refresh tokens on scope change', url: 'https://github.com/alan-eu/alan-apps/pull/1188', context: '#1188' }),
+    m('slack', 1460, { label: 'thread: token rotation review', url: 'https://alan.slack.com/archives/C02/p3', context: '#auth-eng, 3 replies' }),
+    m('branch', 1500, { label: '[alan-apps] joris/auth-session-timeout' }),
+  ]},
+  { id: 'auth-2', title: 'SSO login fails for SAML orgs', bucket: 'Auth', status: 'open', tags: ['bug', 'security'], unread: true, mentions: [
+    m('linear', 240, { label: 'SSO login fails for SAML orgs', url: 'https://linear.app/alan/issue/AUTH-41', context: 'AUTH-41' }),
+    m('slack', 260, { label: 'oauth callback redirect loop on staging', url: 'https://alan.slack.com/archives/C02/p4', context: '#auth-eng' }),
+    m('dust', 300, { label: 'Conversation: debugging SAML redirect loop', context: 'Dust · 14 messages' }),
+  ]},
+  { id: 'infra-1', title: 'Terraform apply hangs on RDS module', bucket: 'Infra', status: 'open', tags: ['ci'], unread: true, mentions: [
+    m('issue', 2880, { label: 'Terraform apply hangs on RDS module', url: 'https://github.com/alan-eu/alan-apps/issues/902', context: '#902' }),
+    m('slack', 2900, { label: 'thread: terraform stuck again', url: 'https://alan.slack.com/archives/C05/p1', context: '#infra, 9 replies' }),
+    m('branch', 1440, { label: '[alan-apps] joris/k8s-autoscale-tuning' }),
+  ]},
+  { id: 'infra-2', title: 'Migrate CI to new runner pool', bucket: 'Infra', status: 'in_progress', tags: ['ci'], unread: false, mentions: [
+    m('linear', 4320, { label: 'Migrate CI to new runner pool', url: 'https://linear.app/alan/issue/INF-19', context: 'INF-19' }),
+    m('markdown', 4300, { label: 'CI migration plan', context: 'docs/infra/ci-migration.md' }),
+    m('slack', 4200, { label: 'runner pool capacity numbers look good', url: 'https://alan.slack.com/archives/C05/p2', context: '#infra' }),
+  ]},
+  { id: 'ai-1', title: 'Claude tool-call latency spikes over 30s', bucket: 'AI', status: 'in_progress', tags: ['perf'], unread: true, mentions: [
+    m('linear', 120, { label: 'Claude tool-call latency spikes over 30s', url: 'https://linear.app/alan/issue/AI-54', context: 'AI-54' }),
+    m('slack', 100, { label: 'thread: latency spike incident', url: 'https://alan.slack.com/archives/C03/p1', context: '#ai-platform, 11 replies' }),
+    m('slack', 60, { label: 'thread: is this related to the eval regression?', url: 'https://alan.slack.com/archives/C03/p5', context: '#ai-eval, 4 replies' }),
+    m('dust', 150, { label: 'Conversation: latency root-cause exploration', context: 'Dust · 22 messages' }),
+  ]},
+  { id: 'ai-2', title: 'Stream partial completions to UI', bucket: 'AI', status: 'open', tags: [], unread: true, mentions: [
+    m('pr', 300, { label: 'feat(ai): stream partial completions to UI', url: 'https://github.com/alan-eu/alan-apps/pull/1215', context: '#1215' }),
+    m('todo', 2880, { label: 'Try Dust prompt caching for HQ sync' }),
+  ]},
+  { id: 'onb-1', title: 'KYC step drops users on mobile Safari', bucket: 'Onboarding', status: 'open', tags: ['bug'], unread: true, mentions: [
+    m('linear', 180, { label: 'KYC step drops users on mobile Safari', url: 'https://linear.app/alan/issue/ONB-12', context: 'ONB-12' }),
+    m('slack', 200, { label: "thread: mobile Safari users can't finish KYC", url: 'https://alan.slack.com/archives/C04/p1', context: '#onboarding, 7 replies' }),
+    m('issue', 5760, { label: "Signup form doesn't validate intl phone numbers", url: 'https://github.com/alan-eu/alan-apps/issues/877', context: '#877' }),
+  ]},
+  { id: 'onb-2', title: 'Improve follow-up UI', bucket: 'Onboarding', status: 'open', tags: ['ux'], unread: true, mentions: [
+    m('slack', 90, { label: 'thread: follow-up reminders feel spammy', url: 'https://alan.slack.com/archives/C04/p6', context: '#onboarding, 5 replies' }),
+    m('slack', 400, { label: 'thread: re: PR #1233 follow-up copy', url: 'https://alan.slack.com/archives/C04/p7', context: '#product, 3 replies — re: PR #1233' }),
+    m('markdown', 1000, { label: 'Follow-up UI — problem statement', context: 'specs/onboarding-followup.md §2' }),
+    m('pr', 420, { label: 'feat(onboarding): redesign follow-up banner', url: 'https://github.com/alan-eu/alan-apps/pull/1233', context: '#1233' }),
+    m('linear', 500, { label: 'Improve follow-up UI', url: 'https://linear.app/alan/issue/ONB-21', context: 'ONB-21' }),
+  ]},
+  { id: 'unc-1', title: 'Roadmap doc questions', bucket: 'Uncategorized', status: 'open', tags: [], unread: true, mentions: [
+    m('slack', 1440, { label: 'quick q about the roadmap doc', url: 'https://alan.slack.com/archives/C06/p1', context: '#general' }),
+    m('markdown', 1440, { label: 'Roadmap — H2 draft', context: 'docs/roadmap.md' }),
+  ]},
+  { id: 'unc-2', title: 'Renew domain for personal site', bucket: 'Uncategorized', status: 'open', tags: [], unread: false, mentions: [
+    m('todo', 8640, { label: 'Renew domain for personal site' }),
+  ]},
+  { id: 'unc-3', title: 'Bump dependencies across monorepo', bucket: 'Uncategorized', status: 'open', tags: ['ci'], unread: false, mentions: [
+    m('pr', 4320, { label: 'chore: bump deps across monorepo', url: 'https://github.com/alan-eu/alan-apps/pull/1190', context: '#1190' }),
+  ]},
+];
+
+TASKS.forEach(t => { t.minsAgo = Math.min(...t.mentions.map(x => x.minsAgo)); t.when = agoLabel(t.minsAgo); });
+
+const SOURCE_META = {
+  pr: { label: 'PR', dot: '#343a40' },
+  issue: { label: 'Issue', dot: '#495057' },
+  linear: { label: 'Linear', dot: '#7048e8' },
+  slack: { label: 'Slack', dot: '#d6336c' },
+  branch: { label: 'Branch', dot: '#e8590c' },
+  todo: { label: 'Todo', dot: '#0ca678' },
+  markdown: { label: 'Doc', dot: '#1c7ed6' },
+  dust: { label: 'Dust', dot: '#f08c00' },
+};
+
+const STATUS_META = {
+  open: { label: 'Open', color: '#1971c2', bg: '#e7f5ff' },
+  in_progress: { label: 'In Progress', color: '#e8590c', bg: '#fff4e6' },
+  merged: { label: 'Merged', color: '#2b8a3e', bg: '#ebfbee' },
+};
+
+const VIBES = {
+  clean: {
+    pageBg: '#f8f9fa', cardBg: '#ffffff', border: '#dee2e6', text: '#212529', muted: '#868e96',
+    font: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", accent: '#228be6', accentText: '#ffffff',
+    radius: 10, cardRadius: 8, headerWeight: 600, titleSize: 17, nameSize: 14, pad: 16,
+  },
+  dense: {
+    pageBg: '#eef0f2', cardBg: '#ffffff', border: '#ced4da', text: '#1a1d20', muted: '#6c757d',
+    font: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", accent: '#1c7ed6', accentText: '#ffffff',
+    radius: 4, cardRadius: 3, headerWeight: 700, titleSize: 14, nameSize: 11, pad: 8,
+  },
+  warm: {
+    pageBg: 'oklch(97% 0.015 75)', cardBg: 'oklch(99% 0.006 75)', border: 'oklch(88% 0.02 70)', text: 'oklch(32% 0.02 50)', muted: 'oklch(58% 0.02 55)',
+    font: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", accent: 'oklch(62% 0.13 40)', accentText: '#ffffff',
+    radius: 18, cardRadius: 14, headerWeight: 600, titleSize: 18, nameSize: 14.5, pad: 18,
+  },
+};
+
+const ADMIN_SOURCES_INIT = [
+  { id: 'github', icon: '\u2387', name: 'GitHub', detail: 'alan-eu/alan-apps · alan-eu/myproject', status: 'connected', checkedMinsAgo: 4 },
+  { id: 'linear', icon: '\u25C9', name: 'Linear', detail: 'Workspace: alan · Teams: PAY, AUTH, INF, AI, ONB', status: 'connected', checkedMinsAgo: 4 },
+  { id: 'slack', icon: '\u2328', name: 'Slack', detail: 'Workspace: alan.slack.com · 4 channels watched', status: 'connected', checkedMinsAgo: 4 },
+  { id: 'git', icon: '\u2325', name: 'Local Git', detail: '~/code/alan-apps · ~/code/myproject', status: 'connected', checkedMinsAgo: 12 },
+  { id: 'todo', icon: '\u2611', name: 'Todo list', detail: '~/todo.md', status: 'connected', checkedMinsAgo: 12 },
+  { id: 'calendar', icon: '\u25A2', name: 'Calendar', detail: 'Not configured', status: 'error', checkedMinsAgo: 180 },
+];
+
+class Component extends DCLogic {
+  state = {
+    items: TASKS.map(t => ({ ...t, mentions: t.mentions.map(x => ({ ...x })) })), focusedBucket: null, syncing: false, toast: null, query: '',
+    lastSync: new Date(Date.now() - 6 * 60 * 1000), autoSync: true, route: 'board',
+    selectedItemId: null, sidebarCollapsed: false, sidebarQuery: '', sidebarGroupByTag: false,
+    adminSources: ADMIN_SOURCES_INIT.map(s => ({ ...s })),
+    logs: [
+      { time: new Date(Date.now() - 6 * 60 * 1000), message: 'Synced 5 sources · 2 items updated' },
+      { time: new Date(Date.now() - 26 * 60 * 1000), message: 'Synced 5 sources · 0 items updated' },
+      { time: new Date(Date.now() - 86 * 60 * 1000), message: 'Synced 5 sources · 7 items updated' },
+    ],
+  };
+
+  componentDidMount() {
+    this._tick = setInterval(() => this.forceUpdate(), 30000);
+    this._autoTimer = setInterval(() => { if (this.state.autoSync && !this.state.syncing) this.doSync(true); }, 45000);
+  }
+
+  componentWillUnmount() {
+    clearInterval(this._tick);
+    clearInterval(this._autoTimer);
+  }
+
+  toggleAutoSync() {
+    this.setState(s => ({ autoSync: !s.autoSync }));
+  }
+
+  setRoute(route) {
+    this.setState({ route });
+  }
+
+  openItem(id) {
+    this.setState({ route: 'item', selectedItemId: id });
+  }
+
+  toggleSidebar() {
+    this.setState(s => ({ sidebarCollapsed: !s.sidebarCollapsed }));
+  }
+
+  setSidebarQuery(q) {
+    this.setState({ sidebarQuery: q });
+  }
+
+  toggleSidebarGroupByTag() {
+    this.setState(s => ({ sidebarGroupByTag: !s.sidebarGroupByTag }));
+  }
+
+  formatAgo(date) {
+    const mins = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.round(mins / 60);
+    return `${hrs}h ago`;
+  }
+
+  toggleFocus(name) {
+    this.setState(s => ({ focusedBucket: s.focusedBucket === name ? null : name }));
+  }
+
+  toggleRead(id) {
+    this.setState(s => ({ items: s.items.map(it => it.id === id ? { ...it, unread: !it.unread } : it) }));
+  }
+
+  setQuery(q) {
+    this.setState({ query: q });
+  }
+
+  retestSource(id) {
+    this.setState(s => ({ adminSources: s.adminSources.map(src => src.id === id ? { ...src, status: 'checking' } : src) }));
+    setTimeout(() => {
+      this.setState(s => ({ adminSources: s.adminSources.map(src => src.id === id ? { ...src, status: src.id === 'calendar' ? 'error' : 'connected', checkedMinsAgo: 0 } : src) }));
+    }, 900);
+  }
+
+  matchesQuery(task, query) {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    const parts = q.split(/\s+/);
+    return parts.every(part => {
+      if (part.startsWith('item:')) {
+        return task.bucket.toLowerCase().includes(part.slice(5));
+      }
+      if (part.startsWith('tag:')) {
+        const t = part.slice(4);
+        return (task.tags || []).some(tag => tag.toLowerCase().includes(t)) || task.mentions.some(m => SOURCE_META[m.source].label.toLowerCase().includes(t));
+      }
+      return task.title.toLowerCase().includes(part) || task.bucket.toLowerCase().includes(part) || task.mentions.some(m => m.label.toLowerCase().includes(part));
+    });
+  }
+
+  doSync(auto) {
+    if (this.state.syncing) return;
+    this.setState({ syncing: true });
+    setTimeout(() => {
+      const now = new Date();
+      const message = auto ? 'Auto-sync · 5 sources · 0 items updated' : 'Synced 5 sources · 2 items updated';
+      this.setState(s => ({
+        syncing: false, toast: message, lastSync: now,
+        logs: [{ time: now, message }, ...s.logs].slice(0, 30),
+      }));
+      setTimeout(() => this.setState({ toast: null }), 2600);
+    }, 1300);
+  }
+
+  renderVals() {
+    const v = VIBES[this.props.vibe] || VIBES.warm;
+    const query = this.state.query;
+    const visible = this.state.items.filter(it => this.matchesQuery(it, query));
+    const focused = this.state.focusedBucket;
+    const route = this.state.route;
+
+    // flatten every mention across all visible tasks into one chronological feed
+    const mentionRows = [];
+    visible.forEach(task => {
+      task.mentions.forEach((men, i) => {
+        const sm = SOURCE_META[men.source];
+        const stm = STATUS_META[task.status];
+        mentionRows.push({
+          key: `${task.id}:${i}`, taskId: task.id,
+          title: task.title, snippet: men.label, context: men.context || '',
+          sourceLabel: sm.label, bucketLabel: task.bucket, statusLabel: stm.label, when: men.when,
+          unreadIcon: task.unread ? '\u2709' : '\u{1F4ED}', minsAgo: men.minsAgo,
+          rowStyle: {
+            display: 'flex', alignItems: 'center', gap: 12, padding: v.pad === 8 ? '8px 12px' : '12px 16px',
+            borderBottom: `1px solid ${v.border}`, textDecoration: 'none', color: 'inherit', cursor: 'pointer',
+            background: task.unread ? v.cardBg : 'transparent',
+          },
+          rowClickHandler: (e) => { e.preventDefault(); this.openItem(task.id); },
+          dotStyle: { width: 8, height: 8, borderRadius: '50%', background: sm.dot, flexShrink: 0 },
+          sourceLabelStyle: { fontSize: v.nameSize - 3, color: v.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', width: 64, flexShrink: 0 },
+          bucketBadgeStyle: { fontSize: v.nameSize - 4, fontWeight: 600, color: v.text, background: v.pageBg, border: `1px solid ${v.border}`, borderRadius: 20, padding: '2px 10px', flexShrink: 0 },
+          titleStyle: { flex: 1, minWidth: 0, fontFamily: v.font, fontSize: v.nameSize, color: v.text, fontWeight: task.unread ? 700 : 400, overflow: 'hidden' },
+          snippetStyle: { fontSize: v.nameSize - 3, color: v.muted, fontWeight: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' },
+          statusPillStyle: { fontSize: v.nameSize - 4, fontWeight: 600, color: stm.color, background: stm.bg, padding: '2px 8px', borderRadius: 20, flexShrink: 0 },
+          whenStyle: { fontSize: v.nameSize - 3, color: v.muted, width: 56, flexShrink: 0, textAlign: 'right' },
+          readToggleStyle: { fontSize: v.nameSize + 2, color: task.unread ? v.accent : v.muted, cursor: 'pointer', opacity: task.unread ? 1 : 0.55, flexShrink: 0 },
+          readToggleClickHandler: (e) => { e.preventDefault(); e.stopPropagation(); this.toggleRead(task.id); },
+        });
+      });
+    });
+    mentionRows.sort((a, b) => a.minsAgo - b.minsAgo);
+    const timelineRows = mentionRows;
+
+    const buckets = BUCKET_ORDER.map(name => {
+      const bucketItems = visible.filter(it => it.bucket === name);
+      const isFocused = focused === name;
+      const dimmed = focused && !isFocused;
+      const expanded = !focused || isFocused;
+
+      const items = bucketItems.map(item => {
+        const stm = STATUS_META[item.status];
+        const uniqueSources = [...new Set(item.mentions.map(mm => mm.source))];
+        const hasSlack = uniqueSources.includes('slack');
+        return {
+          ...item,
+          statusLabel: stm.label,
+          mentionCountLabel: `${item.mentions.length} mention${item.mentions.length > 1 ? 's' : ''}`,
+          sourceDots: uniqueSources.map((s, i) => ({ key: s, style: { width: 9, height: 9, borderRadius: '50%', background: SOURCE_META[s].dot, border: `2px solid ${v.cardBg}`, marginLeft: i === 0 ? 0 : -4 } })),
+          slackBadge: hasSlack ? '\u{1F4AC}' : null,
+          whenStyle: { fontSize: v.nameSize - 3, color: v.muted, marginLeft: 'auto' },
+          topRowStyle: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 },
+          sourceDotsRowStyle: { display: 'flex', alignItems: 'center' },
+          mentionCountStyle: { fontSize: v.nameSize - 3, color: v.muted, marginLeft: 6 },
+          titleStyle: { display: 'block', fontFamily: v.font, fontSize: v.nameSize, color: v.text, textDecoration: 'none', lineHeight: 1.35, marginBottom: 8, fontWeight: item.unread ? 700 : 400 },
+          bottomRowStyle: { display: 'flex', alignItems: 'center', gap: 8 },
+          statusPillStyle: { fontSize: v.nameSize - 4, fontWeight: 600, color: stm.color, background: stm.bg, padding: '2px 8px', borderRadius: 20 },
+          unreadIcon: item.unread ? '\u2709' : '\u{1F4ED}',
+          readToggleStyle: { fontSize: v.nameSize + 2, color: item.unread ? v.accent : v.muted, marginLeft: 'auto', cursor: 'pointer', lineHeight: 1, opacity: item.unread ? 1 : 0.55 },
+          readToggleHandler: (e) => { e.stopPropagation(); this.toggleRead(item.id); },
+          cardClickHandler: () => this.openItem(item.id),
+          cardStyle: {
+            background: v.cardBg, border: `1px solid ${v.border}`, borderLeft: `3px solid ${stm.color}`,
+            borderRadius: v.cardRadius, padding: v.pad === 8 ? '8px 10px' : `${v.pad - 4}px ${v.pad}px`,
+            marginBottom: v.pad === 8 ? 6 : 10, fontFamily: v.font, cursor: 'pointer',
+            opacity: item.unread ? 1 : 0.6,
+          },
+        };
+      });
+
+      return {
+        name, count: bucketItems.length, expanded, items,
+        toggleHandler: () => this.toggleFocus(name),
+        colStyle: {
+          flex: isFocused ? '2 1 480px' : (dimmed ? '0 0 220px' : '1 1 300px'),
+          minWidth: dimmed ? 200 : 260, transition: 'flex 0.25s ease', opacity: dimmed ? 0.55 : 1,
+        },
+        headerRowStyle: {
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
+          padding: '8px 4px', marginBottom: 10, borderBottom: `1px solid ${v.border}`,
+        },
+        nameStyle: { fontFamily: v.font, fontSize: v.nameSize + 1, fontWeight: v.headerWeight, color: v.text, textTransform: v.font.includes('mono') ? 'uppercase' : 'none', letterSpacing: v.font.includes('mono') ? '0.03em' : 'normal' },
+        countStyle: { fontSize: v.nameSize - 3, fontWeight: 600, color: v.accentText, background: v.accent, borderRadius: 20, padding: '2px 8px', minWidth: 20, textAlign: 'center' },
+        listStyle: { display: 'flex', flexDirection: 'column' },
+      };
+    });
+
+    const logLines = [];
+    [...this.state.logs].reverse().forEach((l) => {
+      const ts = l.time.toTimeString().slice(0, 8);
+      logLines.push({ key: logLines.length, text: `[${ts}] $ hq sync --all`, lineStyle: { color: '#6e7681', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: 13, lineHeight: 1.7 } });
+      logLines.push({ key: logLines.length, text: `[${ts}] ${l.message}`, lineStyle: { color: l.message.includes('0 items') ? '#8b949e' : '#3fb950', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: 13, lineHeight: 1.7 } });
+    });
+
+    const adminSources = this.state.adminSources.map(src => {
+      const statusMeta = {
+        connected: { label: 'Connected', color: '#2b8a3e', bg: '#ebfbee' },
+        error: { label: 'Needs setup', color: '#c92a2a', bg: '#fff5f5' },
+        checking: { label: 'Checking…', color: '#e8590c', bg: '#fff4e6' },
+      }[src.status];
+      return {
+        ...src,
+        statusLabel: statusMeta.label,
+        checkedLabel: src.checkedMinsAgo === 0 ? 'checked just now' : `checked ${src.checkedMinsAgo}m ago`,
+        cardStyle: { background: v.cardBg, border: `1px solid ${v.border}`, borderRadius: v.cardRadius, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 },
+        rowTopStyle: { display: 'flex', alignItems: 'center', gap: 10 },
+        iconStyle: { fontSize: 18, color: v.accent, width: 24, textAlign: 'center' },
+        nameStyle: { fontFamily: v.font, fontSize: v.nameSize + 1, fontWeight: 700, color: v.text, flex: 1 },
+        statusPillStyle: { fontSize: v.nameSize - 4, fontWeight: 600, color: statusMeta.color, background: statusMeta.bg, padding: '3px 10px', borderRadius: 20 },
+        detailStyle: { fontFamily: v.font, fontSize: v.nameSize - 2, color: v.muted, lineHeight: 1.4 },
+        footRowStyle: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+        checkedStyle: { fontSize: v.nameSize - 4, color: v.muted },
+        retestStyle: { fontSize: v.nameSize - 4, color: v.accent, fontWeight: 600, cursor: 'pointer' },
+        retestHandler: () => this.retestSource(src.id),
+      };
+    });
+
+    return {
+      appName: APP_NAME,
+      rootStyle: { height: '100%', width: '100%', display: 'flex', flexDirection: 'column', background: v.pageBg, fontFamily: v.font, position: 'relative', overflow: 'hidden' },
+      headerStyle: { display: 'flex', alignItems: 'center', gap: 20, padding: '14px 24px', borderBottom: `1px solid ${v.border}`, background: v.cardBg, flexWrap: 'nowrap' },
+      titleColStyle: { display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0, whiteSpace: 'nowrap' },
+      titleStyle: { fontFamily: v.font, fontSize: v.titleSize, fontWeight: 700, color: v.text, whiteSpace: 'nowrap' },
+      subtitleStyle: { fontFamily: v.font, fontSize: v.nameSize - 3, color: v.muted, whiteSpace: 'nowrap' },
+      summaryLabel: `${visible.length} items across 6 sources`,
+      syncLabel: this.state.syncing ? 'Syncing…' : 'Sync',
+      syncBtnStyle: {
+        display: 'flex', alignItems: 'center', gap: 8, background: v.accent, color: v.accentText, border: 'none',
+        borderRadius: v.cardRadius - 4, padding: '7px 14px', fontFamily: v.font, fontSize: v.nameSize - 1, fontWeight: 600,
+        cursor: 'pointer', opacity: this.state.syncing ? 0.8 : 1, flexShrink: 0,
+      },
+      syncIconStyle: { display: 'inline-block', animation: this.state.syncing ? 'hqSpin 0.8s linear infinite' : 'none' },
+      syncGroupStyle: {
+        display: 'flex', alignItems: 'center', gap: 14, background: v.pageBg, border: `1px solid ${v.border}`,
+        borderRadius: v.cardRadius, padding: '6px 10px 6px 14px', marginLeft: 'auto', flexShrink: 0,
+      },
+      syncGroupDividerStyle: { width: 1, height: 18, background: v.border, flexShrink: 0 },
+      lastSyncLabel: `Synced ${this.formatAgo(this.state.lastSync)}`,
+      lastSyncStyle: { fontSize: v.nameSize - 3, color: v.muted, fontFamily: v.font, whiteSpace: 'nowrap' },
+      autoSyncLabel: 'Auto-sync',
+      autoSyncWrapStyle: { display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flexShrink: 0 },
+      autoSyncTextStyle: { fontSize: v.nameSize - 3, color: v.muted, fontFamily: v.font },
+      autoSyncToggleHandler: () => this.toggleAutoSync(),
+      autoSyncTrackStyle: {
+        width: 34, height: 19, borderRadius: 20, background: this.state.autoSync ? v.accent : v.border,
+        position: 'relative', transition: 'background 0.15s ease', flexShrink: 0,
+      },
+      autoSyncKnobStyle: {
+        width: 15, height: 15, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2,
+        left: this.state.autoSync ? 17 : 2, transition: 'left 0.15s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+      },
+      searchValue: query,
+      searchHandler: (e) => this.setQuery(e.target.value),
+      searchInputStyle: {
+        width: 280, fontFamily: v.font, fontSize: v.nameSize - 1, color: v.text, background: v.pageBg,
+        border: `1px solid ${v.border}`, borderRadius: v.cardRadius, padding: '7px 12px 7px 34px', boxSizing: 'border-box',
+      },
+      searchWrapStyle: { position: 'relative', display: 'flex', alignItems: 'center', minWidth: 0, flexShrink: 1 },
+      searchIconStyle: { position: 'absolute', left: 11, fontSize: v.nameSize, color: v.muted, pointerEvents: 'none' },
+      showToolbar: route === 'board' || route === 'timeline',
+      isBoard: route === 'board', isTimeline: route === 'timeline', isLog: route === 'log', isAdmin: route === 'admin',
+      isItem: route === 'item', isItemView: route === 'item',
+      backToBoardStyle: { fontSize: v.nameSize - 3, color: v.accent, fontWeight: 600, cursor: 'pointer' },
+      ...this.itemViewVals(v),
+      viewTabsStyle: { display: 'flex', gap: 4, background: v.pageBg, padding: 3, borderRadius: v.cardRadius, flexShrink: 0 },
+      boardTabStyle: this.tabStyle(v, route === 'board'),
+      timelineTabStyle: this.tabStyle(v, route === 'timeline'),
+      logTabStyle: this.tabStyle(v, route === 'log'),
+      adminTabStyle: this.tabStyle(v, route === 'admin'),
+      setBoardRoute: () => this.setRoute('board'),
+      setTimelineRoute: () => this.setRoute('timeline'),
+      setLogRoute: () => this.setRoute('log'),
+      setAdminRoute: () => this.setRoute('admin'),
+      timelineRows,
+      timelineWrapStyle: { flex: 1, overflow: 'auto', padding: '0 20px 20px' },
+      timelineCountStyle: { fontSize: v.nameSize - 3, color: v.muted, fontFamily: v.font, padding: '14px 4px 6px' },
+      timelineCountLabel: `${timelineRows.length} items, most recent first`,
+      toast: this.state.toast,
+      toastStyle: {
+        position: 'absolute', top: 12, right: 24, background: v.text, color: v.pageBg, padding: '8px 16px',
+        borderRadius: v.cardRadius, fontFamily: v.font, fontSize: v.nameSize - 2, animation: 'hqToast 2.6s ease forwards', zIndex: 10,
+      },
+      boardStyle: { flex: 1, overflow: 'auto', padding: 20, display: 'flex', gap: 16, alignItems: 'flex-start' },
+      buckets,
+      logPageStyle: { flex: 1, overflow: 'auto', background: '#0d1117', padding: '20px 24px', display: 'flex', flexDirection: 'column' },
+      logTermHeaderStyle: { color: '#8b949e', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: 12, marginBottom: 12, borderBottom: '1px solid #21262d', paddingBottom: 10 },
+      logPromptLabel: 'jojo-hq:~$',
+      logBodyStyle: { display: 'flex', flexDirection: 'column' },
+      logLines,
+      logCursorRowStyle: { display: 'flex', gap: 8, color: '#c9d1d9', fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: 13, marginTop: 4 },
+      logCursorStyle: { animation: 'hqBlink 1s step-start infinite' },
+      adminWrapStyle: { flex: 1, overflow: 'auto', padding: '20px 24px' },
+      adminHeaderRowStyle: { display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 },
+      adminHeaderTitleStyle: { fontFamily: v.font, fontSize: v.titleSize - 2, fontWeight: 700, color: v.text },
+      adminHeaderSubStyle: { fontFamily: v.font, fontSize: v.nameSize - 3, color: v.muted },
+      adminSummaryLabel: `${adminSources.filter(s => s.status === 'connected').length}/${adminSources.length} connected`,
+      adminGridStyle: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 },
+      adminSources,
+    };
+  }
+
+  itemViewVals(v) {
+    const all = [...this.state.items].sort((a, b) => a.minsAgo - b.minsAgo);
+    const sq = this.state.sidebarQuery.trim().toLowerCase();
+    const filtered = sq ? all.filter(it => it.title.toLowerCase().includes(sq) || it.bucket.toLowerCase().includes(sq)) : all;
+    const selectedId = this.state.selectedItemId || (all[0] && all[0].id);
+    const expanded = !this.state.sidebarCollapsed;
+
+    const makeSidebarRow = (item) => {
+      const primarySource = (item.mentions.find(mm => mm.source === 'slack') || item.mentions[0]).source;
+      const sm = SOURCE_META[primarySource];
+      const active = item.id === selectedId;
+      return {
+        key: item.id, title: item.title,
+        dotStyle: { width: 8, height: 8, borderRadius: '50%', background: sm.dot, flexShrink: 0 },
+        labelStyle: { fontFamily: v.font, fontSize: v.nameSize - 1, color: active ? v.text : v.muted, fontWeight: item.unread ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: item.unread ? 1 : 0.65 },
+        rowStyle: {
+          display: 'flex', alignItems: 'center', gap: 10, padding: expanded ? '8px 12px' : '8px 0', margin: expanded ? '0 8px' : '0 auto',
+          borderRadius: v.cardRadius - 4, cursor: 'pointer', justifyContent: expanded ? 'flex-start' : 'center',
+          background: active ? v.pageBg : 'transparent',
+        },
+        tagPills: expanded ? (item.tags || []).map(t => ({ key: t, label: t, style: { fontSize: v.nameSize - 5, fontWeight: 600, color: v.muted, background: v.pageBg, border: `1px solid ${v.border}`, borderRadius: 20, padding: '1px 7px' } })) : [],
+        hasTags: expanded && (item.tags || []).length > 0,
+        clickHandler: () => this.setState({ selectedItemId: item.id }),
+      };
+    };
+
+    const groupByTag = this.state.sidebarGroupByTag;
+    let sidebarItems = [];
+    let sidebarGroups = [];
+    if (groupByTag) {
+      const byTag = {};
+      filtered.forEach(item => {
+        const tags = item.tags && item.tags.length ? item.tags : ['untagged'];
+        tags.forEach(t => { (byTag[t] = byTag[t] || []).push(item); });
+      });
+      sidebarGroups = Object.keys(byTag).sort().map(tag => ({
+        key: tag, label: tag,
+        headerStyle: { fontSize: v.nameSize - 4, fontWeight: 700, color: v.muted, textTransform: 'uppercase', letterSpacing: '0.05em', padding: expanded ? '10px 12px 4px' : '10px 0 4px', textAlign: expanded ? 'left' : 'center' },
+        rows: byTag[tag].map(makeSidebarRow),
+      }));
+    } else {
+      sidebarItems = filtered.map(makeSidebarRow);
+    }
+
+    const sel = this.state.items.find(it => it.id === selectedId);
+    let selectedItem = null;
+    if (sel) {
+      const stm = STATUS_META[sel.status];
+      const mentionRow = (men, i) => {
+        const sm = SOURCE_META[men.source];
+        return {
+          key: i, label: men.label, context: men.context || '', when: men.when, href: men.url || undefined,
+          sourceLabel: sm.label,
+          rowStyle: { display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 14px', borderRadius: v.cardRadius - 4, background: v.cardBg, border: `1px solid ${v.border}` },
+          dotStyle: { width: 8, height: 8, borderRadius: '50%', background: sm.dot, marginTop: 5, flexShrink: 0 },
+          bodyStyle: { display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 },
+          sourceLabelStyle: { fontSize: v.nameSize - 4, color: v.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' },
+          labelStyle: { fontFamily: v.font, fontSize: v.nameSize - 1, color: v.text, lineHeight: 1.4 },
+          contextStyle: { fontSize: v.nameSize - 4, color: v.muted },
+          whenStyle: { fontSize: v.nameSize - 4, color: v.muted, flexShrink: 0, whiteSpace: 'nowrap' },
+          openStyle: { fontSize: v.nameSize - 3, fontWeight: 600, color: v.accent, textDecoration: 'none', flexShrink: 0 },
+        };
+      };
+      const slackMentions = sel.mentions.filter(mm => mm.source === 'slack').map(mentionRow);
+      const otherMentions = sel.mentions.filter(mm => mm.source !== 'slack').map(mentionRow);
+      selectedItem = {
+        ...sel, statusLabel: stm.label,
+        unreadIcon: sel.unread ? '\u2709' : '\u{1F4ED}',
+        bucketBadgeStyle: { fontSize: v.nameSize - 3, fontWeight: 600, color: v.text, background: v.pageBg, border: `1px solid ${v.border}`, borderRadius: 20, padding: '2px 10px' },
+        whenStyle: { fontSize: v.nameSize - 2, color: v.muted, marginLeft: 'auto' },
+        titleBigStyle: { fontFamily: v.font, fontSize: v.titleSize + 8, fontWeight: 700, color: v.text, lineHeight: 1.3, margin: '14px 0 14px' },
+        metaRowStyle: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 },
+        statusPillStyle: { fontSize: v.nameSize - 3, fontWeight: 600, color: stm.color, background: stm.bg, padding: '3px 10px', borderRadius: 20 },
+        tagPills: (sel.tags || []).map(t => ({ label: t, style: { fontSize: v.nameSize - 3, fontWeight: 600, color: v.muted, background: v.pageBg, border: `1px solid ${v.border}`, borderRadius: 20, padding: '3px 10px' } })),
+        actionsRowStyle: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 28 },
+        readToggleBtnStyle: { fontSize: v.nameSize, fontWeight: 600, color: v.accent, cursor: 'pointer' },
+        readToggleHandler: () => this.toggleRead(sel.id),
+        hasSlack: slackMentions.length > 0,
+        slackMentions,
+        hasOther: otherMentions.length > 0,
+        otherMentions,
+        slackSectionStyle: { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: otherMentions.length ? 24 : 0 },
+        sectionHeaderStyle: { fontSize: v.nameSize - 3, fontWeight: 700, color: v.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 },
+        slackSectionHeaderStyle: { fontSize: v.nameSize - 3, fontWeight: 700, color: '#d6336c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 },
+        otherSectionStyle: { display: 'flex', flexDirection: 'column', gap: 8 },
+      };
+    }
+
+    return {
+      itemLayoutStyle: { flex: 1, display: 'flex', overflow: 'hidden' },
+      sidebarStyle: {
+        width: expanded ? 280 : 56, flexShrink: 0, background: v.cardBg, borderRight: `1px solid ${v.border}`,
+        display: 'flex', flexDirection: 'column', transition: 'width 0.18s ease', overflow: 'hidden',
+      },
+      sidebarTopRowStyle: { display: 'flex', alignItems: 'center', gap: 8, padding: '12px 8px', borderBottom: `1px solid ${v.border}` },
+      sidebarExpanded: expanded,
+      sidebarQueryValue: this.state.sidebarQuery,
+      sidebarSearchHandler: (e) => this.setSidebarQuery(e.target.value),
+      sidebarSearchWrapStyle: { position: 'relative', display: 'flex', alignItems: 'center', flex: 1 },
+      sidebarSearchInputStyle: {
+        width: '100%', fontFamily: v.font, fontSize: v.nameSize - 2, color: v.text, background: v.pageBg,
+        border: `1px solid ${v.border}`, borderRadius: v.cardRadius - 4, padding: '6px 10px 6px 28px', boxSizing: 'border-box',
+      },
+      sidebarCollapseBtnStyle: { cursor: 'pointer', fontSize: v.nameSize + 2, color: v.muted, flexShrink: 0, padding: '2px 4px' },
+      sidebarCollapseIcon: expanded ? '\u00AB' : '\u00BB',
+      sidebarToggleHandler: () => this.toggleSidebar(),
+      sidebarGroupBtnStyle: {
+        margin: expanded ? '8px 12px 0' : '8px auto 0', fontSize: v.nameSize - 4, fontWeight: 600, cursor: 'pointer',
+        color: groupByTag ? v.accentText : v.muted, background: groupByTag ? v.accent : 'transparent',
+        border: `1px solid ${groupByTag ? v.accent : v.border}`, borderRadius: v.cardRadius - 4,
+        padding: expanded ? '5px 10px' : '5px', textAlign: 'center', width: expanded ? 'auto' : 32,
+      },
+      sidebarGroupBtnLabel: expanded ? 'Group by tags' : '#',
+      sidebarGroupByTag: groupByTag,
+      sidebarFlatList: !groupByTag,
+      sidebarGroupToggleHandler: () => this.toggleSidebarGroupByTag(),
+      sidebarListStyle: { flex: 1, overflow: 'auto', padding: '8px 0' },
+      sidebarItems,
+      sidebarGroups,
+      itemDetailWrapStyle: { flex: 1, overflow: 'auto', padding: '32px 40px' },
+      itemDetailCardStyle: { maxWidth: 720 },
+      itemDetailTopRowStyle: { display: 'flex', alignItems: 'center', gap: 8 },
+      selectedItem,
+    };
+  }
+
+  tabStyle(v, active) {
+    return {
+      padding: '6px 14px', borderRadius: v.cardRadius - 2, fontFamily: v.font, fontSize: v.nameSize - 2, fontWeight: 600,
+      cursor: 'pointer', background: active ? v.cardBg : 'transparent', color: active ? v.text : v.muted,
+      boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+    };
+  }
+}
+
+</script>
+</body>
+</html>

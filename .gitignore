@@ -35,4 +35,5 @@ frontend/dist/
 # Editors / OS
 .DS_Store
 .idea/
+.vscode/
 *.swp

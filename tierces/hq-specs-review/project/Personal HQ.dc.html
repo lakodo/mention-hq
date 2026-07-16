@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" hint-size="0,0"></x-import>
+</helmet>
+
+<section style="display:flex; flex-direction:column; gap:24px; padding:60px; background:#e9ecef; min-height:100vh; box-sizing:border-box; font-family:'Inter',sans-serif;">
+  <div style="display:flex; gap:12px; align-items:center;">
+    <span style="font-size:22px; font-weight:700; color:#212529;">Personal HQ — dashboard explorations</span>
+  </div>
+  <div style="display:flex; gap:48px; flex-wrap:wrap; align-items:flex-start;">
+
+    <div id="1a" style="display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="background:#212529; color:#fff; font-size:12px; font-weight:700; padding:3px 8px; border-radius:5px;">1a</span>
+        <span style="font-size:15px; font-weight:600; color:#495057;">Clean &amp; minimal</span>
+      </div>
+      <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="localhost:5173" hint-size="1180,820">
+        <dc-import name="HQBoard" vibe="clean" hint-size="100%,100%" style="width:1180px; height:780px;"></dc-import>
+      </x-import>
+    </div>
+
+    <div id="1b" style="display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="background:#212529; color:#fff; font-size:12px; font-weight:700; padding:3px 8px; border-radius:5px;">1b</span>
+        <span style="font-size:15px; font-weight:600; color:#495057;">Dense developer console</span>
+      </div>
+      <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="localhost:5173" hint-size="1180,820">
+        <dc-import name="HQBoard" vibe="dense" hint-size="100%,100%" style="width:1180px; height:780px;"></dc-import>
+      </x-import>
+    </div>
+
+    <div id="1c" style="display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="background:#212529; color:#fff; font-size:12px; font-weight:700; padding:3px 8px; border-radius:5px;">1c</span>
+        <span style="font-size:15px; font-weight:600; color:#495057;">Warm &amp; friendly</span>
+      </div>
+      <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" url="localhost:5173" hint-size="1180,820">
+        <dc-import name="HQBoard" vibe="warm" hint-size="100%,100%" style="width:1180px; height:780px;"></dc-import>
+      </x-import>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+</body>
+</html>
