@@ -95,6 +95,28 @@ describe('TaskDetailView', () => {
     expect(await screen.findByLabelText('Resize task list')).toBeInTheDocument();
   });
 
+  it('select-all ticks only the shown rows and keeps them when the filter clears', async () => {
+    const user = userEvent.setup();
+    renderApp('/task');
+    await screen.findByText('Select a task from the list.');
+
+    // Narrow to one task, then select all shown.
+    const search = screen.getByLabelText('Search tasks');
+    await user.type(search, 'refresh token');
+    await waitFor(() =>
+      expect(screen.getAllByText('Refresh token rotation on scope change')).toHaveLength(1),
+    );
+    await user.click(screen.getByRole('checkbox', { name: 'Select all shown tasks' }));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+
+    // Clearing the filter keeps that one selected among the full list.
+    await user.clear(search);
+    await waitFor(() =>
+      expect(screen.getByText('Stripe webhook handling for invoice payments')).toBeInTheDocument(),
+    );
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+  });
+
   it('gives Slack its own section ahead of the other sources', async () => {
     renderApp(detailRoute(PAYMENTS_TASK_ID));
 

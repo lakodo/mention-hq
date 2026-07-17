@@ -565,17 +565,22 @@ function TriageRules() {
   );
 }
 
+// Values are hours, so sub-day windows work alongside the day-scale ones.
 const WINDOW_OPTIONS = [
-  { value: '7', label: 'Last 7 days' },
-  { value: '30', label: 'Last 30 days' },
-  { value: '90', label: 'Last 90 days' },
+  { value: '1', label: 'Last hour' },
+  { value: '24', label: 'Last day' },
+  { value: '168', label: 'Last 7 days' },
+  { value: '720', label: 'Last 30 days' },
+  { value: '2160', label: 'Last 90 days' },
   { value: '', label: 'All time' },
 ];
 
-function sinceParam(days: string): string | undefined {
-  if (!days) return undefined;
+const DEFAULT_WINDOW = '168';
+
+function sinceParam(hours: string): string | undefined {
+  if (!hours) return undefined;
   const d = new Date();
-  d.setDate(d.getDate() - Number(days));
+  d.setHours(d.getHours() - Number(hours));
   return d.toISOString();
 }
 
@@ -608,7 +613,7 @@ function MatchProgress() {
 export function CatchupView() {
   const { query } = useHq();
   const [tab, setTab] = useState<'inbox' | 'skipped'>('inbox');
-  const [window, setWindow] = useState('7');
+  const [window, setWindow] = useState(DEFAULT_WINDOW);
   const since = useMemo(() => sinceParam(window), [window]);
 
   const { data: inboxItems, isLoading: inboxLoading } = useCatchup();
@@ -687,7 +692,7 @@ export function CatchupView() {
               size="xs"
               data={WINDOW_OPTIONS}
               value={window}
-              onChange={(v) => setWindow(v ?? '7')}
+              onChange={(v) => setWindow(v ?? DEFAULT_WINDOW)}
               w={140}
               comboboxProps={{ withinPortal: true }}
             />

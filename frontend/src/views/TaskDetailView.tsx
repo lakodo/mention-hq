@@ -431,6 +431,19 @@ export function TaskDetailView() {
 
   const clearSelection = () => setSelectedIds(new Set());
 
+  // Select-all acts on the shown (filtered) rows only, and adds to the running selection —
+  // so narrowing by a search, selecting all, then clearing it keeps those rows ticked.
+  const shownIds = filtered.map((t) => t.id);
+  const allShownSelected = shownIds.length > 0 && shownIds.every((id) => selectedIds.has(id));
+  const someShownSelected = shownIds.some((id) => selectedIds.has(id));
+  const toggleSelectAllShown = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allShownSelected) shownIds.forEach((id) => next.delete(id));
+      else shownIds.forEach((id) => next.add(id));
+      return next;
+    });
+
   const plural = (n: number) => `${n} ${n === 1 ? 'task' : 'tasks'}`;
 
   const bulkArchive = async () => {
@@ -728,6 +741,20 @@ export function TaskDetailView() {
         )}
 
         <Box style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
+          {!collapsed && filtered.length > 0 && (
+            <Group gap={8} px={20} pb={6} wrap="nowrap">
+              <Checkbox
+                size="xs"
+                aria-label="Select all shown tasks"
+                checked={allShownSelected}
+                indeterminate={!allShownSelected && someShownSelected}
+                onChange={toggleSelectAllShown}
+              />
+              <Text fz="xs" c="dimmed">
+                Select all{sidebarQuery ? ' shown' : ''}
+              </Text>
+            </Group>
+          )}
           {sidebarGroups.map((group) => (
             <Box key={group.label || 'all'}>
               {groupMode !== 'none' && !collapsed && (

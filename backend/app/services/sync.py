@@ -84,6 +84,17 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
     result = await _persist(db, _merge(kept, fetched))
     await _skip_by_rules(db)
 
+    # Rules run after the engine proposes, so a proposal on a now-skipped item is no longer
+    # something to catch up on. Report only live proposals — the ones still in the inbox.
+    result.proposals = (
+        await db.scalar(
+            select(func.count())
+            .select_from(Link)
+            .join(Item, Item.id == Link.item_id)
+            .where(Link.state == PROPOSED, Item.triaged.is_(False))
+        )
+    ) or 0
+
     duration = round(time.perf_counter() - started, 2)
     _write_log(db, outcomes, result, started_at, duration)
     await db.commit()

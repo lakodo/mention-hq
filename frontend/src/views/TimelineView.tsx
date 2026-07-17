@@ -193,6 +193,8 @@ function TimelineRow({
   const navigate = useNavigate();
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const tasks = confirmedTasks(item);
+  // Triaged with nothing filed under it means it was skipped — dim it and say so.
+  const skipped = item.triaged && tasks.length === 0;
 
   return (
     <>
@@ -210,7 +212,10 @@ function TimelineRow({
         wrap="nowrap"
         px={16}
         py={12}
-        style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+        style={{
+          borderBottom: '1px solid var(--mantine-color-gray-3)',
+          opacity: skipped ? 0.55 : 1,
+        }}
       >
         <SourceDot source={item.source} />
         <Text
@@ -264,7 +269,7 @@ function TimelineRow({
           </Group>
         ) : (
           <Badge variant="default" color="gray" radius="xl" style={{ flexShrink: 0 }}>
-            {item.triaged ? 'No task' : 'To triage'}
+            {skipped ? 'Skipped' : 'To triage'}
           </Badge>
         )}
 
