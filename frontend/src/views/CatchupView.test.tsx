@@ -19,6 +19,29 @@ describe('CatchupView', () => {
     expect(screen.getByText('#payments-eng, 4 replies')).toBeInTheDocument();
   });
 
+  it('filters the items to triage by the header search', async () => {
+    const user = userEvent.setup();
+    renderApp('/catchup');
+    await waitFor(() => expect(screen.getAllByTestId('catchup-card')).toHaveLength(2));
+
+    await user.type(screen.getByLabelText('Search'), 'auth-session');
+
+    await waitFor(() => expect(screen.getAllByTestId('catchup-card')).toHaveLength(1));
+    expect(screen.getByText('[alan-apps] joris/auth-session-timeout')).toBeInTheDocument();
+    expect(screen.getByText('1 item to triage (of 2)')).toBeInTheDocument();
+  });
+
+  it('says so when the search matches no items', async () => {
+    const user = userEvent.setup();
+    renderApp('/catchup');
+    await screen.findAllByTestId('catchup-card');
+
+    await user.type(screen.getByLabelText('Search'), 'nothingmatchesthis');
+
+    await waitFor(() => expect(screen.queryByTestId('catchup-card')).not.toBeInTheDocument());
+    expect(screen.getByText(/No items match/)).toBeInTheDocument();
+  });
+
   it('argues a proposal with its engine, confidence and reason', async () => {
     renderApp('/catchup');
 

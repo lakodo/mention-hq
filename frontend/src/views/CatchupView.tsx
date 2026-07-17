@@ -27,7 +27,9 @@ import {
   useTasks,
   useTriageItem,
 } from '../api/hooks';
+import { filterItems } from '../lib/search';
 import { formatAgo } from '../lib/time';
+import { useHq } from '../shell/HqContext';
 import type { ItemWithLinks, Link } from '../types';
 
 function confidenceLabel(confidence: number): string {
@@ -248,6 +250,7 @@ function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
 }
 
 export function CatchupView() {
+  const { query } = useHq();
   const { data: items, isLoading } = useCatchup();
   const { data: tasks } = useTasks();
   const { data: buckets } = useBuckets();
@@ -258,6 +261,7 @@ export function CatchupView() {
     [tasks],
   );
   const bucketOptions = useMemo(() => (buckets ?? []).map((b) => b.name), [buckets]);
+  const visible = useMemo(() => filterItems(items ?? [], query), [items, query]);
 
   if (isLoading) {
     return (
@@ -280,13 +284,24 @@ export function CatchupView() {
     );
   }
 
+  if (visible.length === 0) {
+    return (
+      <Center style={{ flex: 1 }}>
+        <Text c="dimmed" fz="sm">
+          No items match “{query}”.
+        </Text>
+      </Center>
+    );
+  }
+
   return (
     <Box style={{ flex: 1, overflow: 'auto', padding: '16px 20px 20px' }}>
       <Text fz="xs" c="dimmed" px={4} pb={10}>
-        {items.length} {items.length === 1 ? 'item' : 'items'} to triage
+        {visible.length} {visible.length === 1 ? 'item' : 'items'} to triage
+        {query ? ` (of ${items.length})` : ''}
       </Text>
       <Stack gap="sm" style={{ maxWidth: 860 }}>
-        {items.map((item) => (
+        {visible.map((item) => (
           <CatchupCard
             key={item.id}
             item={item}
