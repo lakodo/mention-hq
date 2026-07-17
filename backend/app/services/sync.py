@@ -397,6 +397,7 @@ async def _upsert_items(db: AsyncSession, owned: list[tuple[str | None, RawItem]
             "tags": raw.tags,
             "identity_keys": sorted(raw.identity_keys),
             "reference_keys": sorted(raw.reference_keys),
+            "people": raw.people,
         }
         row = existing.get(raw.id)
         if row is None:

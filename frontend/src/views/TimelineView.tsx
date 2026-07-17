@@ -38,10 +38,12 @@ import {
   useConfirmLinks,
   useCreateTaskFromItem,
   useDeleteItem,
+  useEmojiMap,
   useItems,
   useTasks,
 } from '../api/hooks';
 import { filterItems } from '../lib/search';
+import { taskPath } from '../lib/tasks';
 import { formatAgo } from '../lib/time';
 import { useHq } from '../shell/HqContext';
 import type { ItemWithLinks } from '../types';
@@ -205,6 +207,7 @@ function TimelineRow({
   bucketOptions: string[];
 }) {
   const navigate = useNavigate();
+  const { data: emojiMap = {} } = useEmojiMap();
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const deleteItem = useDeleteItem();
   const tasks = confirmedTasks(item);
@@ -246,11 +249,11 @@ function TimelineRow({
         <Box style={{ flex: 1, minWidth: 0 }}>
           {item.url ? (
             <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" truncate="end">
-              {itemLabel(item.label, item.emoji)}
+              {itemLabel(item.label, { ...emojiMap, ...item.emoji })}
             </Anchor>
           ) : (
             <Text fz="sm" truncate>
-              {itemLabel(item.label, item.emoji)}
+              {itemLabel(item.label, { ...emojiMap, ...item.emoji })}
             </Text>
           )}
           {item.context && (
@@ -275,7 +278,7 @@ function TimelineRow({
                 variant="light"
                 radius="xl"
                 style={{ cursor: 'pointer' }}
-                onClick={() => navigate(`/task/${encodeURIComponent(task.id)}`)}
+                onClick={() => navigate(taskPath(task.id))}
                 title={`${task.title} · ${task.bucket}`}
               >
                 {task.title}

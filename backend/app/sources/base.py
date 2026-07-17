@@ -71,6 +71,9 @@ class RawItem:
     # Keys this item points at, such as a ticket cited in a PR body. An engine proposes a
     # link when one item's references hit another's identity.
     reference_keys: set[str] = field(default_factory=set)
+    # People the item concerns, each `{kind, value, name, role}` — a source names them its own
+    # way (a Slack mention, a PR reviewer, a Linear assignee). Aggregated onto the task.
+    people: list[dict] = field(default_factory=list)
     extra: dict = field(default_factory=dict)
 
     @property

@@ -88,6 +88,18 @@ async def backup_now() -> BackupOut:
     )
 
 
+@router.get("/emoji", response_model=dict[str, str])
+async def emoji_map(db: AsyncSession = Depends(get_db)) -> dict[str, str]:
+    """Custom emoji name → image URL, merged across configured Slack sources. The frontend
+    renders these :shortcodes: as images in any item label, so no re-sync is needed."""
+    merged: dict[str, str] = {}
+    for connected in await build_connected(db):
+        source = connected.source
+        if hasattr(source, "emoji_map"):
+            merged.update(source.emoji_map())
+    return merged
+
+
 @router.get("/ai", response_model=AIStatusOut)
 async def ai_status() -> AIStatusOut:
     current = ai.status()

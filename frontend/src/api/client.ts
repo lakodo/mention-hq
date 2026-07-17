@@ -122,6 +122,11 @@ export async function fetchCatchup(limit?: number): Promise<ItemWithLinks[]> {
   return data;
 }
 
+export async function fetchEmojiMap(): Promise<Record<string, string>> {
+  const { data } = await api.get<Record<string, string>>('/admin/emoji');
+  return data;
+}
+
 export async function enrichTasks(): Promise<{ scheduled: number }> {
   const { data } = await api.post<{ scheduled: number }>('/tasks/enrich');
   return data;

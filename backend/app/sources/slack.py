@@ -82,6 +82,9 @@ class SlackSource(Source):
     def is_configured(self) -> bool:
         return bool(self.get("user_token"))
 
+    def emoji_map(self) -> dict[str, str]:
+        return _parse_emoji_urls(self.get("emoji_urls"))
+
     def detail(self) -> str:
         if not self.is_configured():
             return "Not configured"

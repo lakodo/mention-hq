@@ -20,6 +20,7 @@ import {
   deleteBucket,
   deleteItem,
   enrichTasks,
+  fetchEmojiMap,
   deletePerson,
   deleteTask,
   detectSource,
@@ -468,6 +469,14 @@ export function useBackupDatabase(): UseMutationResult<Backup, Error, void> {
 
 export function useEnrichTasks(): UseMutationResult<{ scheduled: number }, Error, void> {
   return useMutation({ mutationFn: enrichTasks });
+}
+
+export function useEmojiMap(): UseQueryResult<Record<string, string>> {
+  return useQuery({
+    queryKey: ['admin', 'emoji'],
+    queryFn: fetchEmojiMap,
+    staleTime: 5 * 60 * 1000,
+  });
 }
 
 function useInvalidateSources() {

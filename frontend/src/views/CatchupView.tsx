@@ -42,6 +42,7 @@ import {
   useCreateTaskFromItem,
   useCreateTriageRule,
   useDeleteTriageRule,
+  useEmojiMap,
   useMatchAllItems,
   useMatchStatus,
   useRejectLink,
@@ -203,6 +204,7 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
   const [bucket, setBucket] = useState<string | null>(null);
   const [priority, setPriority] = useState(50);
 
+  const { data: emojiMap = {} } = useEmojiMap();
   const confirm = useConfirmLinks();
   const reject = useRejectLink();
   const triage = useTriageItem();
@@ -300,13 +302,13 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
       {item.url ? (
         <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" fw={600} mb={2}>
           <Group gap={4} wrap="nowrap" component="span" style={{ display: 'inline-flex' }}>
-            {itemLabel(item.label, item.emoji)}
+            {itemLabel(item.label, { ...emojiMap, ...item.emoji })}
             <IconExternalLink size={12} />
           </Group>
         </Anchor>
       ) : (
         <Text fz="sm" fw={600} mb={2}>
-          {itemLabel(item.label, item.emoji)}
+          {itemLabel(item.label, { ...emojiMap, ...item.emoji })}
         </Text>
       )}
       {item.context && (

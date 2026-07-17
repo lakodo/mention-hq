@@ -508,6 +508,8 @@ export const handlers = [
     }),
   ),
 
+  http.get(`${BASE}/admin/emoji`, () => HttpResponse.json({})),
+
   http.get(`${BASE}/admin/source-kinds`, () => HttpResponse.json(db.sourceKinds)),
 
   http.get(`${BASE}/admin/sources`, () => HttpResponse.json(db.sources)),

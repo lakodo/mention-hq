@@ -124,3 +124,13 @@ export function groupTasksByBucket(tasks: Task[]): { label: string; tasks: Task[
 export function countItems(tasks: Task[]): number {
   return tasks.reduce((total, task) => total + task.items.length, 0);
 }
+
+/** Task ids are `task:<hex>`; keep the colon out of the URL so it doesn't show as %3A. */
+export function taskPath(taskId: string): string {
+  return `/task/${taskId.replace(/^task:/, '')}`;
+}
+
+export function taskIdFromParam(param: string | undefined): string | undefined {
+  if (!param) return undefined;
+  return param.startsWith('task:') ? param : `task:${param}`;
+}

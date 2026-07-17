@@ -6,6 +6,8 @@ import {
   itemCountLabel,
   primarySource,
   splitSlackItems,
+  taskIdFromParam,
+  taskPath,
   uniqueSources,
 } from './tasks';
 import { makeBuckets, makeTasks } from '../test/fixtures';
@@ -132,5 +134,15 @@ describe('groupTasksByBucket', () => {
       stripe.id,
       refund.id,
     ]);
+  });
+});
+
+describe('task url helpers', () => {
+  it('keeps the colon out of the path and reads it back', () => {
+    expect(taskPath('task:c71aa901e22d')).toBe('/task/c71aa901e22d');
+    expect(taskIdFromParam('c71aa901e22d')).toBe('task:c71aa901e22d');
+    // Idempotent when the param already carries the prefix (older links).
+    expect(taskIdFromParam('task:c71aa901e22d')).toBe('task:c71aa901e22d');
+    expect(taskIdFromParam(undefined)).toBeUndefined();
   });
 });

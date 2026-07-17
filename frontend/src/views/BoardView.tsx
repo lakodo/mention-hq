@@ -34,7 +34,7 @@ import {
   useUpdateTask,
 } from '../api/hooks';
 import { filterTasks } from '../lib/search';
-import { groupByBucket, itemCountLabel, newestItemAt, uniqueSources } from '../lib/tasks';
+import { groupByBucket, itemCountLabel, newestItemAt, taskPath, uniqueSources } from '../lib/tasks';
 import { formatAgo } from '../lib/time';
 import { useHq } from '../shell/HqContext';
 import type { Bucket, Task } from '../types';
@@ -366,7 +366,7 @@ export function BoardView() {
                 key={task.id}
                 task={task}
                 bucketNames={bucketNames}
-                onOpen={(id) => navigate(`/task/${encodeURIComponent(id)}`)}
+                onOpen={(id) => navigate(taskPath(id))}
                 onToggleRead={toggleRead}
                 onMoveToBucket={moveToBucket}
               />

@@ -48,6 +48,7 @@ import { errorMessage } from '../api/client';
 import {
   useConfirmTaskCandidate,
   useCreateBucket,
+  useEmojiMap,
   useCreateTask,
   useDeleteTask,
   useNextAction,
@@ -64,6 +65,8 @@ import {
   primarySource,
   sortTasksByRecency,
   splitSlackItems,
+  taskIdFromParam,
+  taskPath,
 } from '../lib/tasks';
 import { formatAgo } from '../lib/time';
 import type { BucketSuggestion, Item, NextAction, Task, TaskCandidate } from '../types';
@@ -116,6 +119,7 @@ interface ItemCardProps {
 }
 
 function ItemCard({ item }: ItemCardProps) {
+  const { data: emojiMap = {} } = useEmojiMap();
   const meta = sourceMeta(item.source);
 
   return (
@@ -131,13 +135,13 @@ function ItemCard({ item }: ItemCardProps) {
           {item.url ? (
             <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" lh={1.4}>
               <Group gap={4} wrap="nowrap">
-                {itemLabel(item.label, item.emoji)}
+                {itemLabel(item.label, { ...emojiMap, ...item.emoji })}
                 <IconExternalLink size={12} />
               </Group>
             </Anchor>
           ) : (
             <Text fz="sm" lh={1.4}>
-              {itemLabel(item.label, item.emoji)}
+              {itemLabel(item.label, { ...emojiMap, ...item.emoji })}
             </Text>
           )}
           {item.context && (
@@ -222,7 +226,8 @@ function SuggestionPanel({ task, suggestion, onAccept, onDismiss, busy }: Sugges
 }
 
 export function TaskDetailView() {
-  const { id } = useParams();
+  const { id: rawId } = useParams();
+  const id = taskIdFromParam(rawId);
   const navigate = useNavigate();
 
   const [collapsed, setCollapsed] = useState(false);
@@ -343,7 +348,7 @@ export function TaskDetailView() {
               if (title.trim())
                 createTask.mutate(
                   { title: title.trim() },
-                  { onSuccess: (t) => navigate(`/task/${t.id}`), onError: fail },
+                  { onSuccess: (t) => navigate(taskPath(t.id)), onError: fail },
                 );
             }
           }}
@@ -354,7 +359,7 @@ export function TaskDetailView() {
         if (title.trim())
           createTask.mutate(
             { title: title.trim() },
-            { onSuccess: (t) => navigate(`/task/${t.id}`), onError: fail },
+            { onSuccess: (t) => navigate(taskPath(t.id)), onError: fail },
           );
       },
     });
@@ -521,7 +526,7 @@ export function TaskDetailView() {
           gap={10}
           wrap="nowrap"
           style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
-          onClick={() => navigate(`/task/${encodeURIComponent(task.id)}`)}
+          onClick={() => navigate(taskPath(task.id))}
           title={task.title}
           justify={collapsed ? 'center' : 'flex-start'}
         >
