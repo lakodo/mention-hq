@@ -180,10 +180,15 @@ async def suggest_tasks(db: AsyncSession, item: Item) -> list[TaskMatch]:
 
     result = await _structured(MATCH_SYSTEM_PROMPT, _build_match_prompt(item, tasks), TaskMatches)
 
-    # No match is the expected outcome, so keep only ids it was actually given, and only
-    # confident ones — a half-hearted guess is worse than leaving the item to be filed by hand.
-    known = {task.id for task in tasks}
-    matches = [m for m in result.matches if m.task_id in known and m.confidence >= MATCH_FLOOR]
+    # The brain often drops the "task:" id prefix, so resolve on the bare id — otherwise a
+    # genuine, confident match is silently discarded as an unknown id. Then keep only the
+    # confident ones: a half-hearted guess is worse than leaving the item to be filed by hand.
+    by_bare = {task.id.removeprefix("task:"): task.id for task in tasks}
+    matches = []
+    for m in result.matches:
+        real_id = by_bare.get(m.task_id.removeprefix("task:"))
+        if real_id is not None and m.confidence >= MATCH_FLOOR:
+            matches.append(TaskMatch(task_id=real_id, confidence=m.confidence, reason=m.reason))
     matches.sort(key=lambda m: m.confidence, reverse=True)
     log.info("tasks_suggested", item=item.id, matches=len(matches))
     return matches

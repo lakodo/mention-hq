@@ -202,6 +202,43 @@ class TestEndpoint:
         assert [m["task"]["id"] for m in body] == ["task:a"]
         assert body[0]["reason"] == "same refund work"
 
+    async def test_suggest_tasks_resolves_a_match_that_dropped_the_task_prefix(self, client, db, monkeypatch):
+        db.add(
+            Task(
+                id="task:dcd73249fe21",
+                title="SFA",
+                bucket="Uncategorized",
+                status="open",
+                tags=[],
+                unread=False,
+                origin="manual",
+                updated_at=datetime.now(UTC),
+            )
+        )
+        db.add(
+            Item(
+                id="slack:x~1",
+                source="slack",
+                label="#org_alaner-sfa hiring",
+                url=None,
+                context=None,
+                occurred_at=datetime.now(UTC),
+                extra={},
+            )
+        )
+        await db.commit()
+
+        async def fake_structured(system, prompt, model_cls):
+            # The brain returns the id without the "task:" prefix, as it often does.
+            return model_cls(matches=[{"task_id": "dcd73249fe21", "confidence": 0.9, "reason": "SFA"}])
+
+        monkeypatch.setattr(ai, "_claude_cli", lambda: "/usr/bin/claude")
+        monkeypatch.setattr(ai, "_structured", fake_structured)
+
+        body = (await client.post("/api/catchup/slack:x~1/suggest-tasks")).json()
+
+        assert [m["task"]["id"] for m in body] == ["task:dcd73249fe21"]
+
     async def test_admin_reports_ai_status(self, client, isolated_secrets):
         body = (await client.get("/api/admin/ai")).json()
 
