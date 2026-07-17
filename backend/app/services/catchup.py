@@ -28,6 +28,15 @@ async def all_items(db: AsyncSession, limit: int = 200) -> list[Item]:
     return list((await db.execute(stmt)).scalars().all())
 
 
+async def skipped_items(db: AsyncSession, since: datetime | None = None) -> list[Item]:
+    """Items that were skipped (triaged with no task attachment) — the skipped view."""
+    stmt = select(Item).where(Item.triaged.is_(True), Item.triage_reason.isnot(None))
+    if since is not None:
+        stmt = stmt.where(Item.triaged_at >= since)
+    stmt = stmt.order_by(Item.triaged_at.desc())
+    return list((await db.execute(stmt)).scalars().all())
+
+
 async def confirm(db: AsyncSession, item_id: str, task_ids: list[str]) -> Item:
     """Attach an item to one or more tasks, for good."""
     item = await _require_item(db, item_id)
