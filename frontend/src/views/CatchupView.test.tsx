@@ -119,6 +119,44 @@ describe('CatchupView', () => {
     expect(link).toHaveAttribute('target', '_blank');
   });
 
+  it('shows an already-attached task pre-selected in the attach box, not as a badge', async () => {
+    db.catchup.push({
+      id: 'slack:confirmed-1',
+      source: 'slack',
+      label: 'already filed thread',
+      url: null,
+      context: '#mo',
+      occurred_at: new Date().toISOString(),
+      triaged: false,
+      triage_reason: null,
+      triaged_at: null,
+      pr_status: null,
+      links: [
+        {
+          task: {
+            id: PAYMENTS_TASK_ID,
+            title: 'Stripe webhook handling for invoice payments',
+            bucket: 'Payments',
+          },
+          state: 'confirmed',
+          engine: null,
+          confidence: 1,
+          reason: 'You said so',
+        },
+      ],
+    });
+    renderApp('/catchup');
+
+    const card = (await screen.findByText('already filed thread')).closest(
+      '[data-testid="catchup-card"]',
+    ) as HTMLElement;
+    // The confirmed task is a selected value in the attach box, not a CONFIRMED badge row.
+    expect(within(card).queryByTestId('link-confirmed')).not.toBeInTheDocument();
+    expect(
+      within(card).getByText('Stripe webhook handling for invoice payments · Payments'),
+    ).toBeInTheDocument();
+  });
+
   it('argues a proposal with its engine, confidence and reason', async () => {
     renderApp('/catchup');
 

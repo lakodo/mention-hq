@@ -189,7 +189,13 @@ interface CatchupCardProps {
 }
 
 function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: CatchupCardProps) {
-  const [selected, setSelected] = useState<string[]>([]);
+  // An item can already be attached (a confirmed link) yet still sit untriaged. Show those
+  // tasks pre-selected in the attach box rather than as a separate badge, so Attach files it.
+  const confirmedTaskIds = item.links.filter((l) => l.state === 'confirmed').map((l) => l.task.id);
+  // Confirmed links move into the attach box as pre-selected tasks; proposed and rejected
+  // links stay visible as their own rows to decide on.
+  const shownLinks = item.links.filter((l) => l.state !== 'confirmed');
+  const [selected, setSelected] = useState<string[]>(confirmedTaskIds);
   const [modalOpen, setModalOpen] = useState(false);
   const [title, setTitle] = useState(item.label);
   const [bucket, setBucket] = useState<string | null>(null);
@@ -301,9 +307,9 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
       )}
       {item.pr_status && <PrStatusPill status={item.pr_status} size="xs" />}
 
-      {item.links.length > 0 && (
+      {shownLinks.length > 0 && (
         <Stack gap={6} mb="sm">
-          {item.links.map((link) => (
+          {shownLinks.map((link) => (
             <LinkRow
               key={`${link.task.id}:${link.state}`}
               link={link}
