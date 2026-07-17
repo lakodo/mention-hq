@@ -26,6 +26,7 @@ import {
   IconChevronRight,
   IconDots,
   IconExternalLink,
+  IconPlus,
   IconSearch,
   IconSparkles,
   IconTrash,
@@ -40,6 +41,7 @@ import { SLACK_ACCENT, sourceMeta } from '../constants';
 import { errorMessage } from '../api/client';
 import {
   useCreateBucket,
+  useCreateTask,
   useDeleteTask,
   useSuggestBucket,
   useTasks,
@@ -193,6 +195,7 @@ export function TaskDetailView() {
 
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const createTask = useCreateTask();
   const createBucket = useCreateBucket();
   const suggest = useSuggestBucket();
 
@@ -256,6 +259,41 @@ export function TaskDetailView() {
       { name: accepted.bucket, keywords: accepted.keywords },
       { onSuccess: move, onError: fail },
     );
+  };
+
+  const openNewTask = () => {
+    let title = '';
+    modals.openConfirmModal({
+      title: 'New task',
+      children: (
+        <TextInput
+          data-autofocus
+          placeholder="Task title"
+          onChange={(e) => {
+            title = e.currentTarget.value;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              modals.closeAll();
+              if (title.trim())
+                createTask.mutate(
+                  { title: title.trim() },
+                  { onSuccess: (t) => navigate(`/task/${t.id}`), onError: fail },
+                );
+            }
+          }}
+        />
+      ),
+      labels: { confirm: 'Create', cancel: 'Cancel' },
+      onConfirm: () => {
+        if (title.trim())
+          createTask.mutate(
+            { title: title.trim() },
+            { onSuccess: (t) => navigate(`/task/${t.id}`), onError: fail },
+          );
+      },
+    });
   };
 
   const askForSuggestion = () => {
@@ -506,6 +544,19 @@ export function TaskDetailView() {
               onChange={(e) => setSidebarQuery(e.currentTarget.value)}
               style={{ flex: 1 }}
             />
+          )}
+          {!collapsed && (
+            <Tooltip label="New task" withArrow>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                aria-label="New task"
+                loading={createTask.isPending}
+                onClick={openNewTask}
+              >
+                <IconPlus size={16} />
+              </ActionIcon>
+            </Tooltip>
           )}
           <Tooltip label={collapsed ? 'Expand' : 'Collapse'} withArrow>
             <ActionIcon
