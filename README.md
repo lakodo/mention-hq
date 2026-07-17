@@ -1,5 +1,7 @@
 # Personal HQ
 
+[![CI](https://github.com/lakodo/mention-hq/actions/workflows/ci.yml/badge.svg)](https://github.com/lakodo/mention-hq/actions/workflows/ci.yml)
+
 A local dashboard that pulls your activity out of GitHub, Linear, Slack, Dust and your own
 machine (git branches, todo files, markdown docs) and groups it by subject, so you can pick
 a topic back up without hunting through five tabs.
