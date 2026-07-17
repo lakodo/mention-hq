@@ -28,6 +28,7 @@ import {
   fetchSyncStatus,
   fetchTask,
   fetchTasks,
+  matchAllItems,
   mergePeople,
   patchBucket,
   patchSettings,
@@ -321,6 +322,16 @@ export function useSuggestBucket(): UseMutationResult<BucketSuggestion, Error, s
 
 export function useSuggestItemTasks(): UseMutationResult<TaskMatch[], Error, string> {
   return useMutation({ mutationFn: suggestItemTasks });
+}
+
+export function useMatchAllItems(): UseMutationResult<void, Error, void> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: matchAllItems,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.catchup() });
+    },
+  });
 }
 
 export function useTriageRules(): UseQueryResult<TriageRule[]> {

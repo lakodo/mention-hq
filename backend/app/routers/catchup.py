@@ -19,6 +19,12 @@ from app.services import ai, catchup
 router = APIRouter(prefix="/catchup", tags=["catchup"])
 
 
+@router.post("/match-all", status_code=204)
+async def match_all(db: AsyncSession = Depends(get_db)) -> None:
+    """Reset the auto-match flag on every inbox item so the next sync re-attempts them all."""
+    await catchup.reset_matched_at(db)
+
+
 @router.post("/{item_id}/suggest-tasks", response_model=list[TaskMatchOut])
 async def suggest_tasks(item_id: str, db: AsyncSession = Depends(get_db)):
     """Ask the brain which existing tasks this item belongs to. On-demand; suggests only."""

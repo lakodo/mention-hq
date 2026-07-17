@@ -182,6 +182,10 @@ class Item(Base):
     # onto a task rather than skipped). Read by the skipped view.
     triage_reason: Mapped[str | None] = mapped_column(String)
     triaged_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # Set when the auto-matcher has attempted a brain match for this item. None means it
+    # has never been tried; once set, the auto-matcher skips it so the brain isn't called
+    # again on every sync. Cleared by "Match all" to force a fresh attempt.
+    matched_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
     extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
