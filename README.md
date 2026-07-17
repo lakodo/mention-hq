@@ -9,7 +9,7 @@ to the APIs you connect.
 
 ## Run it
 
-Each in its own terminal, inside `devbox shell`:
+Inside `devbox shell`, each in its own terminal:
 
 ```bash
 task back:dev     # backend  → http://localhost:13000
@@ -17,7 +17,9 @@ task front:dev    # frontend → http://localhost:13001
 task proxy        # optional → your bare domain (e.g. http://myhq), needs sudo
 ```
 
-Or `task dev` for backend + frontend together in one terminal. Details below.
+Shortcuts: `task dev` runs backend + frontend together; `task up` runs all three (backend +
+frontend + proxy) — one command for the whole stack behind your domain, after a one-time
+`task proxy:set`. Details below.
 
 ## What has to be running
 

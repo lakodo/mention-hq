@@ -51,6 +51,15 @@ tasks:
       # sudo drops the devbox PATH that put caddy there. `task dev` must already be running.
       - 'sudo "$(command -v caddy)" run --config ops/Caddyfile --adapter caddyfile'
 
+  up:
+    desc: The whole stack behind your domain — backend + frontend + proxy (Caddy prompts for sudo)
+    # Same parallel deps as `task dev`, plus the proxy. Each server tees to its own log;
+    # Caddy asks for a password once (port 80). Needs `task proxy:set` first. Ctrl-C stops all.
+    deps:
+      - back:dev
+      - front:dev
+      - proxy
+
   serve:
     desc: Build the UI and serve the whole app from the API alone, on :13000
     cmds:
