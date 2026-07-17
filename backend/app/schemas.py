@@ -99,6 +99,7 @@ class TaskOut(BaseModel):
     description: str | None = None
     bucket: str
     status: Status
+    priority: int
     tags: list[str]
     unread: bool
     origin: str
@@ -112,6 +113,7 @@ class TaskPatch(BaseModel):
     bucket: str | None = None
     unread: bool | None = None
     status: Status | None = None
+    priority: int | None = Field(default=None, ge=0, le=100)
     title: str | None = None
     description: str | None = None
     tags: list[str] | None = None
@@ -122,6 +124,7 @@ class TaskCreate(BaseModel):
     title: str
     description: str | None = None
     bucket: str | None = None
+    priority: int = Field(default=50, ge=0, le=100)
     tags: list[str] = []
 
 

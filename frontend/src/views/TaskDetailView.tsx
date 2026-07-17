@@ -11,6 +11,7 @@ import {
   Group,
   Loader,
   Menu,
+  NumberInput,
   SegmentedControl,
   Stack,
   Text,
@@ -23,6 +24,8 @@ import { notifications } from '@mantine/notifications';
 import {
   IconArchive,
   IconArchiveOff,
+  IconArrowDown,
+  IconArrowUp,
   IconChevronLeft,
   IconChevronRight,
   IconDots,
@@ -76,6 +79,35 @@ function confirmDelete(question: string, onConfirm: () => void) {
     confirmProps: { color: 'red' },
     onConfirm,
   });
+}
+
+interface SortButtonProps {
+  label: string;
+  active: boolean;
+  dir: 'asc' | 'desc';
+  onClick: () => void;
+}
+
+function SortButton({ label, active, dir, onClick }: SortButtonProps) {
+  return (
+    <Button
+      size="xs"
+      variant={active ? 'filled' : 'default'}
+      color="gray"
+      rightSection={
+        active ? (
+          dir === 'desc' ? (
+            <IconArrowDown size={13} />
+          ) : (
+            <IconArrowUp size={13} />
+          )
+        ) : undefined
+      }
+      onClick={onClick}
+    >
+      {label}
+    </Button>
+  );
 }
 
 interface ItemCardProps {
@@ -193,6 +225,10 @@ export function TaskDetailView() {
   const [resizing, setResizing] = useState(false);
   const [sidebarQuery, setSidebarQuery] = useState('');
   const [groupMode, setGroupMode] = useState<'none' | 'bucket' | 'tags'>('none');
+  const [sort, setSort] = useState<{ field: 'date' | 'priority'; dir: 'asc' | 'desc' }>({
+    field: 'date',
+    dir: 'desc',
+  });
   const [showArchived, setShowArchived] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [suggestion, setSuggestion] = useState<BucketSuggestion | null>(null);
@@ -210,7 +246,16 @@ export function TaskDetailView() {
   const rejectCandidate = useRejectTaskCandidate();
   const nextActionMutation = useNextAction(id ?? '');
 
-  const ordered = useMemo(() => sortTasksByRecency(tasks ?? []), [tasks]);
+  const ordered = useMemo(() => {
+    // Recency (newest first) is the stable base; priority sorts on top of it so equal
+    // priorities keep recency order. `dir` then flips whichever field is active.
+    const byRecency = sortTasksByRecency(tasks ?? []);
+    const sorted =
+      sort.field === 'priority'
+        ? [...byRecency].sort((a, b) => b.priority - a.priority)
+        : byRecency;
+    return sort.dir === 'asc' ? [...sorted].reverse() : sorted;
+  }, [tasks, sort]);
   const filtered = useMemo(
     () => ordered.filter((task) => matchesSidebarQuery(task, sidebarQuery)),
     [ordered, sidebarQuery],
@@ -611,6 +656,30 @@ export function TaskDetailView() {
             >
               Archived
             </Button>
+            <SortButton
+              label="Date"
+              active={sort.field === 'date'}
+              dir={sort.dir}
+              onClick={() =>
+                setSort((s) =>
+                  s.field === 'date'
+                    ? { field: 'date', dir: s.dir === 'desc' ? 'asc' : 'desc' }
+                    : { field: 'date', dir: 'desc' },
+                )
+              }
+            />
+            <SortButton
+              label="Priority"
+              active={sort.field === 'priority'}
+              dir={sort.dir}
+              onClick={() =>
+                setSort((s) =>
+                  s.field === 'priority'
+                    ? { field: 'priority', dir: s.dir === 'desc' ? 'asc' : 'desc' }
+                    : { field: 'priority', dir: 'desc' },
+                )
+              }
+            />
           </Group>
         )}
 
@@ -754,8 +823,30 @@ export function TaskDetailView() {
               </Text>
             )}
 
-            <Group gap={8} mb="lg">
+            <Group gap={8} mb="lg" align="center">
               <StatusPill status={selected.status} />
+              <Tooltip label="Priority (0–100). Higher sorts first." withArrow>
+                <NumberInput
+                  size="xs"
+                  w={92}
+                  min={0}
+                  max={100}
+                  clampBehavior="strict"
+                  aria-label="Priority"
+                  leftSection={
+                    <Text fz={10} fw={700} c="dimmed">
+                      P
+                    </Text>
+                  }
+                  value={selected.priority}
+                  onChange={(v) => {
+                    const priority = typeof v === 'number' ? v : Number(v);
+                    if (!Number.isNaN(priority) && priority !== selected.priority) {
+                      updateTask.mutate({ id: selected.id, patch: { priority } });
+                    }
+                  }}
+                />
+              </Tooltip>
               {selected.tags.map((tag) => (
                 <Badge key={tag} variant="default" radius="xl">
                   {tag}

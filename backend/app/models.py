@@ -113,6 +113,9 @@ class Task(Base):
     # Set when the user picks a bucket by hand; sync must not clobber it.
     bucket_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="open")
+    # 0 to 100, higher is more urgent; 50 is the neutral default so a new task doesn't jump
+    # ahead of what you've already ranked.
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=50, server_default="50")
     tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     unread: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # "auto" tasks are derived from items and vanish when their items do.

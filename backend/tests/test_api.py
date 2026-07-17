@@ -442,3 +442,16 @@ async def test_match_status_reports_whether_a_pass_is_running(client):
 
 async def test_match_stop_is_accepted_even_when_nothing_runs(client):
     assert (await client.post("/api/catchup/match-stop")).status_code == 204
+
+
+async def test_priority_defaults_to_50_and_can_be_set(client):
+    created = (await client.post("/api/tasks", json={"title": "Rank me"})).json()
+    assert created["priority"] == 50
+
+    patched = (await client.patch(f"/api/tasks/{created['id']}", json={"priority": 90})).json()
+    assert patched["priority"] == 90
+
+
+async def test_priority_must_be_within_zero_to_hundred(client):
+    created = (await client.post("/api/tasks", json={"title": "Rank me"})).json()
+    assert (await client.patch(f"/api/tasks/{created['id']}", json={"priority": 150})).status_code == 422

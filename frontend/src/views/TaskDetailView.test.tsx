@@ -25,6 +25,20 @@ describe('TaskDetailView', () => {
     expect(within(detail).getByText('backend')).toBeInTheDocument();
   });
 
+  it('edits the task priority and persists it', async () => {
+    const user = userEvent.setup();
+    renderApp(detailRoute(PAYMENTS_TASK_ID));
+
+    const detail = await panel();
+    const input = within(detail).getByLabelText('Priority');
+    expect(input).toHaveValue('50');
+
+    await user.clear(input);
+    await user.type(input, '90');
+
+    await waitFor(() => expect(db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)?.priority).toBe(90));
+  });
+
   it('lands on /task with nothing selected rather than opening the first task', async () => {
     renderApp('/task');
 

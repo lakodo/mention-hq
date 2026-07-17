@@ -69,6 +69,7 @@ async def create_task(payload: TaskCreate, db: AsyncSession = Depends(get_db)) -
         bucket=payload.bucket or matcher.assign(title, payload.tags),
         bucket_override=payload.bucket is not None,
         status="open",
+        priority=payload.priority,
         tags=payload.tags,
         unread=False,
         origin="manual",
@@ -112,6 +113,8 @@ async def patch_task(task_id: str, patch: TaskPatch, db: AsyncSession = Depends(
         task.unread = patch.unread
     if patch.status is not None:
         task.status = patch.status
+    if patch.priority is not None:
+        task.priority = patch.priority
     if patch.archived is not None:
         task.archived_at = datetime.now(UTC) if patch.archived else None
 

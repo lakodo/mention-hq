@@ -75,6 +75,7 @@ export interface Task {
   description: string | null;
   bucket: string;
   status: Status;
+  priority: number;
   tags: string[];
   unread: boolean;
   origin: Origin;
@@ -288,6 +289,7 @@ export interface TaskPatch {
   bucket?: string;
   unread?: boolean;
   status?: Status;
+  priority?: number;
   title?: string;
   description?: string | null;
   tags?: string[];
