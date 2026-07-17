@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import engine as engine_registry
 from app.config import Settings
+from app.database import SessionLocal
 from app.engine import TaskView
 from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, SyncLog, Task
 from app.schemas import SyncResult, SyncSourceResult
@@ -82,11 +83,14 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
 
     result = await _persist(db, _merge(kept, fetched))
     await _skip_by_rules(db)
-    await _auto_match(db)
 
     duration = round(time.perf_counter() - started, 2)
     _write_log(db, outcomes, result, started_at, duration)
     await db.commit()
+
+    # The brain is slow (a subprocess per item), so it must never hold up the sync response
+    # or the periodic auto-sync. Kick it off detached, against its own session.
+    schedule_auto_match()
 
     return SyncResult(
         sources_synced=[o.name for o in outcomes if o.authoritative],
@@ -108,9 +112,39 @@ async def _skip_by_rules(db: AsyncSession) -> None:
     await triage.apply_rules(db, items)
 
 
-# How many unmatched inbox items to attempt per sync. Keeps sync bounded when many items
-# arrive at once; remaining items are matched in the next sync or by "Match all".
+# How many unmatched inbox items to attempt per pass. Keeps a pass bounded when many items
+# arrive at once; remaining items are matched on the next pass or by "Match all".
 _AUTO_MATCH_BATCH = 10
+
+# One matching pass at a time. A pass outlives the sync that started it, and auto-sync fires
+# again on a timer, so without this the passes would stack and hammer the brain in parallel.
+_matching = asyncio.Lock()
+_background: set[asyncio.Task] = set()
+
+
+def schedule_auto_match() -> None:
+    """Run a brain-matching pass in the background, detached from any request.
+
+    Returns at once so a sync (or the periodic auto-sync) never waits on the brain. If a
+    pass is already running, the new one finds the lock held and exits without touching the
+    brain. asyncio keeps only a weak reference to tasks, so we hold one until it finishes.
+    """
+    if not ai.status().available:
+        return
+    task = asyncio.create_task(_auto_match_pass())
+    _background.add(task)
+    task.add_done_callback(_background.discard)
+
+
+async def _auto_match_pass() -> None:
+    if _matching.locked():
+        return
+    async with _matching, SessionLocal() as db:
+        try:
+            await _auto_match(db)
+            await db.commit()
+        except Exception as exc:
+            log.warning("auto_match_pass_failed", error=str(exc))
 
 
 async def _auto_match(db: AsyncSession) -> None:

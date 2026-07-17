@@ -15,14 +15,20 @@ from app.schemas import (
     TriageRequest,
 )
 from app.services import ai, catchup
+from app.services.sync import schedule_auto_match
 
 router = APIRouter(prefix="/catchup", tags=["catchup"])
 
 
 @router.post("/match-all", status_code=204)
 async def match_all(db: AsyncSession = Depends(get_db)) -> None:
-    """Reset the auto-match flag on every inbox item so the next sync re-attempts them all."""
+    """Re-attempt a brain match on every inbox item, in the background.
+
+    Clears the per-item match flag (which commits), then kicks off a detached matching pass
+    so the button returns at once — the matches land as proposals over the next minute.
+    """
     await catchup.reset_matched_at(db)
+    schedule_auto_match()
 
 
 @router.post("/{item_id}/suggest-tasks", response_model=list[TaskMatchOut])
