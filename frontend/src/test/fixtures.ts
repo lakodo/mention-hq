@@ -11,23 +11,23 @@ import type {
   Task,
 } from '../types';
 
-export const BRUNO_ID = 'person:bruno';
+export const ADA_ID = 'person:ada';
 
 export function makePeople(): Person[] {
   return [
     {
-      id: BRUNO_ID,
-      display_name: 'Bruno Vegreville',
-      email: 'bruno@acme.dev',
+      id: ADA_ID,
+      display_name: 'Ada Lovelace',
+      email: 'ada@acme.dev',
       note: null,
       identities: [
-        { id: 'pid:1', kind: 'slack', value: 'U9', label: 'bruno.v' },
-        { id: 'pid:2', kind: 'github', value: 'brunov', label: null },
+        { id: 'pid:1', kind: 'slack', value: 'U9', label: 'ada.l' },
+        { id: 'pid:2', kind: 'github', value: 'adal', label: null },
       ],
     },
     {
-      id: 'person:alex',
-      display_name: 'Alexandre Bermudez',
+      id: 'person:grace',
+      display_name: 'Grace Hopper',
       email: null,
       note: null,
       identities: [{ id: 'pid:3', kind: 'slack', value: 'U0AERGW78CX', label: null }],
@@ -42,7 +42,7 @@ export const REFUND_TASK_ID = 'task:pay-2';
 export const AUTH_TASK_ID = 'task:auth-1';
 
 /** Ids from real sources carry colons and `~`, which every URL has to escape. */
-export const BRANCH_ITEM_ID = 'branch:alan-apps:joris~auth-session-timeout';
+export const BRANCH_ITEM_ID = 'branch:webapp:dev~auth-session-timeout';
 export const SLACK_ITEM_ID = 'slack:C01:p1700000000';
 
 export function makeTasks(): Task[] {
@@ -59,10 +59,10 @@ export function makeTasks(): Task[] {
       updated_at: minutesAgo(95),
       items: [
         {
-          id: 'pr:alan-eu/alan-apps:1201',
+          id: 'pr:acme/webapp:1201',
           source: 'pr',
           label: 'feat(payments): add Stripe webhook handler',
-          url: 'https://github.com/alan-eu/alan-apps/pull/1201',
+          url: 'https://github.com/acme/webapp/pull/1201',
           context: '#1201',
           occurred_at: minutesAgo(120),
           triaged: true,
@@ -71,7 +71,7 @@ export function makeTasks(): Task[] {
           id: 'slack:C01:p1699999999',
           source: 'slack',
           label: 'thread: webhook retries flaking on staging',
-          url: 'https://alan.slack.com/archives/C01/p1',
+          url: 'https://acme.slack.com/archives/C01/p1',
           context: '#payments-eng, 6 replies',
           occurred_at: minutesAgo(95),
           triaged: true,
@@ -121,10 +121,10 @@ export function makeTasks(): Task[] {
       updated_at: minutesAgo(1440),
       items: [
         {
-          id: 'pr:alan-eu/alan-apps:1188',
+          id: 'pr:acme/webapp:1188',
           source: 'pr',
           label: 'fix(auth): rotate refresh tokens on scope change',
-          url: 'https://github.com/alan-eu/alan-apps/pull/1188',
+          url: 'https://github.com/acme/webapp/pull/1188',
           context: '#1188',
           occurred_at: minutesAgo(1440),
           triaged: true,
@@ -132,7 +132,7 @@ export function makeTasks(): Task[] {
         {
           id: BRANCH_ITEM_ID,
           source: 'branch',
-          label: '[alan-apps] joris/auth-session-timeout',
+          label: '[webapp] dev/auth-session-timeout',
           url: null,
           context: null,
           occurred_at: minutesAgo(1500),
@@ -156,7 +156,7 @@ export function makeCatchupItems(): ItemWithLinks[] {
       id: SLACK_ITEM_ID,
       source: 'slack',
       label: 'thread: can someone look at the webhook retry storm?',
-      url: 'https://alan.slack.com/archives/C01/p2',
+      url: 'https://acme.slack.com/archives/C01/p2',
       context: '#payments-eng, 4 replies',
       occurred_at: minutesAgo(20),
       triaged: false,
@@ -177,7 +177,7 @@ export function makeCatchupItems(): ItemWithLinks[] {
     {
       id: BRANCH_ITEM_ID,
       source: 'branch',
-      label: '[alan-apps] joris/auth-session-timeout',
+      label: '[webapp] dev/auth-session-timeout',
       url: null,
       context: 'last commit 2h ago',
       occurred_at: minutesAgo(120),

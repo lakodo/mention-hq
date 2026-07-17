@@ -195,6 +195,8 @@ function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
           searchable
           clearable
           style={{ flex: 1, minWidth: 0 }}
+          // Inline: this list sits in a full-width card, so it never clips — and it keeps
+          // each card's options scoped to that card. Modal dropdowns portal (they clip).
           comboboxProps={{ withinPortal: false }}
         />
         <Button size="sm" disabled={busy || selected.length === 0} onClick={() => attach(selected)}>

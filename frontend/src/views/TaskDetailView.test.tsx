@@ -104,7 +104,7 @@ describe('TaskDetailView', () => {
     const link = await screen.findByRole('link', {
       name: /feat\(payments\): add Stripe webhook handler/,
     });
-    expect(link).toHaveAttribute('href', 'https://github.com/alan-eu/alan-apps/pull/1201');
+    expect(link).toHaveAttribute('href', 'https://github.com/acme/webapp/pull/1201');
     expect(link).toHaveAttribute('target', '_blank');
   });
 

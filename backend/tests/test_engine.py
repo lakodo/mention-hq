@@ -95,8 +95,8 @@ class TestTitleSimilarityEngine:
             # The commit type goes, the scope stays — it names the subject.
             ("feat(payments): add Stripe webhook handler", "payments stripe webhook handler"),
             ("fix: rotate refresh tokens", "rotate refresh tokens"),
-            ("joris/pay-88-refunds", "pay 88 refunds"),
-            ("[alan-apps] main", "alan apps main"),
+            ("dev/pay-88-refunds", "pay 88 refunds"),
+            ("[webapp] main", "webapp main"),
         ],
     )
     def test_normalise(self, raw, expected):

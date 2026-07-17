@@ -27,7 +27,7 @@ describe('CatchupView', () => {
     await user.type(screen.getByLabelText('Search'), 'auth-session');
 
     await waitFor(() => expect(screen.getAllByTestId('catchup-card')).toHaveLength(1));
-    expect(screen.getByText('[alan-apps] joris/auth-session-timeout')).toBeInTheDocument();
+    expect(screen.getByText('[webapp] dev/auth-session-timeout')).toBeInTheDocument();
     expect(screen.getByText('1 item to triage (of 2)')).toBeInTheDocument();
   });
 
@@ -63,7 +63,9 @@ describe('CatchupView', () => {
     // Without a manual refresh, the new task is attachable to the item still in the inbox.
     const remaining = await screen.findAllByTestId('catchup-card');
     await user.click(within(remaining[0]).getByPlaceholderText('Attach to tasks…'));
-    expect(await within(remaining[0]).findByText(/Fresh subject/)).toBeInTheDocument();
+    expect(
+      await within(remaining[0]).findByText('Fresh subject · Uncategorized'),
+    ).toBeInTheDocument();
   });
 
   it('argues a proposal with its engine, confidence and reason', async () => {
@@ -116,7 +118,7 @@ describe('CatchupView', () => {
     const cards = await screen.findAllByTestId('catchup-card');
     const card = cards[0];
 
-    // Every card owns a combobox, so the options have to be picked within this one.
+    // This dropdown is inline, so its options live within the card they belong to.
     await user.click(within(card).getByPlaceholderText('Attach to tasks…'));
     await user.click(await within(card).findByText(/Refund flow throws on partial captures/));
     await user.click(await within(card).findByText(/Refresh token rotation on scope change/));

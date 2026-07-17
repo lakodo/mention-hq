@@ -280,7 +280,7 @@ class TestSlack:
     async def test_a_thread_collapses_to_one_item_even_via_the_permalink(self, slack):
         root = {
             "ts": "1752660000.000100",
-            "text": "Follow-up in Vera",
+            "text": "Follow-up in Orion",
             "permalink": "https://acme.slack.com/archives/C05/p1752660000000100",
             "channel": {"id": "C05", "name": "mo"},
         }
@@ -298,13 +298,13 @@ class TestSlack:
         items = await slack.fetch()
         assert len(items) == 1, "root and reply belong to one thread, so one item"
         # And it is titled by the thread's root, not whichever reply happened to match.
-        assert items[0].label == "#mo - Follow-up in Vera"
+        assert items[0].label == "#mo - Follow-up in Orion"
 
     @respx.mock
     async def test_emoji_shortcodes_become_unicode(self, slack):
         match = {
             **SLACK_SEARCH["messages"]["matches"][0],
-            "text": "Dataset annotation :arrow_heading_down: :marmot-wave:",
+            "text": "Dataset annotation :arrow_heading_down: :party-parrot:",
         }
         respx.get("https://slack.com/api/search.messages").mock(
             return_value=httpx.Response(200, json={"ok": True, "messages": {"matches": [match]}})
@@ -312,14 +312,14 @@ class TestSlack:
 
         label = (await slack.fetch())[0].label
         assert "⤵" in label, "a standard shortcode is rendered"
-        assert ":marmot-wave:" in label, "a custom workspace emoji has no Unicode, so it stays"
+        assert ":party-parrot:" in label, "a custom workspace emoji has no Unicode, so it stays"
 
     @respx.mock
     async def test_markup_is_rendered_into_readable_text(self, slack):
         match = {
             **SLACK_SEARCH["messages"]["matches"][0],
             "text": (
-                "hey <@U9|bruno.vegreville> can you review "
+                "hey <@U9|ada.lovelace> can you review "
                 "<https://github.com/x/y/pull/1|PR #1>? cc <!here> &amp; thanks"
             ),
         }
@@ -328,7 +328,7 @@ class TestSlack:
         )
 
         item = (await slack.fetch())[0]
-        assert item.label.startswith("#eng - hey @bruno.vegreville can you review PR #1?")
+        assert item.label.startswith("#eng - hey @ada.lovelace can you review PR #1?")
 
     @respx.mock
     async def test_a_bare_mention_and_dm_channel_resolve_to_names(self, slack):
@@ -344,12 +344,12 @@ class TestSlack:
         )
         respx.get("https://slack.com/api/users.info").mock(
             return_value=httpx.Response(
-                200, json={"ok": True, "user": {"id": "U9", "profile": {"display_name": "Bruno"}}}
+                200, json={"ok": True, "user": {"id": "U9", "profile": {"display_name": "Ada"}}}
             )
         )
 
         item = (await slack.fetch())[0]
-        assert item.label == "DM with @Bruno - ping @Bruno"
+        assert item.label == "DM with @Ada - ping @Ada"
 
     @respx.mock
     async def test_a_missing_users_read_scope_leaves_a_dm_readable(self, slack):
@@ -372,7 +372,7 @@ class TestSlack:
 
     @respx.mock
     async def test_a_known_id_is_not_looked_up_again(self, slack):
-        slack.directory = _FakeDirectory({"U9": "Bruno"})
+        slack.directory = _FakeDirectory({"U9": "Ada"})
         match = {
             "ts": "1752660000.000100",
             "thread_ts": "1752660000.000100",
@@ -386,7 +386,7 @@ class TestSlack:
         # No users.info mock: if the source asked Slack for a name the directory already had,
         # respx would raise on the unmocked call.
         item = (await slack.fetch())[0]
-        assert item.label == "DM with @Bruno - ping @Bruno"
+        assert item.label == "DM with @Ada - ping @Ada"
 
     @respx.mock
     async def test_a_discovered_name_is_handed_to_the_directory(self, slack):
@@ -404,13 +404,13 @@ class TestSlack:
         )
         respx.get("https://slack.com/api/users.info").mock(
             return_value=httpx.Response(
-                200, json={"ok": True, "user": {"id": "U9", "profile": {"display_name": "Bruno"}}}
+                200, json={"ok": True, "user": {"id": "U9", "profile": {"display_name": "Ada"}}}
             )
         )
 
         item = (await slack.fetch())[0]
-        assert item.label == "DM with @Bruno - ping @Bruno"
-        assert directory.remembered == {"U9": "Bruno"}
+        assert item.label == "DM with @Ada - ping @Ada"
+        assert directory.remembered == {"U9": "Ada"}
 
     @respx.mock
     async def test_an_app_message_reads_its_block_kit_content(self, slack):

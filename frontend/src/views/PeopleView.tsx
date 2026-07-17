@@ -164,7 +164,7 @@ function PersonCard({ person, others }: PersonCardProps) {
           onChange={setKind}
           aria-label="Handle kind"
           w={110}
-          comboboxProps={{ withinPortal: false }}
+          comboboxProps={{ withinPortal: true }}
         />
         <TextInput
           size="xs"
@@ -206,7 +206,7 @@ function EditPerson({ person, opened, onClose }: { person: Person } & ModalProps
     );
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Edit person" withinPortal={false}>
+    <Modal opened={opened} onClose={onClose} title="Edit person">
       <Stack gap="sm">
         <TextInput
           label="Name"
@@ -256,12 +256,7 @@ function MergePerson({
   };
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={`Merge ${person.display_name} into…`}
-      withinPortal={false}
-    >
+    <Modal opened={opened} onClose={onClose} title={`Merge ${person.display_name} into…`}>
       <Stack gap="sm">
         <Text fz="sm" c="dimmed">
           {person.display_name}&rsquo;s handles move to the person you pick, and{' '}
@@ -274,7 +269,6 @@ function MergePerson({
           placeholder="Keep this person"
           aria-label="Merge target"
           searchable
-          comboboxProps={{ withinPortal: false }}
         />
         <Group justify="flex-end">
           <Button variant="subtle" onClick={onClose}>
@@ -313,7 +307,7 @@ function AddPerson() {
       <Button leftSection={<IconUserPlus size={16} />} onClick={() => setOpen(true)}>
         Add person
       </Button>
-      <Modal opened={open} onClose={() => setOpen(false)} title="Add a person" withinPortal={false}>
+      <Modal opened={open} onClose={() => setOpen(false)} title="Add a person">
         <Stack gap="sm">
           <TextInput
             label="Name"

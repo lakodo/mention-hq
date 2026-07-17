@@ -353,6 +353,6 @@ def _render(text: str, names: dict[str, str]) -> str:
     text = re.sub(r"<(?:mailto:)?((?:https?://)?[^>|]+)>", lambda m: m.group(1), text)
 
     text = html.unescape(text)
-    # :fire: -> 🔥. Custom workspace emoji (:marmot-wave:) have no Unicode, so stay as-is.
+    # :fire: -> 🔥. Custom workspace emoji (:party-parrot:) have no Unicode, so stay as-is.
     text = emoji_lib.emojize(text, language="alias")
     return " ".join(text.split()).strip()

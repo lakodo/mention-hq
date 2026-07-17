@@ -7,25 +7,25 @@ async def test_create_list_and_get_a_person(client):
     created = await client.post(
         "/api/people",
         json={
-            "display_name": "Bruno Vegreville",
-            "email": "bruno@acme.dev",
-            "identities": [{"kind": "slack", "value": "U9", "label": "bruno.v"}],
+            "display_name": "Ada Lovelace",
+            "email": "ada@acme.dev",
+            "identities": [{"kind": "slack", "value": "U9", "label": "ada.l"}],
         },
     )
     assert created.status_code == 201
     person = created.json()
-    assert person["display_name"] == "Bruno Vegreville"
+    assert person["display_name"] == "Ada Lovelace"
     assert [i["kind"] for i in person["identities"]] == ["slack"]
 
     listed = (await client.get("/api/people")).json()
     assert [p["id"] for p in listed] == [person["id"]]
 
     fetched = await client.get(f"/api/people/{person['id']}")
-    assert fetched.json()["email"] == "bruno@acme.dev"
+    assert fetched.json()["email"] == "ada@acme.dev"
 
 
 async def test_patch_can_clear_a_field(client):
-    person = (await client.post("/api/people", json={"display_name": "Bruno", "email": "x@y.z"})).json()
+    person = (await client.post("/api/people", json={"display_name": "Ada", "email": "x@y.z"})).json()
 
     patched = await client.patch(f"/api/people/{person['id']}", json={"email": None})
     assert patched.json()["email"] is None
@@ -35,7 +35,7 @@ async def test_adding_a_claimed_identity_conflicts(client):
     a = (
         await client.post(
             "/api/people",
-            json={"display_name": "Bruno", "identities": [{"kind": "slack", "value": "U9"}]},
+            json={"display_name": "Ada", "identities": [{"kind": "slack", "value": "U9"}]},
         )
     ).json()
     b = (await client.post("/api/people", json={"display_name": "Someone"})).json()
@@ -43,7 +43,7 @@ async def test_adding_a_claimed_identity_conflicts(client):
     clash = await client.post(f"/api/people/{b['id']}/identities", json={"kind": "slack", "value": "U9"})
     assert clash.status_code == 409
 
-    added = await client.post(f"/api/people/{a['id']}/identities", json={"kind": "github", "value": "brunov"})
+    added = await client.post(f"/api/people/{a['id']}/identities", json={"kind": "github", "value": "adal"})
     assert {i["kind"] for i in added.json()["identities"]} == {"slack", "github"}
 
 
@@ -51,7 +51,7 @@ async def test_remove_identity(client):
     person = (
         await client.post(
             "/api/people",
-            json={"display_name": "Bruno", "identities": [{"kind": "email", "value": "b@a.dev"}]},
+            json={"display_name": "Ada", "identities": [{"kind": "email", "value": "b@a.dev"}]},
         )
     ).json()
     identity_id = person["identities"][0]["id"]
@@ -64,13 +64,13 @@ async def test_merge_two_people(client):
     slack_side = (
         await client.post(
             "/api/people",
-            json={"display_name": "bruno.v", "identities": [{"kind": "slack", "value": "U9"}]},
+            json={"display_name": "ada.l", "identities": [{"kind": "slack", "value": "U9"}]},
         )
     ).json()
     github_side = (
         await client.post(
             "/api/people",
-            json={"display_name": "Bruno Vegreville", "identities": [{"kind": "github", "value": "bv"}]},
+            json={"display_name": "Ada Lovelace", "identities": [{"kind": "github", "value": "bv"}]},
         )
     ).json()
 
@@ -81,7 +81,7 @@ async def test_merge_two_people(client):
 
 
 async def test_delete_a_person(client):
-    person = (await client.post("/api/people", json={"display_name": "Bruno"})).json()
+    person = (await client.post("/api/people", json={"display_name": "Ada"})).json()
     assert (await client.delete(f"/api/people/{person['id']}")).status_code == 204
     assert (await client.get(f"/api/people/{person['id']}")).status_code == 404
 
