@@ -1,16 +1,107 @@
-import { Badge, Box, Card, Center, Group, Loader, Stack, Text } from '@mantine/core';
+import {
+  Badge,
+  Box,
+  Button,
+  Card,
+  Center,
+  Group,
+  Loader,
+  Modal,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import { IconPlus } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ReadToggle } from '../components/ReadToggle';
 import { SourceDots } from '../components/SourceDot';
 import { StatusPill } from '../components/StatusPill';
 import { statusMeta } from '../constants';
-import { useBuckets, useTasks, useUpdateTask } from '../api/hooks';
+import { errorMessage } from '../api/client';
+import { useBuckets, useCreateBucket, useTasks, useUpdateTask } from '../api/hooks';
 import { filterTasks } from '../lib/search';
 import { groupByBucket, itemCountLabel, newestItemAt, uniqueSources } from '../lib/tasks';
 import { formatAgo } from '../lib/time';
 import { useHq } from '../shell/HqContext';
 import type { Task } from '../types';
+
+function AddBucket({ ghost }: { ghost?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [keywords, setKeywords] = useState('');
+  const create = useCreateBucket();
+
+  const save = () =>
+    create.mutate(
+      {
+        name: name.trim(),
+        keywords: keywords
+          .split(',')
+          .map((k) => k.trim())
+          .filter(Boolean),
+      },
+      {
+        onSuccess: () => {
+          setOpen(false);
+          setName('');
+          setKeywords('');
+        },
+        onError: (error) =>
+          notifications.show({
+            title: 'Could not add bucket',
+            message: errorMessage(error),
+            color: 'red',
+          }),
+      },
+    );
+
+  return (
+    <>
+      {ghost ? (
+        <Button
+          variant="default"
+          color="gray"
+          leftSection={<IconPlus size={15} />}
+          onClick={() => setOpen(true)}
+        >
+          New bucket
+        </Button>
+      ) : (
+        <Button leftSection={<IconPlus size={16} />} onClick={() => setOpen(true)}>
+          Add a bucket
+        </Button>
+      )}
+      <Modal opened={open} onClose={() => setOpen(false)} title="New bucket">
+        <Stack gap="sm">
+          <TextInput
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.currentTarget.value)}
+            onKeyDown={(e) => e.key === 'Enter' && name.trim() && save()}
+            data-autofocus
+          />
+          <TextInput
+            label="Keywords"
+            description="Comma-separated. A task matching one files itself here automatically."
+            placeholder="infra, deploy, ci"
+            value={keywords}
+            onChange={(e) => setKeywords(e.currentTarget.value)}
+          />
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={save} loading={create.isPending} disabled={!name.trim()}>
+              Create
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </>
+  );
+}
 
 interface TaskCardProps {
   task: Task;
@@ -80,11 +171,12 @@ export function BoardView() {
   if (columns.length === 0) {
     return (
       <Center style={{ flex: 1 }}>
-        <Stack align="center" gap="xs">
+        <Stack align="center" gap="sm">
           <Text fw={600}>No buckets yet</Text>
           <Text c="dimmed" fz="sm">
-            Create one in Admin to start grouping your tasks.
+            Buckets group your tasks by subject. Make your first one.
           </Text>
+          <AddBucket />
         </Stack>
       </Center>
     );
@@ -152,6 +244,10 @@ export function BoardView() {
           </Box>
         );
       })}
+
+      <Box style={{ flex: '0 0 200px', paddingTop: 8 }}>
+        <AddBucket ghost />
+      </Box>
     </Box>
   );
 }

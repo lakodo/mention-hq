@@ -40,7 +40,7 @@ describe('BoardView', () => {
     expect(screen.getByText('1 item')).toBeInTheDocument();
   });
 
-  it('tells the user where to go on a fresh install with no buckets', async () => {
+  it('lets the user make their first bucket on a fresh install', async () => {
     server.use(
       http.get('http://localhost:8000/api/buckets', () => HttpResponse.json([])),
       http.get('http://localhost:8000/api/tasks', () => HttpResponse.json([])),
@@ -48,7 +48,21 @@ describe('BoardView', () => {
     renderApp('/');
 
     expect(await screen.findByText('No buckets yet')).toBeInTheDocument();
-    expect(screen.getByText(/Create one in Admin/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add a bucket/ })).toBeInTheDocument();
+  });
+
+  it('creates a bucket from the board', async () => {
+    const user = userEvent.setup();
+    renderApp('/');
+    await screen.findByTestId('bucket-column-Payments');
+
+    await user.click(screen.getByRole('button', { name: /New bucket/ }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Name'), 'Infra');
+    await user.type(within(dialog).getByLabelText('Keywords'), 'deploy, ci');
+    await user.click(within(dialog).getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(db.buckets.some((b) => b.name === 'Infra')).toBe(true));
   });
 
   it('still shows tasks under Uncategorized when no bucket claims them', async () => {
