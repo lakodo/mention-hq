@@ -10,6 +10,7 @@ import {
   Loader,
   Menu,
   Modal,
+  Select,
   Stack,
   Text,
   TextInput,
@@ -116,11 +117,13 @@ function AddBucket({ ghost }: { ghost?: boolean }) {
 
 interface TaskCardProps {
   task: Task;
+  bucketNames: string[];
   onOpen: (id: string) => void;
   onToggleRead: (task: Task) => void;
+  onMoveToBucket: (task: Task, bucket: string) => void;
 }
 
-function TaskCard({ task, onOpen, onToggleRead }: TaskCardProps) {
+function TaskCard({ task, bucketNames, onOpen, onToggleRead, onMoveToBucket }: TaskCardProps) {
   return (
     <Card
       withBorder
@@ -150,7 +153,18 @@ function TaskCard({ task, onOpen, onToggleRead }: TaskCardProps) {
 
       <Group gap={8} wrap="nowrap">
         <StatusPill status={task.status} size="xs" />
-        <Box ml="auto">
+        <Select
+          size="xs"
+          variant="unstyled"
+          data={bucketNames}
+          value={task.bucket}
+          allowDeselect={false}
+          style={{ flex: 1, minWidth: 0 }}
+          styles={{ input: { fontSize: 11, color: 'var(--mantine-color-dimmed)', padding: 0 } }}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(val) => val && onMoveToBucket(task, val)}
+        />
+        <Box>
           <ReadToggle unread={task.unread} onToggle={() => onToggleRead(task)} />
         </Box>
       </Group>
@@ -171,6 +185,11 @@ export function BoardView() {
   const columns = useMemo(
     () => groupByBucket(filterTasks(tasks ?? [], query), buckets ?? []),
     [tasks, buckets, query],
+  );
+
+  const bucketNames = useMemo(
+    () => (buckets ?? []).map((b) => b.name).concat(['Uncategorized']),
+    [buckets],
   );
 
   const openArchive = (bucket: Bucket) => {
@@ -250,6 +269,9 @@ export function BoardView() {
 
   const toggleRead = (task: Task) =>
     updateTask.mutate({ id: task.id, patch: { unread: !task.unread } });
+
+  const moveToBucket = (task: Task, bucket: string) =>
+    updateTask.mutate({ id: task.id, patch: { bucket } });
 
   return (
     <Box
@@ -341,8 +363,10 @@ export function BoardView() {
               <TaskCard
                 key={task.id}
                 task={task}
+                bucketNames={bucketNames}
                 onOpen={(id) => navigate(`/task/${encodeURIComponent(id)}`)}
                 onToggleRead={toggleRead}
+                onMoveToBucket={moveToBucket}
               />
             ))}
           </Box>
