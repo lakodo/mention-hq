@@ -10,6 +10,7 @@ import {
   Menu,
   Modal,
   MultiSelect,
+  NumberInput,
   Select,
   Stack,
   Text,
@@ -48,6 +49,7 @@ function AttachModal({ item, taskOptions, bucketOptions, opened, onClose }: Atta
   const [selected, setSelected] = useState<string[]>([]);
   const [newTitle, setNewTitle] = useState(item.label);
   const [bucket, setBucket] = useState<string | null>(null);
+  const [priority, setPriority] = useState(50);
   const [view, setView] = useState<'attach' | 'new'>('attach');
   const confirm = useConfirmLinks();
   const createTask = useCreateTaskFromItem();
@@ -59,6 +61,7 @@ function AttachModal({ item, taskOptions, bucketOptions, opened, onClose }: Atta
     setSelected([]);
     setNewTitle(item.label);
     setBucket(null);
+    setPriority(50);
     setView('attach');
     onClose();
   };
@@ -83,7 +86,12 @@ function AttachModal({ item, taskOptions, bucketOptions, opened, onClose }: Atta
 
   const create = () => {
     createTask.mutate(
-      { itemId: item.id, title: newTitle.trim() || item.label, bucket: bucket ?? undefined },
+      {
+        itemId: item.id,
+        title: newTitle.trim() || item.label,
+        bucket: bucket ?? undefined,
+        priority,
+      },
       {
         onSuccess: (task) => {
           notifications.show({ title: 'Task created', message: task.title, color: 'teal' });
@@ -148,6 +156,15 @@ function AttachModal({ item, taskOptions, bucketOptions, opened, onClose }: Atta
               onChange={setBucket}
               clearable
               comboboxProps={{ withinPortal: true }}
+            />
+            <NumberInput
+              label="Priority"
+              description="0–100, higher sorts first"
+              min={0}
+              max={100}
+              clampBehavior="strict"
+              value={priority}
+              onChange={(v) => setPriority(typeof v === 'number' ? v : 50)}
             />
             <Button
               size="sm"

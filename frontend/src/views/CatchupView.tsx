@@ -11,6 +11,7 @@ import {
   Loader,
   Modal,
   MultiSelect,
+  NumberInput,
   Popover,
   Progress,
   SegmentedControl,
@@ -199,6 +200,7 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
   const [modalOpen, setModalOpen] = useState(false);
   const [title, setTitle] = useState(item.label);
   const [bucket, setBucket] = useState<string | null>(null);
+  const [priority, setPriority] = useState(50);
 
   const confirm = useConfirmLinks();
   const reject = useRejectLink();
@@ -260,7 +262,7 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
 
   const submitNewTask = () => {
     createTask.mutate(
-      { itemId: item.id, title: title.trim() || item.label, bucket: bucket ?? undefined },
+      { itemId: item.id, title: title.trim() || item.label, bucket: bucket ?? undefined, priority },
       {
         onSuccess: (task) => {
           setModalOpen(false);
@@ -416,6 +418,15 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
             searchable
             comboboxProps={{ withinPortal: true }}
             maxDropdownHeight={240}
+          />
+          <NumberInput
+            label="Priority"
+            description="0–100, higher sorts first"
+            min={0}
+            max={100}
+            clampBehavior="strict"
+            value={priority}
+            onChange={(v) => setPriority(typeof v === 'number' ? v : 50)}
           />
           <Group justify="flex-end">
             <Button variant="subtle" onClick={() => setModalOpen(false)}>

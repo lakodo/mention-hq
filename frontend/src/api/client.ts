@@ -182,8 +182,13 @@ export async function createTaskFromItem(
   itemId: string,
   title: string,
   bucket?: string,
+  priority?: number,
 ): Promise<Task> {
-  const { data } = await api.post<Task>(`/catchup/${seg(itemId)}/new-task`, { title, bucket });
+  const { data } = await api.post<Task>(`/catchup/${seg(itemId)}/new-task`, {
+    title,
+    bucket,
+    priority,
+  });
   return data;
 }
 

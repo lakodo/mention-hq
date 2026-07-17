@@ -232,7 +232,7 @@ export function TaskDetailView() {
   const [sidebarQuery, setSidebarQuery] = useState('');
   const [groupMode, setGroupMode] = useState<'none' | 'bucket' | 'tags'>('none');
   const [sort, setSort] = useState<{ field: 'date' | 'priority'; dir: 'asc' | 'desc' }>({
-    field: 'date',
+    field: 'priority',
     dir: 'desc',
   });
   const [showArchived, setShowArchived] = useState(false);

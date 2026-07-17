@@ -89,7 +89,9 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await catchup.create_task_from_item(db, item_id, request.title, request.bucket)
+        return await catchup.create_task_from_item(
+            db, item_id, request.title, request.bucket, request.priority
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

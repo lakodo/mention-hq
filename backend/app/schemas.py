@@ -136,6 +136,7 @@ class ConfirmRequest(BaseModel):
 class CreateTaskFromItemRequest(BaseModel):
     title: str
     bucket: str | None = None
+    priority: int = Field(default=50, ge=0, le=100)
 
 
 class TriageRequest(BaseModel):

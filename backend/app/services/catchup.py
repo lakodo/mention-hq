@@ -83,7 +83,9 @@ async def _decide(db: AsyncSession, item_id: str, task_id: str, state: str) -> N
         link.reason = "You said so"
 
 
-async def create_task_from_item(db: AsyncSession, item_id: str, title: str, bucket: str | None) -> Task:
+async def create_task_from_item(
+    db: AsyncSession, item_id: str, title: str, bucket: str | None, priority: int = 50
+) -> Task:
     item = await _require_item(db, item_id)
     matcher = await load_matcher(db)
 
@@ -94,6 +96,7 @@ async def create_task_from_item(db: AsyncSession, item_id: str, title: str, buck
         bucket=bucket or matcher.assign(resolved_title, []),
         bucket_override=bucket is not None,
         status="open",
+        priority=priority,
         tags=[],
         unread=False,
         origin="manual",

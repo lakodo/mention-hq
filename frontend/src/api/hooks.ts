@@ -281,11 +281,12 @@ export function useRejectLink(): UseMutationResult<
 export function useCreateTaskFromItem(): UseMutationResult<
   Task,
   Error,
-  { itemId: string; title: string; bucket?: string }
+  { itemId: string; title: string; bucket?: string; priority?: number }
 > {
   const invalidate = useCatchupInvalidation();
   return useMutation({
-    mutationFn: ({ itemId, title, bucket }) => createTaskFromItem(itemId, title, bucket),
+    mutationFn: ({ itemId, title, bucket, priority }) =>
+      createTaskFromItem(itemId, title, bucket, priority),
     onSuccess: invalidate,
   });
 }
