@@ -206,6 +206,49 @@ class BucketSuggestionOut(BaseModel):
     reasoning: str
 
 
+class PersonIdentityOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    kind: str
+    value: str
+    label: str | None = None
+
+
+class PersonIdentityIn(BaseModel):
+    kind: str
+    value: str
+    label: str | None = None
+
+
+class PersonOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    display_name: str
+    email: str | None = None
+    note: str | None = None
+    identities: list[PersonIdentityOut] = []
+
+
+class PersonCreate(BaseModel):
+    display_name: str
+    email: str | None = None
+    note: str | None = None
+    identities: list[PersonIdentityIn] = []
+
+
+class PersonPatch(BaseModel):
+    display_name: str | None = None
+    email: str | None = None
+    note: str | None = None
+
+
+class PersonMerge(BaseModel):
+    # The surviving person this one folds into.
+    into: str
+
+
 class AppSettingsOut(BaseModel):
     app_name: str
     secret_backend: str

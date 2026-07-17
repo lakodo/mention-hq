@@ -192,6 +192,18 @@ SLACK_SEARCH = {
 }
 
 
+class _FakeDirectory:
+    def __init__(self, known: dict[str, str] | None = None) -> None:
+        self._known = known or {}
+        self.remembered: dict[str, str] = {}
+
+    async def known(self, kind: str, values: set[str]) -> dict[str, str]:
+        return {v: self._known[v] for v in values if v in self._known}
+
+    async def remember(self, kind: str, names: dict[str, str]) -> None:
+        self.remembered.update(names)
+
+
 @pytest.fixture
 def slack() -> SlackSource:
     return SlackSource({"user_token": "xoxp-x", "user_id": "U1"})
@@ -319,6 +331,47 @@ class TestSlack:
         item = (await slack.fetch())[0]
         assert item.label == "ping @someone"
         assert item.context == "direct message"
+
+    @respx.mock
+    async def test_a_known_id_is_not_looked_up_again(self, slack):
+        slack.directory = _FakeDirectory({"U9": "Bruno"})
+        match = {
+            "ts": "1752660000.000100",
+            "thread_ts": "1752660000.000100",
+            "text": "ping <@U9>",
+            "permalink": "https://acme.slack.com/archives/D01/p1",
+            "channel": {"id": "D01", "name": "U9", "is_im": True, "user": "U9"},
+        }
+        respx.get("https://slack.com/api/search.messages").mock(
+            return_value=httpx.Response(200, json={"ok": True, "messages": {"matches": [match]}})
+        )
+        # No users.info mock: if the source asked Slack for a name the directory already had,
+        # respx would raise on the unmocked call.
+        item = (await slack.fetch())[0]
+        assert item.label == "ping @Bruno"
+
+    @respx.mock
+    async def test_a_discovered_name_is_handed_to_the_directory(self, slack):
+        directory = _FakeDirectory()
+        slack.directory = directory
+        match = {
+            "ts": "1752660000.000100",
+            "thread_ts": "1752660000.000100",
+            "text": "ping <@U9>",
+            "permalink": "https://acme.slack.com/archives/D01/p1",
+            "channel": {"id": "D01", "name": "U9", "is_im": True, "user": "U9"},
+        }
+        respx.get("https://slack.com/api/search.messages").mock(
+            return_value=httpx.Response(200, json={"ok": True, "messages": {"matches": [match]}})
+        )
+        respx.get("https://slack.com/api/users.info").mock(
+            return_value=httpx.Response(
+                200, json={"ok": True, "user": {"id": "U9", "profile": {"display_name": "Bruno"}}}
+            )
+        )
+
+        await slack.fetch()
+        assert directory.remembered == {"U9": "Bruno"}
 
     @respx.mock
     async def test_a_message_with_no_text_is_named_by_its_file(self, slack):

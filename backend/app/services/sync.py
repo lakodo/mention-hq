@@ -27,6 +27,7 @@ from app.engine import TaskView
 from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, SyncLog, Task
 from app.schemas import SyncResult, SyncSourceResult
 from app.services.buckets import load_matcher
+from app.services.people import DbDirectory
 from app.services.sources_factory import Connected, build_connected
 from app.sources.base import STATUS_PRIORITY, TITLE_PRIORITY, RawItem
 
@@ -70,7 +71,8 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
 
     # Concurrently: these are independent network calls, and run in series the sync takes
     # as long as every source added together. _fetch never raises, so gather is safe.
-    outcomes = list(await asyncio.gather(*(_fetch(c) for c in connected)))
+    directory = DbDirectory()
+    outcomes = list(await asyncio.gather(*(_fetch(c, directory) for c in connected)))
 
     fetched = [(o.instance_id, item) for o in outcomes for item in o.items]
 
@@ -97,11 +99,12 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
     )
 
 
-async def _fetch(connected: Connected) -> _FetchOutcome:
+async def _fetch(connected: Connected, directory: DbDirectory) -> _FetchOutcome:
     instance, source = connected.instance, connected.source
     common = {"instance_id": instance.id, "name": instance.name, "kind": instance.kind}
     if not source.is_configured():
         return _FetchOutcome(**common, items=[], configured=False)
+    source.directory = directory
     try:
         return _FetchOutcome(**common, items=await source.fetch())
     except Exception as exc:  # one broken connection must not fail the others

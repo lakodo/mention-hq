@@ -121,15 +121,23 @@ class SlackSource(Source):
         return [_to_item(match, names) for match in matches.values()]
 
     async def _resolve_users(self, client: httpx.AsyncClient, ids: set[str]) -> dict[str, str]:
-        """Best-effort id -> display name. A missing users:read scope just leaves names raw."""
-        names: dict[str, str] = {}
-        for uid in ids:
+        """Ids -> display names. The directory answers first, so an id learned on an earlier
+        sync (by any source) is never looked up again; only genuine misses hit users.info,
+        and what they find is handed back to the directory. Best-effort: a missing users:read
+        scope just leaves those names raw."""
+        if not ids:
+            return {}
+        names = dict(await self.directory.known("slack", ids)) if self.directory else {}
+        discovered: dict[str, str] = {}
+        for uid in ids - names.keys():
             try:
                 payload = await self._call(client, "users.info", {"user": uid})
             except (RuntimeError, httpx.HTTPError):
                 continue
-            names[uid] = _display_name(payload.get("user") or {})
-        return names
+            discovered[uid] = _display_name(payload.get("user") or {})
+        if self.directory and discovered:
+            await self.directory.remember("slack", discovered)
+        return {**names, **discovered}
 
 
 def _after_date() -> str:

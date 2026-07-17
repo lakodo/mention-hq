@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.routers import admin, buckets, catchup, items, sync, tasks
+from app.routers import admin, buckets, catchup, items, people, sync, tasks
 from app.services.sync import sync_all
 
 log = structlog.get_logger(__name__)
@@ -56,6 +56,7 @@ app.include_router(tasks.router, prefix=API_PREFIX)
 app.include_router(buckets.router, prefix=API_PREFIX)
 app.include_router(catchup.router, prefix=API_PREFIX)
 app.include_router(items.router, prefix=API_PREFIX)
+app.include_router(people.router, prefix=API_PREFIX)
 app.include_router(sync.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 
