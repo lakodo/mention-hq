@@ -7,6 +7,8 @@ import {
   Center,
   Group,
   Loader,
+  Menu,
+  Modal,
   MultiSelect,
   Select,
   Stack,
@@ -14,13 +16,26 @@ import {
   TextInput,
   Tooltip,
 } from '@mantine/core';
-import { IconSortAscending, IconSortDescending } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
+import { useDisclosure } from '@mantine/hooks';
+import { notifications } from '@mantine/notifications';
+import {
+  IconLink,
+  IconPlus,
+  IconSortAscending,
+  IconSortDescending,
+} from '@tabler/icons-react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SourceDot } from '../components/SourceDot';
 import { PrStatusPill } from '../components/PrStatusPill';
 import { sourceMeta } from '../constants';
-import { useItems } from '../api/hooks';
+import { errorMessage } from '../api/client';
+import {
+  useConfirmLinks,
+  useCreateTaskFromItem,
+  useItems,
+  useTasks,
+} from '../api/hooks';
 import { filterItems } from '../lib/search';
 import { formatAgo } from '../lib/time';
 import { useHq } from '../shell/HqContext';
@@ -31,17 +46,265 @@ function confirmedTasks(item: ItemWithLinks) {
   return item.links.filter((link) => link.state === 'confirmed').map((link) => link.task);
 }
 
+interface AttachModalProps {
+  item: ItemWithLinks;
+  taskOptions: { value: string; label: string }[];
+  bucketOptions: string[];
+  opened: boolean;
+  onClose: () => void;
+}
+
+function AttachModal({ item, taskOptions, bucketOptions, opened, onClose }: AttachModalProps) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [newTitle, setNewTitle] = useState(item.label);
+  const [bucket, setBucket] = useState<string | null>(null);
+  const [view, setView] = useState<'attach' | 'new'>('attach');
+  const confirm = useConfirmLinks();
+  const createTask = useCreateTaskFromItem();
+
+  const fail = (error: unknown) =>
+    notifications.show({ title: 'Action failed', message: errorMessage(error), color: 'red' });
+
+  const close = () => {
+    setSelected([]);
+    setNewTitle(item.label);
+    setBucket(null);
+    setView('attach');
+    onClose();
+  };
+
+  const attach = () => {
+    if (selected.length === 0) return;
+    confirm.mutate(
+      { itemId: item.id, taskIds: selected },
+      {
+        onSuccess: () => {
+          notifications.show({
+            title: 'Attached',
+            message: `Attached to ${selected.length} ${selected.length === 1 ? 'task' : 'tasks'}.`,
+            color: 'teal',
+          });
+          close();
+        },
+        onError: fail,
+      },
+    );
+  };
+
+  const create = () => {
+    createTask.mutate(
+      { itemId: item.id, title: newTitle.trim() || item.label, bucket: bucket ?? undefined },
+      {
+        onSuccess: (task) => {
+          notifications.show({ title: 'Task created', message: task.title, color: 'teal' });
+          close();
+        },
+        onError: fail,
+      },
+    );
+  };
+
+  return (
+    <Modal opened={opened} onClose={close} title={item.label} size="sm" withinPortal>
+      <Stack gap="sm">
+        <Group gap={8}>
+          <Button
+            size="xs"
+            variant={view === 'attach' ? 'filled' : 'default'}
+            onClick={() => setView('attach')}
+          >
+            Attach to task
+          </Button>
+          <Button
+            size="xs"
+            variant={view === 'new' ? 'filled' : 'default'}
+            onClick={() => setView('new')}
+          >
+            New task
+          </Button>
+        </Group>
+
+        {view === 'attach' ? (
+          <>
+            <MultiSelect
+              data={taskOptions}
+              value={selected}
+              onChange={setSelected}
+              placeholder="Search tasks…"
+              searchable
+              label="Task"
+              comboboxProps={{ withinPortal: true }}
+            />
+            <Button
+              size="sm"
+              disabled={selected.length === 0}
+              loading={confirm.isPending}
+              onClick={attach}
+            >
+              Attach
+            </Button>
+          </>
+        ) : (
+          <>
+            <TextInput
+              label="Title"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.currentTarget.value)}
+            />
+            <Select
+              label="Bucket (optional)"
+              data={bucketOptions}
+              value={bucket}
+              onChange={setBucket}
+              clearable
+              comboboxProps={{ withinPortal: true }}
+            />
+            <Button
+              size="sm"
+              loading={createTask.isPending}
+              disabled={!newTitle.trim()}
+              onClick={create}
+            >
+              Create task
+            </Button>
+          </>
+        )}
+      </Stack>
+    </Modal>
+  );
+}
+
+function TimelineRow({
+  item,
+  taskOptions,
+  bucketOptions,
+}: {
+  item: ItemWithLinks;
+  taskOptions: { value: string; label: string }[];
+  bucketOptions: string[];
+}) {
+  const navigate = useNavigate();
+  const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
+  const tasks = confirmedTasks(item);
+  // Keep a stable key for the modal so it remounts when the item changes.
+  const stableKey = useRef(item.id);
+
+  return (
+    <>
+      <AttachModal
+        key={stableKey.current}
+        item={item}
+        taskOptions={taskOptions}
+        bucketOptions={bucketOptions}
+        opened={modalOpened}
+        onClose={closeModal}
+      />
+      <Group
+        data-testid="timeline-row"
+        gap={12}
+        wrap="nowrap"
+        px={16}
+        py={12}
+        style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+      >
+        <SourceDot source={item.source} />
+        <Text
+          fz={11}
+          c="dimmed"
+          fw={600}
+          tt="uppercase"
+          style={{ width: 64, flexShrink: 0, letterSpacing: '0.04em' }}
+        >
+          {sourceMeta(item.source).label}
+        </Text>
+
+        <Box style={{ flex: 1, minWidth: 0 }}>
+          {item.url ? (
+            <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" truncate="end">
+              {item.label}
+            </Anchor>
+          ) : (
+            <Text fz="sm" truncate>
+              {item.label}
+            </Text>
+          )}
+          {item.context && (
+            <Text fz="xs" c="dimmed" truncate>
+              {item.context}
+            </Text>
+          )}
+          {item.pr_status && <PrStatusPill status={item.pr_status} size="xs" />}
+        </Box>
+
+        {tasks.length > 0 ? (
+          <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
+            {tasks.map((task) => (
+              <Badge
+                key={task.id}
+                variant="light"
+                radius="xl"
+                style={{ cursor: 'pointer' }}
+                onClick={() => navigate(`/task/${encodeURIComponent(task.id)}`)}
+                title={`${task.title} · ${task.bucket}`}
+              >
+                {task.title}
+              </Badge>
+            ))}
+          </Group>
+        ) : (
+          <Badge variant="default" color="gray" radius="xl" style={{ flexShrink: 0 }}>
+            {item.triaged ? 'No task' : 'To triage'}
+          </Badge>
+        )}
+
+        <Text fz="xs" c="dimmed" style={{ width: 56, flexShrink: 0, textAlign: 'right' }}>
+          {formatAgo(item.occurred_at)}
+        </Text>
+
+        <Menu withinPortal position="bottom-end" shadow="md">
+          <Menu.Target>
+            <Tooltip label="Attach or create task" withArrow>
+              <ActionIcon variant="subtle" color="gray" size="sm" aria-label="Row actions">
+                <IconPlus size={14} />
+              </ActionIcon>
+            </Tooltip>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item leftSection={<IconLink size={14} />} onClick={openModal}>
+              Attach / new task…
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+      </Group>
+    </>
+  );
+}
+
 type Attachment = 'any' | 'filed' | 'untriaged';
 
 export function TimelineView() {
-  const navigate = useNavigate();
   const { query } = useHq();
   const { data: items, isLoading } = useItems();
+  const { data: allTasks } = useTasks();
 
   const [kinds, setKinds] = useState<string[]>([]);
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<Attachment>('any');
   const [oldestFirst, setOldestFirst] = useState(false);
+
+  const taskOptions = useMemo(
+    () =>
+      (allTasks ?? []).map((t) => ({
+        value: t.id,
+        label: `${t.title} · ${t.bucket}`,
+      })),
+    [allTasks],
+  );
+
+  const bucketOptions = useMemo(
+    () => [...new Set((allTasks ?? []).map((t) => t.bucket))].sort(),
+    [allTasks],
+  );
 
   const sourceOptions = useMemo(
     () =>
@@ -171,74 +434,14 @@ export function TimelineView() {
           </Stack>
         </Center>
       ) : (
-        rows.map((item) => {
-          const tasks = confirmedTasks(item);
-          return (
-            <Group
-              key={item.id}
-              data-testid="timeline-row"
-              gap={12}
-              wrap="nowrap"
-              px={16}
-              py={12}
-              style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
-            >
-              <SourceDot source={item.source} />
-              <Text
-                fz={11}
-                c="dimmed"
-                fw={600}
-                tt="uppercase"
-                style={{ width: 64, flexShrink: 0, letterSpacing: '0.04em' }}
-              >
-                {sourceMeta(item.source).label}
-              </Text>
-
-              <Box style={{ flex: 1, minWidth: 0 }}>
-                {item.url ? (
-                  <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" truncate="end">
-                    {item.label}
-                  </Anchor>
-                ) : (
-                  <Text fz="sm" truncate>
-                    {item.label}
-                  </Text>
-                )}
-                {item.context && (
-                  <Text fz="xs" c="dimmed" truncate>
-                    {item.context}
-                  </Text>
-                )}
-                {item.pr_status && <PrStatusPill status={item.pr_status} size="xs" />}
-              </Box>
-
-              {tasks.length > 0 ? (
-                <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
-                  {tasks.map((task) => (
-                    <Badge
-                      key={task.id}
-                      variant="light"
-                      radius="xl"
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => navigate(`/task/${encodeURIComponent(task.id)}`)}
-                      title={`${task.title} · ${task.bucket}`}
-                    >
-                      {task.title}
-                    </Badge>
-                  ))}
-                </Group>
-              ) : (
-                <Badge variant="default" color="gray" radius="xl" style={{ flexShrink: 0 }}>
-                  {item.triaged ? 'No task' : 'To triage'}
-                </Badge>
-              )}
-
-              <Text fz="xs" c="dimmed" style={{ width: 56, flexShrink: 0, textAlign: 'right' }}>
-                {formatAgo(item.occurred_at)}
-              </Text>
-            </Group>
-          );
-        })
+        rows.map((item) => (
+          <TimelineRow
+            key={item.id}
+            item={item}
+            taskOptions={taskOptions}
+            bucketOptions={bucketOptions}
+          />
+        ))
       )}
     </Box>
   );

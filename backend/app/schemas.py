@@ -80,6 +80,17 @@ class TriageRulePatch(BaseModel):
     enabled: bool | None = None
 
 
+class TaskCandidateOut(BaseModel):
+    """An item the engine proposed for this task but the user hasn't ruled on yet."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    item: ItemOut
+    engine: str | None
+    confidence: float
+    reason: str | None
+
+
 class TaskOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -94,6 +105,7 @@ class TaskOut(BaseModel):
     archived: bool
     updated_at: datetime
     items: list[ItemOut]
+    candidates: list[TaskCandidateOut] = []
 
 
 class TaskPatch(BaseModel):
@@ -247,6 +259,11 @@ class BucketSuggestionOut(BaseModel):
     keywords: list[str]
     confidence: float
     reasoning: str
+
+
+class NextActionOut(BaseModel):
+    action: str
+    confidence: float
 
 
 class PersonIdentityOut(BaseModel):

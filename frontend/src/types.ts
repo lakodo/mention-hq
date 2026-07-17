@@ -62,6 +62,13 @@ export interface TriageRuleCreate {
   value: string;
 }
 
+export interface TaskCandidate {
+  item: Item;
+  engine: string | null;
+  confidence: number;
+  reason: string | null;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -74,6 +81,12 @@ export interface Task {
   archived: boolean;
   updated_at: string;
   items: Item[];
+  candidates: TaskCandidate[];
+}
+
+export interface NextAction {
+  action: string;
+  confidence: number;
 }
 
 export interface Bucket {

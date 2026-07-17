@@ -135,10 +135,17 @@ class Task(Base):
 
     @property
     def items(self) -> list[Item]:
-        """Items actually on this task — a rejected link is not an attachment."""
-        attached = [link for link in self.links if link.state != REJECTED]
-        attached.sort(key=lambda link: link.item.occurred_at, reverse=True)
-        return [link.item for link in attached]
+        """Items confirmed onto this task — a rejected or merely proposed link is not an attachment."""
+        confirmed = [link for link in self.links if link.state == CONFIRMED]
+        confirmed.sort(key=lambda link: link.item.occurred_at, reverse=True)
+        return [link.item for link in confirmed]
+
+    @property
+    def candidates(self) -> list[Link]:
+        """Proposed links the engine guessed but the user hasn't ruled on yet."""
+        proposed = [link for link in self.links if link.state == PROPOSED]
+        proposed.sort(key=lambda link: link.confidence, reverse=True)
+        return proposed
 
     @property
     def archived(self) -> bool:

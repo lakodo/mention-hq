@@ -41,9 +41,12 @@ import { StatusPill } from '../components/StatusPill';
 import { SLACK_ACCENT, sourceMeta } from '../constants';
 import { errorMessage } from '../api/client';
 import {
+  useConfirmTaskCandidate,
   useCreateBucket,
   useCreateTask,
   useDeleteTask,
+  useNextAction,
+  useRejectTaskCandidate,
   useSuggestBucket,
   useTasks,
   useUpdateTask,
@@ -57,7 +60,7 @@ import {
   splitSlackItems,
 } from '../lib/tasks';
 import { formatAgo } from '../lib/time';
-import type { BucketSuggestion, Item, Task } from '../types';
+import type { BucketSuggestion, Item, NextAction, Task, TaskCandidate } from '../types';
 
 const DELETE_WARNING =
   'The items are kept but return to Catch-up to be triaged again. Archive instead to keep them filed.';
@@ -192,6 +195,7 @@ export function TaskDetailView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [suggestion, setSuggestion] = useState<BucketSuggestion | null>(null);
   const [descDraft, setDescDraft] = useState<string | null>(null);
+  const [nextActionResult, setNextActionResult] = useState<NextAction | null>(null);
 
   const { data: tasks, isLoading } = useTasks(showArchived ? { archived: true } : {});
 
@@ -200,6 +204,9 @@ export function TaskDetailView() {
   const createTask = useCreateTask();
   const createBucket = useCreateBucket();
   const suggest = useSuggestBucket();
+  const confirmCandidate = useConfirmTaskCandidate();
+  const rejectCandidate = useRejectTaskCandidate();
+  const nextActionMutation = useNextAction(id ?? '');
 
   const ordered = useMemo(() => sortTasksByRecency(tasks ?? []), [tasks]);
   const filtered = useMemo(
@@ -212,6 +219,7 @@ export function TaskDetailView() {
   useEffect(() => {
     if (selected?.unread) updateTask.mutate({ id: selected.id, patch: { unread: false } });
     setDescDraft(null);
+    setNextActionResult(null);
     // Only when the opened task changes, not on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
@@ -764,6 +772,22 @@ export function TaskDetailView() {
               </Button>
               <Button
                 size="xs"
+                variant="light"
+                color="indigo"
+                leftSection={<IconSparkles size={14} />}
+                loading={nextActionMutation.isPending}
+                onClick={() => {
+                  setNextActionResult(null);
+                  nextActionMutation.mutate(undefined, {
+                    onSuccess: (result) => setNextActionResult(result),
+                    onError: (error) => fail(error),
+                  });
+                }}
+              >
+                Next action
+              </Button>
+              <Button
+                size="xs"
                 variant="subtle"
                 color="gray"
                 leftSection={
@@ -794,6 +818,87 @@ export function TaskDetailView() {
                 onDismiss={() => setSuggestion(null)}
                 busy={busy}
               />
+            )}
+
+            {nextActionResult && (
+              <Alert
+                mb="md"
+                color="indigo"
+                variant="light"
+                title="Next action"
+                withCloseButton
+                onClose={() => setNextActionResult(null)}
+              >
+                <Text fz="sm">{nextActionResult.action}</Text>
+              </Alert>
+            )}
+
+            {selected.candidates.length > 0 && (
+              <Box mb="lg" data-testid="candidates-section">
+                <Text
+                  fz="xs"
+                  fw={700}
+                  c="dimmed"
+                  tt="uppercase"
+                  mb={8}
+                  style={{ letterSpacing: '0.05em' }}
+                >
+                  Suggested items
+                </Text>
+                <Stack gap={6}>
+                  {selected.candidates.map((candidate: TaskCandidate) => (
+                    <Card key={candidate.item.id} withBorder radius="sm" p="xs">
+                      <Group gap={8} wrap="nowrap">
+                        <SourceDot source={candidate.item.source} />
+                        <Box style={{ flex: 1, minWidth: 0 }}>
+                          <Text fz="sm" truncate>
+                            {candidate.item.label}
+                          </Text>
+                          {candidate.reason && (
+                            <Text fz="xs" c="dimmed" truncate>
+                              {candidate.reason}
+                            </Text>
+                          )}
+                        </Box>
+                        <Group gap={4} wrap="nowrap">
+                          <Tooltip label="Attach to task">
+                            <ActionIcon
+                              size="xs"
+                              variant="light"
+                              color="teal"
+                              loading={confirmCandidate.isPending}
+                              onClick={() =>
+                                confirmCandidate.mutate(
+                                  { taskId: selected.id, itemId: candidate.item.id },
+                                  { onError: fail },
+                                )
+                              }
+                            >
+                              <IconPlus size={12} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="Dismiss">
+                            <ActionIcon
+                              size="xs"
+                              variant="subtle"
+                              color="gray"
+                              loading={rejectCandidate.isPending}
+                              onClick={() =>
+                                rejectCandidate.mutate(
+                                  { taskId: selected.id, itemId: candidate.item.id },
+                                  { onError: fail },
+                                )
+                              }
+                            >
+                              <IconX size={12} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+                      </Group>
+                    </Card>
+                  ))}
+                </Stack>
+              </Box>
             )}
 
             {slack.length > 0 && (

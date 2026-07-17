@@ -119,6 +119,7 @@ export const handlers = [
     const task: Task = {
       id: `task:${Math.random().toString(16).slice(2, 10)}`,
       title: body.title,
+      description: null,
       bucket: body.bucket ?? 'Uncategorized',
       status: 'open',
       tags: body.tags ?? [],
@@ -127,6 +128,7 @@ export const handlers = [
       archived: false,
       updated_at: new Date().toISOString(),
       items: [],
+      candidates: [],
     };
     db.tasks.push(task);
     return HttpResponse.json(task, { status: 201 });
@@ -266,6 +268,7 @@ export const handlers = [
     const task: Task = {
       id: `task:${Math.random().toString(16).slice(2, 10)}`,
       title: body.title || item.label,
+      description: null,
       bucket: body.bucket ?? 'Uncategorized',
       status: 'open',
       tags: [],
@@ -274,6 +277,7 @@ export const handlers = [
       archived: false,
       updated_at: item.occurred_at,
       items: [item],
+      candidates: [],
     };
     db.tasks.push(task);
     // The item stays in the inbox on purpose — a new task doesn't triage it away.
