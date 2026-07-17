@@ -213,11 +213,14 @@ function BucketRow({ bucket, isFirst, isLast }: BucketRowProps) {
             disabled={implicit}
             loading={remove.isPending}
             onClick={() =>
-              remove.mutate(bucket.name, {
-                onSuccess: () =>
-                  ok('Deleted', `${bucket.name} is gone. Its tasks moved to ${UNCATEGORIZED}.`),
-                onError: fail,
-              })
+              remove.mutate(
+                { name: bucket.name },
+                {
+                  onSuccess: () =>
+                    ok('Deleted', `${bucket.name} is gone. Its tasks moved to ${UNCATEGORIZED}.`),
+                  onError: fail,
+                },
+              )
             }
           >
             <IconTrash size={16} />

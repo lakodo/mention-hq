@@ -47,3 +47,6 @@ devbox.d/
 .idea/
 .vscode/
 *.swp
+
+# Local database backups
+backups/

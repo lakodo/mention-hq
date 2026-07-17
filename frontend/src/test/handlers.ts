@@ -119,6 +119,7 @@ export const handlers = [
     const task: Task = {
       id: `task:${Math.random().toString(16).slice(2, 10)}`,
       title: body.title,
+      description: null,
       bucket: body.bucket ?? 'Uncategorized',
       status: 'open',
       tags: body.tags ?? [],
@@ -161,6 +162,7 @@ export const handlers = [
       name: body.name,
       keywords: body.keywords,
       position: body.position ?? db.buckets.length,
+      archived: false,
       count: 0,
     };
     db.buckets.push(bucket);
@@ -266,6 +268,7 @@ export const handlers = [
     const task: Task = {
       id: `task:${Math.random().toString(16).slice(2, 10)}`,
       title: body.title || item.label,
+      description: null,
       bucket: body.bucket ?? 'Uncategorized',
       status: 'open',
       tags: [],

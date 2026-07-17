@@ -22,8 +22,8 @@ describe('groupByBucket', () => {
 
   it('orders columns by position rather than by array order', () => {
     const reordered: Bucket[] = [
-      { name: 'Auth', keywords: [], position: 0, count: 1 },
-      { name: 'Payments', keywords: [], position: 1, count: 2 },
+      { name: 'Auth', keywords: [], position: 0, count: 1, archived: false },
+      { name: 'Payments', keywords: [], position: 1, count: 2, archived: false },
     ];
     expect(groupByBucket(tasks, reordered).map((c) => c.name)).toEqual(['Auth', 'Payments']);
   });

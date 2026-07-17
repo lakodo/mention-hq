@@ -56,6 +56,7 @@ export function makeTasks(): Task[] {
       unread: true,
       origin: 'auto',
       archived: false,
+      description: null,
       updated_at: minutesAgo(95),
       items: [
         {
@@ -66,6 +67,9 @@ export function makeTasks(): Task[] {
           context: '#1201',
           occurred_at: minutesAgo(120),
           triaged: true,
+          triage_reason: null,
+          triaged_at: null,
+          pr_status: null,
         },
         {
           id: 'slack:C01:p1699999999',
@@ -75,6 +79,9 @@ export function makeTasks(): Task[] {
           context: '#payments-eng, 6 replies',
           occurred_at: minutesAgo(95),
           triaged: true,
+          triage_reason: null,
+          triaged_at: null,
+          pr_status: null,
         },
         {
           id: 'todo:todo.md:12',
@@ -84,6 +91,9 @@ export function makeTasks(): Task[] {
           context: null,
           occurred_at: minutesAgo(7200),
           triaged: true,
+          triage_reason: null,
+          triaged_at: null,
+          pr_status: null,
         },
       ],
     },
@@ -96,6 +106,7 @@ export function makeTasks(): Task[] {
       unread: false,
       origin: 'auto',
       archived: false,
+      description: null,
       updated_at: minutesAgo(180),
       items: [
         {
@@ -106,6 +117,9 @@ export function makeTasks(): Task[] {
           context: 'PAY-88',
           occurred_at: minutesAgo(180),
           triaged: true,
+          triage_reason: null,
+          triaged_at: null,
+          pr_status: null,
         },
       ],
     },
@@ -118,6 +132,7 @@ export function makeTasks(): Task[] {
       unread: false,
       origin: 'manual',
       archived: false,
+      description: null,
       updated_at: minutesAgo(1440),
       items: [
         {
@@ -128,6 +143,9 @@ export function makeTasks(): Task[] {
           context: '#1188',
           occurred_at: minutesAgo(1440),
           triaged: true,
+          triage_reason: null,
+          triaged_at: null,
+          pr_status: null,
         },
         {
           id: BRANCH_ITEM_ID,
@@ -137,6 +155,9 @@ export function makeTasks(): Task[] {
           context: null,
           occurred_at: minutesAgo(1500),
           triaged: true,
+          triage_reason: null,
+          triaged_at: null,
+          pr_status: null,
         },
       ],
     },
@@ -145,8 +166,8 @@ export function makeTasks(): Task[] {
 
 export function makeBuckets(): Bucket[] {
   return [
-    { name: 'Payments', keywords: ['stripe', 'invoice'], position: 0, count: 2 },
-    { name: 'Auth', keywords: ['token', 'sso'], position: 1, count: 1 },
+    { name: 'Payments', keywords: ['stripe', 'invoice'], position: 0, count: 2, archived: false },
+    { name: 'Auth', keywords: ['token', 'sso'], position: 1, count: 1, archived: false },
   ];
 }
 
@@ -160,6 +181,9 @@ export function makeCatchupItems(): ItemWithLinks[] {
       context: '#payments-eng, 4 replies',
       occurred_at: minutesAgo(20),
       triaged: false,
+      triage_reason: null,
+      triaged_at: null,
+      pr_status: null,
       links: [
         {
           task: {
@@ -182,6 +206,9 @@ export function makeCatchupItems(): ItemWithLinks[] {
       context: 'last commit 2h ago',
       occurred_at: minutesAgo(120),
       triaged: false,
+      triage_reason: null,
+      triaged_at: null,
+      pr_status: null,
       links: [],
     },
   ];

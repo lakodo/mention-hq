@@ -37,12 +37,23 @@ def github() -> GitHubSource:
     return GitHubSource({"token": "ghp_x", "username": "someone", "org": "acme"})
 
 
+def _github_search(pr_json: dict):
+    """A respx side-effect for search/issues: the base PR query returns `pr_json`; the issue
+    query and the two review-status queries the source also fires return nothing."""
+
+    def handler(request):
+        q = request.url.params.get("q", "")
+        if q.startswith("is:pr") and "review:" not in q:
+            return httpx.Response(200, json=pr_json)
+        return httpx.Response(200, json={"items": []})
+
+    return handler
+
+
 class TestGitHub:
     @respx.mock
     async def test_maps_a_pull_request(self, github):
-        respx.get("https://api.github.com/search/issues").mock(
-            side_effect=[httpx.Response(200, json=PR_SEARCH), httpx.Response(200, json={"items": []})]
-        )
+        respx.get("https://api.github.com/search/issues").mock(side_effect=_github_search(PR_SEARCH))
 
         items = await github.fetch()
 
@@ -58,9 +69,7 @@ class TestGitHub:
 
     @respx.mock
     async def test_identity_is_its_own_ref_and_the_cited_ticket_is_a_reference(self, github):
-        respx.get("https://api.github.com/search/issues").mock(
-            side_effect=[httpx.Response(200, json=PR_SEARCH), httpx.Response(200, json={"items": []})]
-        )
+        respx.get("https://api.github.com/search/issues").mock(side_effect=_github_search(PR_SEARCH))
 
         item = (await github.fetch())[0]
 
@@ -71,18 +80,14 @@ class TestGitHub:
     @respx.mock
     async def test_a_merged_pr_reports_merged(self, github):
         merged = {"items": [{**PR_SEARCH["items"][0], "pull_request": {"merged_at": "2026-07-16T11:00:00Z"}}]}
-        respx.get("https://api.github.com/search/issues").mock(
-            side_effect=[httpx.Response(200, json=merged), httpx.Response(200, json={"items": []})]
-        )
+        respx.get("https://api.github.com/search/issues").mock(side_effect=_github_search(merged))
 
         assert (await github.fetch())[0].status == "merged"
 
     @respx.mock
     async def test_a_draft_pr_is_open_not_in_progress(self, github):
         draft = {"items": [{**PR_SEARCH["items"][0], "draft": True}]}
-        respx.get("https://api.github.com/search/issues").mock(
-            side_effect=[httpx.Response(200, json=draft), httpx.Response(200, json={"items": []})]
-        )
+        respx.get("https://api.github.com/search/issues").mock(side_effect=_github_search(draft))
 
         assert (await github.fetch())[0].status == "open"
 
