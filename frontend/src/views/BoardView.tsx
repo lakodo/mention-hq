@@ -130,26 +130,29 @@ function TaskCard({ task, bucketNames, onOpen, onToggleRead, onMoveToBucket }: T
       radius="md"
       p="sm"
       mb="xs"
-      onClick={() => onOpen(task.id)}
       style={{
-        cursor: 'pointer',
         borderLeft: `3px solid ${statusMeta(task.status).color}`,
         opacity: task.unread ? 1 : 0.6,
       }}
     >
-      <Group gap={6} mb={6} wrap="nowrap">
-        <SourceDots sources={uniqueSources(task)} />
-        <Text fz="xs" c="dimmed" ml={6}>
-          {itemCountLabel(task)}
-        </Text>
-        <Text fz="xs" c="dimmed" ml="auto">
-          {formatAgo(newestItemAt(task))}
-        </Text>
-      </Group>
+      {/* Only the header and title open the task. The controls row is left out on purpose:
+          the bucket dropdown portals its options, and a React portal bubbles clicks up the
+          component tree, so a whole-card handler would navigate on every option pick. */}
+      <Box style={{ cursor: 'pointer' }} onClick={() => onOpen(task.id)}>
+        <Group gap={6} mb={6} wrap="nowrap">
+          <SourceDots sources={uniqueSources(task)} />
+          <Text fz="xs" c="dimmed" ml={6}>
+            {itemCountLabel(task)}
+          </Text>
+          <Text fz="xs" c="dimmed" ml="auto">
+            {formatAgo(newestItemAt(task))}
+          </Text>
+        </Group>
 
-      <Text fz="sm" fw={task.unread ? 700 : 400} lh={1.35} mb={8}>
-        {task.title}
-      </Text>
+        <Text fz="sm" fw={task.unread ? 700 : 400} lh={1.35} mb={8}>
+          {task.title}
+        </Text>
+      </Box>
 
       <Group gap={8} wrap="nowrap">
         <StatusPill status={task.status} size="xs" />
@@ -161,7 +164,6 @@ function TaskCard({ task, bucketNames, onOpen, onToggleRead, onMoveToBucket }: T
           allowDeselect={false}
           style={{ flex: 1, minWidth: 0 }}
           styles={{ input: { fontSize: 11, color: 'var(--mantine-color-dimmed)', padding: 0 } }}
-          onClick={(e) => e.stopPropagation()}
           onChange={(val) => val && onMoveToBucket(task, val)}
         />
         <Box>
