@@ -68,6 +68,16 @@ describe('CatchupView', () => {
     ).toBeInTheDocument();
   });
 
+  it('links an item out to its source', async () => {
+    renderApp('/catchup');
+
+    const link = await screen.findByRole('link', {
+      name: /thread: can someone look at the webhook retry storm\?/,
+    });
+    expect(link).toHaveAttribute('href', 'https://acme.slack.com/archives/C01/p2');
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
   it('argues a proposal with its engine, confidence and reason', async () => {
     renderApp('/catchup');
 

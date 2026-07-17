@@ -1,4 +1,5 @@
 import {
+  Anchor,
   Badge,
   Box,
   Button,
@@ -14,6 +15,7 @@ import {
   TextInput,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { IconExternalLink } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { SourceDot } from '../components/SourceDot';
 import { LINK_STATE_META, sourceMeta } from '../constants';
@@ -160,9 +162,18 @@ function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
         </Text>
       </Group>
 
-      <Text fz="sm" fw={600} mb={2}>
-        {item.label}
-      </Text>
+      {item.url ? (
+        <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" fw={600} mb={2}>
+          <Group gap={4} wrap="nowrap" component="span" style={{ display: 'inline-flex' }}>
+            {item.label}
+            <IconExternalLink size={12} />
+          </Group>
+        </Anchor>
+      ) : (
+        <Text fz="sm" fw={600} mb={2}>
+          {item.label}
+        </Text>
+      )}
       {item.context && (
         <Text fz="xs" c="dimmed" mb="sm">
           {item.context}

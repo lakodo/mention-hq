@@ -272,7 +272,7 @@ export const handlers = [
       items: [item],
     };
     db.tasks.push(task);
-    item.triaged = true;
+    // The item stays in the inbox on purpose — a new task doesn't triage it away.
     return HttpResponse.json(task);
   }),
 

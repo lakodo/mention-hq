@@ -93,7 +93,9 @@ async def create_task_from_item(db: AsyncSession, item_id: str, title: str, buck
     await db.flush()
 
     await _decide(db, item_id, task.id, CONFIRMED)
-    item.triaged = True
+    # The item is not triaged here on purpose: making a task from it shouldn't whisk it out
+    # of the inbox, since you may want to attach it to other tasks first. Confirm or skip
+    # is what files it away.
     await db.commit()
 
     stmt = select(Task).where(Task.id == task.id).execution_options(populate_existing=True)
