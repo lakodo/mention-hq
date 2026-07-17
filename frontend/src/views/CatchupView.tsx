@@ -264,7 +264,13 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
       {
         onSuccess: (task) => {
           setModalOpen(false);
-          notifications.show({ title: 'Task created', message: task.title, color: 'teal' });
+          // Stage the new task in the attach box; Attach is what files the item away.
+          setSelected((prev) => [...new Set([...prev, task.id])]);
+          notifications.show({
+            title: 'Task created',
+            message: `${task.title} — click Attach to file this item under it.`,
+            color: 'teal',
+          });
         },
         onError: fail,
       },

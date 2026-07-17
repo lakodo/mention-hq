@@ -105,11 +105,9 @@ async def create_task_from_item(db: AsyncSession, item_id: str, title: str, buck
     await db.flush()
 
     await _decide(db, item_id, task.id, CONFIRMED)
-    # Turning an item into a task files it: an attached item is handled, so it leaves the
-    # inbox rather than lingering there with a confirmed link. To attach to several tasks at
-    # once, pick them in the attach box before confirming.
-    item.triaged = True
-    item.triage_reason = None
+    # Not triaged here on purpose: New task seeds a task from the item and stages it in the
+    # attach box, but the item stays in the inbox until the user clicks Attach — that is what
+    # files it, and lets them attach it to other tasks first.
     await db.commit()
 
     stmt = select(Task).where(Task.id == task.id).execution_options(populate_existing=True)

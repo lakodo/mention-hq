@@ -288,8 +288,7 @@ export const handlers = [
       candidates: [],
     };
     db.tasks.push(task);
-    // Turning an item into a task files it away, so it leaves the inbox.
-    item.triaged = true;
+    // The item stays in the inbox — it's staged in the attach box, filed only on Attach.
     return HttpResponse.json(task);
   }),
 

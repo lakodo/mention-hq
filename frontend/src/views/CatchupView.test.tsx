@@ -87,7 +87,7 @@ describe('CatchupView', () => {
     expect(screen.getByLabelText('Search')).toHaveValue('');
   });
 
-  it('offers a task made from one item when triaging the next', async () => {
+  it('stages a task made from an item in its attach box, still in the inbox', async () => {
     const user = userEvent.setup();
     renderApp('/catchup');
 
@@ -98,15 +98,11 @@ describe('CatchupView', () => {
     await user.type(title, 'Fresh subject');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    // The source item is filed away by New task; the new task is immediately attachable to
-    // the items still in the inbox, without a manual refresh.
-    const remaining = await screen.findAllByTestId('catchup-card');
-    // Options portal out of the card into one shared node, so scope to this input's own
-    // listbox by the id it points at.
-    const input = within(remaining[0]).getByPlaceholderText('Attach to tasks…');
-    await user.click(input);
-    const listbox = document.getElementById(input.getAttribute('aria-controls')!)!;
-    expect(await within(listbox).findByText('Fresh subject · Uncategorized')).toBeInTheDocument();
+    // New task doesn't file the item — it stays in the inbox with the new task staged as a
+    // selected value in its attach box, waiting for Attach.
+    const staged = await screen.findAllByTestId('catchup-card');
+    expect(staged).toHaveLength(2);
+    expect(await within(staged[0]).findByText('Fresh subject · Uncategorized')).toBeInTheDocument();
   });
 
   it('links an item out to its source', async () => {
