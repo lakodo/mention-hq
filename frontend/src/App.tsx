@@ -9,6 +9,7 @@ import { AdminView } from './views/AdminView';
 import { BoardView } from './views/BoardView';
 import { CatchupView } from './views/CatchupView';
 import { LogView } from './views/LogView';
+import { PeopleView } from './views/PeopleView';
 import { TaskDetailView } from './views/TaskDetailView';
 import { TimelineView } from './views/TimelineView';
 
@@ -19,6 +20,7 @@ export function AppRoutes() {
         <Route index element={<BoardView />} />
         <Route path="timeline" element={<TimelineView />} />
         <Route path="catchup" element={<CatchupView />} />
+        <Route path="people" element={<PeopleView />} />
         <Route path="log" element={<LogView />} />
         <Route path="admin" element={<AdminView />} />
         <Route path="task/:id" element={<TaskDetailView />} />

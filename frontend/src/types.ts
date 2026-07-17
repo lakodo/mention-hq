@@ -55,6 +55,40 @@ export interface Bucket {
   count: number;
 }
 
+export interface PersonIdentity {
+  id: string;
+  kind: string;
+  value: string;
+  label: string | null;
+}
+
+export interface Person {
+  id: string;
+  display_name: string;
+  email: string | null;
+  note: string | null;
+  identities: PersonIdentity[];
+}
+
+export interface PersonCreate {
+  display_name: string;
+  email?: string | null;
+  note?: string | null;
+  identities?: { kind: string; value: string; label?: string | null }[];
+}
+
+export interface PersonPatch {
+  display_name?: string;
+  email?: string | null;
+  note?: string | null;
+}
+
+export interface IdentityInput {
+  kind: string;
+  value: string;
+  label?: string | null;
+}
+
 export type ConfigFieldKind = 'text' | 'secret';
 
 export interface ConfigField {

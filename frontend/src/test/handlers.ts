@@ -3,6 +3,7 @@ import {
   makeAIStatus,
   makeBuckets,
   makeCatchupItems,
+  makePeople,
   makeSettings,
   makeSourceFields,
   makeSourceKinds,
@@ -17,6 +18,7 @@ import type {
   Detection,
   ItemWithLinks,
   Link,
+  Person,
   SourceKind,
   SourceStatus,
   SyncLogEntry,
@@ -30,6 +32,7 @@ interface Db {
   tasks: Task[];
   buckets: Bucket[];
   catchup: ItemWithLinks[];
+  people: Person[];
   sources: SourceStatus[];
   sourceKinds: SourceKind[];
   /** What a local CLI would answer, per kind. A test overwrites it to steer detection. */
@@ -43,6 +46,7 @@ export const db: Db = {
   tasks: [],
   buckets: [],
   catchup: [],
+  people: [],
   sources: [],
   sourceKinds: [],
   detections: {},
@@ -65,6 +69,7 @@ export function resetDb(): void {
   db.tasks = makeTasks();
   db.buckets = makeBuckets();
   db.catchup = makeCatchupItems();
+  db.people = makePeople();
   db.sources = makeSources();
   db.sourceKinds = makeSourceKinds();
   db.detections = {
@@ -277,6 +282,91 @@ export const handlers = [
     const { triaged } = (await request.json()) as { triaged: boolean };
     item.triaged = triaged;
     return HttpResponse.json(item);
+  }),
+
+  http.get(`${BASE}/people`, () => HttpResponse.json(db.people)),
+
+  http.post(`${BASE}/people`, async ({ request }) => {
+    const body = (await request.json()) as Partial<Person> & {
+      identities?: { kind: string; value: string; label?: string | null }[];
+    };
+    const person: Person = {
+      id: `person:${Math.random().toString(16).slice(2, 10)}`,
+      display_name: body.display_name ?? '',
+      email: body.email ?? null,
+      note: body.note ?? null,
+      identities: (body.identities ?? []).map((i, n) => ({
+        id: `pid:${Math.random().toString(16).slice(2, 8)}${n}`,
+        kind: i.kind,
+        value: i.value,
+        label: i.label ?? null,
+      })),
+    };
+    db.people.push(person);
+    return HttpResponse.json(person, { status: 201 });
+  }),
+
+  http.get(`${BASE}/people/:id`, ({ params }) => {
+    const person = db.people.find((p) => p.id === params.id);
+    return person ? HttpResponse.json(person) : notFound(`Person not found: ${String(params.id)}`);
+  }),
+
+  http.patch(`${BASE}/people/:id`, async ({ params, request }) => {
+    const person = db.people.find((p) => p.id === params.id);
+    if (!person) return notFound(`Person not found: ${String(params.id)}`);
+    Object.assign(person, await request.json());
+    return HttpResponse.json(person);
+  }),
+
+  http.delete(`${BASE}/people/:id`, ({ params }) => {
+    if (!db.people.some((p) => p.id === params.id)) {
+      return notFound(`Person not found: ${String(params.id)}`);
+    }
+    db.people = db.people.filter((p) => p.id !== params.id);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.post(`${BASE}/people/:id/identities`, async ({ params, request }) => {
+    const person = db.people.find((p) => p.id === params.id);
+    if (!person) return notFound(`Person not found: ${String(params.id)}`);
+    const identity = (await request.json()) as {
+      kind: string;
+      value: string;
+      label?: string | null;
+    };
+    const taken = db.people.some((p) =>
+      p.identities.some((i) => i.kind === identity.kind && i.value === identity.value),
+    );
+    if (taken) {
+      return HttpResponse.json(
+        { detail: `${identity.kind}:${identity.value} already belongs to someone` },
+        { status: 409 },
+      );
+    }
+    person.identities.push({
+      id: `pid:${Math.random().toString(16).slice(2, 8)}`,
+      kind: identity.kind,
+      value: identity.value,
+      label: identity.label ?? null,
+    });
+    return HttpResponse.json(person, { status: 201 });
+  }),
+
+  http.delete(`${BASE}/people/:id/identities/:identityId`, ({ params }) => {
+    const person = db.people.find((p) => p.id === params.id);
+    if (!person) return notFound(`Person not found: ${String(params.id)}`);
+    person.identities = person.identities.filter((i) => i.id !== params.identityId);
+    return HttpResponse.json(person);
+  }),
+
+  http.post(`${BASE}/people/:id/merge`, async ({ params, request }) => {
+    const source = db.people.find((p) => p.id === params.id);
+    const { into } = (await request.json()) as { into: string };
+    const target = db.people.find((p) => p.id === into);
+    if (!source || !target) return notFound('Both people must exist to merge');
+    target.identities = [...target.identities, ...source.identities];
+    db.people = db.people.filter((p) => p.id !== source.id);
+    return HttpResponse.json(target);
   }),
 
   http.post(`${BASE}/sync`, () => {

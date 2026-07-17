@@ -4,11 +4,36 @@ import type {
   Bucket,
   ConfigField,
   ItemWithLinks,
+  Person,
   SourceKind,
   SourceStatus,
   SyncLogEntry,
   Task,
 } from '../types';
+
+export const BRUNO_ID = 'person:bruno';
+
+export function makePeople(): Person[] {
+  return [
+    {
+      id: BRUNO_ID,
+      display_name: 'Bruno Vegreville',
+      email: 'bruno@acme.dev',
+      note: null,
+      identities: [
+        { id: 'pid:1', kind: 'slack', value: 'U9', label: 'bruno.v' },
+        { id: 'pid:2', kind: 'github', value: 'brunov', label: null },
+      ],
+    },
+    {
+      id: 'person:alex',
+      display_name: 'Alexandre Bermudez',
+      email: null,
+      note: null,
+      identities: [{ id: 'pid:3', kind: 'slack', value: 'U0AERGW78CX', label: null }],
+    },
+  ];
+}
 
 const minutesAgo = (mins: number) => new Date(Date.now() - mins * 60_000).toISOString();
 

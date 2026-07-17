@@ -6,24 +6,29 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import {
+  addIdentity,
   addSource,
   confirmLinks,
   createBucket,
+  createPerson,
   createTask,
   createTaskFromItem,
   deleteBucket,
+  deletePerson,
   deleteTask,
   detectSource,
   fetchAIStatus,
   fetchBuckets,
   fetchCatchup,
   fetchItems,
+  fetchPeople,
   fetchSettings,
   fetchSourceKinds,
   fetchSources,
   fetchSyncStatus,
   fetchTask,
   fetchTasks,
+  mergePeople,
   patchBucket,
   patchSettings,
   patchSource,
@@ -33,10 +38,12 @@ import {
   putSourceConfig,
   reassignBuckets,
   rejectLink,
+  removeIdentity,
   removeSource,
   suggestBucket,
   testSource,
   triageItem,
+  updatePerson,
 } from './client';
 import type {
   AIStatus,
@@ -47,6 +54,9 @@ import type {
   BucketSuggestion,
   Detection,
   ItemWithLinks,
+  Person,
+  PersonCreate,
+  PersonPatch,
   SourceCreate,
   SourceKind,
   SourcePatch,
@@ -65,6 +75,7 @@ export const queryKeys = {
   buckets: () => ['buckets'] as const,
   catchup: () => ['catchup'] as const,
   items: () => ['items'] as const,
+  people: () => ['people'] as const,
   syncStatus: () => ['sync', 'status'] as const,
   sources: () => ['admin', 'sources'] as const,
   sourceKinds: () => ['admin', 'source-kinds'] as const,
@@ -379,5 +390,72 @@ export function useUpdateAIKey(): UseMutationResult<AIStatus, Error, string> {
   return useMutation({
     mutationFn: putAIKey,
     onSuccess: (status) => qc.setQueryData(queryKeys.ai(), status),
+  });
+}
+
+export function usePeople(): UseQueryResult<Person[]> {
+  return useQuery({ queryKey: queryKeys.people(), queryFn: fetchPeople });
+}
+
+function usePeopleInvalidation() {
+  const qc = useQueryClient();
+  return () => void qc.invalidateQueries({ queryKey: queryKeys.people() });
+}
+
+export function useCreatePerson(): UseMutationResult<Person, Error, PersonCreate> {
+  const invalidate = usePeopleInvalidation();
+  return useMutation({ mutationFn: createPerson, onSuccess: invalidate });
+}
+
+export function useUpdatePerson(): UseMutationResult<
+  Person,
+  Error,
+  { id: string; patch: PersonPatch }
+> {
+  const invalidate = usePeopleInvalidation();
+  return useMutation({
+    mutationFn: ({ id, patch }) => updatePerson(id, patch),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeletePerson(): UseMutationResult<void, Error, string> {
+  const invalidate = usePeopleInvalidation();
+  return useMutation({ mutationFn: deletePerson, onSuccess: invalidate });
+}
+
+export function useAddIdentity(): UseMutationResult<
+  Person,
+  Error,
+  { id: string; kind: string; value: string; label?: string | null }
+> {
+  const invalidate = usePeopleInvalidation();
+  return useMutation({
+    mutationFn: ({ id, kind, value, label }) => addIdentity(id, { kind, value, label }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRemoveIdentity(): UseMutationResult<
+  Person,
+  Error,
+  { id: string; identityId: string }
+> {
+  const invalidate = usePeopleInvalidation();
+  return useMutation({
+    mutationFn: ({ id, identityId }) => removeIdentity(id, identityId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useMergePeople(): UseMutationResult<
+  Person,
+  Error,
+  { sourceId: string; into: string }
+> {
+  const invalidate = usePeopleInvalidation();
+  return useMutation({
+    mutationFn: ({ sourceId, into }) => mergePeople(sourceId, into),
+    onSuccess: invalidate,
   });
 }

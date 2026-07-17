@@ -7,7 +7,11 @@ import type {
   BucketPatch,
   BucketSuggestion,
   Detection,
+  IdentityInput,
   ItemWithLinks,
+  Person,
+  PersonCreate,
+  PersonPatch,
   SourceCreate,
   SourceKind,
   SourcePatch,
@@ -102,6 +106,40 @@ export async function fetchCatchup(limit?: number): Promise<ItemWithLinks[]> {
 
 export async function fetchItems(limit?: number): Promise<ItemWithLinks[]> {
   const { data } = await api.get<ItemWithLinks[]>('/items', { params: { limit } });
+  return data;
+}
+
+export async function fetchPeople(): Promise<Person[]> {
+  const { data } = await api.get<Person[]>('/people');
+  return data;
+}
+
+export async function createPerson(payload: PersonCreate): Promise<Person> {
+  const { data } = await api.post<Person>('/people', payload);
+  return data;
+}
+
+export async function updatePerson(id: string, patch: PersonPatch): Promise<Person> {
+  const { data } = await api.patch<Person>(`/people/${seg(id)}`, patch);
+  return data;
+}
+
+export async function deletePerson(id: string): Promise<void> {
+  await api.delete(`/people/${seg(id)}`);
+}
+
+export async function addIdentity(id: string, identity: IdentityInput): Promise<Person> {
+  const { data } = await api.post<Person>(`/people/${seg(id)}/identities`, identity);
+  return data;
+}
+
+export async function removeIdentity(id: string, identityId: string): Promise<Person> {
+  const { data } = await api.delete<Person>(`/people/${seg(id)}/identities/${seg(identityId)}`);
+  return data;
+}
+
+export async function mergePeople(sourceId: string, into: string): Promise<Person> {
+  const { data } = await api.post<Person>(`/people/${seg(sourceId)}/merge`, { into });
   return data;
 }
 
