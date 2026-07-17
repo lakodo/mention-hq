@@ -406,7 +406,9 @@ def _render(text: str, names: dict[str, str]) -> str:
         uid, name = m.group(1), m.group(2)
         return f"@{name or names.get(uid) or 'someone'}"
 
-    text = re.sub(r"<@([UW][A-Z0-9]+)(?:\|([^>]+))?>", mention, text)
+    # Users are U/W ids; a usergroup pinged with @ carries an S id. Either way the pipe label
+    # (or a resolved name) is what to show.
+    text = re.sub(r"<@([A-Z][A-Z0-9]+)(?:\|([^>]+))?>", mention, text)
     text = re.sub(r"<#[CG][A-Z0-9]+(?:\|([^>]+))?>", lambda m: f"#{m.group(1) or 'channel'}", text)
     text = re.sub(r"<!subteam\^[A-Z0-9]+(?:\|([^>]+))?>", lambda m: f"@{m.group(1) or 'team'}", text)
     text = re.sub(r"<!(here|channel|everyone)>", lambda m: f"@{m.group(1)}", text)

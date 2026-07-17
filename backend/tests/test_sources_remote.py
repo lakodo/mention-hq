@@ -446,6 +446,18 @@ class TestSlack:
         assert item.label.startswith("#eng - Grace Hopper in #mo: follow-up")
 
     @respx.mock
+    async def test_a_usergroup_mention_uses_its_handle(self, slack):
+        match = {**SLACK_SEARCH["messages"]["matches"][0], "text": "Cc <@S060JTNTFBP|mo-crew>"}
+        respx.get("https://slack.com/api/search.messages").mock(
+            return_value=httpx.Response(200, json={"ok": True, "messages": {"matches": [match]}})
+        )
+
+        label = (await slack.fetch())[0].label
+
+        assert "@mo-crew" in label
+        assert "S060JTNTFBP" not in label, "the raw id is gone"
+
+    @respx.mock
     async def test_a_bare_mention_and_dm_channel_resolve_to_names(self, slack):
         match = {
             "ts": "1752660000.000100",
