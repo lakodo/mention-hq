@@ -30,7 +30,7 @@ import {
   IconTrash,
   IconX,
 } from '@tabler/icons-react';
-import { type MouseEvent as ReactMouseEvent, useMemo, useState } from 'react';
+import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ReadToggle } from '../components/ReadToggle';
 import { SourceDot } from '../components/SourceDot';
@@ -200,6 +200,13 @@ export function TaskDetailView() {
     [ordered, sidebarQuery],
   );
   const selected = useMemo(() => ordered.find((task) => task.id === id), [ordered, id]);
+
+  // Opening a task reads it — that's what un-bolds it on the board and in the list.
+  useEffect(() => {
+    if (selected?.unread) updateTask.mutate({ id: selected.id, patch: { unread: false } });
+    // Only when the opened task changes, not on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
 
   if (isLoading) {
     return (

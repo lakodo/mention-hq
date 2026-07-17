@@ -1,19 +1,42 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models import Item, Task
 from app.schemas import (
     ConfirmRequest,
     CreateTaskFromItemRequest,
     ItemWithLinks,
+    TaskMatchOut,
     TaskOut,
     TriageRequest,
 )
-from app.services import catchup
+from app.services import ai, catchup
 
 router = APIRouter(prefix="/catchup", tags=["catchup"])
+
+
+@router.post("/{item_id}/suggest-tasks", response_model=list[TaskMatchOut])
+async def suggest_tasks(item_id: str, db: AsyncSession = Depends(get_db)):
+    """Ask the brain which existing tasks this item belongs to. On-demand; suggests only."""
+    item = await db.get(Item, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"Item not found: {item_id}")
+    try:
+        matches = await ai.suggest_tasks(db, item)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    rows = (await db.execute(select(Task).where(Task.id.in_([m.task_id for m in matches])))).scalars()
+    tasks = {task.id: task for task in rows.all()}
+    return [
+        TaskMatchOut(task=tasks[m.task_id], confidence=m.confidence, reason=m.reason)
+        for m in matches
+        if m.task_id in tasks
+    ]
 
 
 @router.get("", response_model=list[ItemWithLinks])

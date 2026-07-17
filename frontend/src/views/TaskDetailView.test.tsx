@@ -129,16 +129,18 @@ describe('TaskDetailView', () => {
     );
   });
 
-  it('toggles read from the detail panel', async () => {
+  it('reads a task on open, and the toggle flips it back to unread', async () => {
     const user = userEvent.setup();
     renderApp(detailRoute(PAYMENTS_TASK_ID));
 
     const detail = await panel();
-    await user.click(within(detail).getByLabelText('Toggle read/unread'));
-
+    // Opening the (unread) task marks it read.
     await waitFor(() =>
       expect(db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)?.unread).toBe(false),
     );
+
+    await user.click(within(detail).getByLabelText('Toggle read/unread'));
+    await waitFor(() => expect(db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)?.unread).toBe(true));
   });
 
   it('offers archive and delete on any task', async () => {

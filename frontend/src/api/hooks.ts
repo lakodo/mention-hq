@@ -41,6 +41,7 @@ import {
   removeIdentity,
   removeSource,
   suggestBucket,
+  suggestItemTasks,
   testSource,
   triageItem,
   updatePerson,
@@ -66,6 +67,7 @@ import type {
   SyncResult,
   Task,
   TaskCreate,
+  TaskMatch,
   TaskFilters,
   TaskPatch,
 } from '../types';
@@ -309,6 +311,10 @@ export function useReassignBuckets(): UseMutationResult<Bucket[], Error, void> {
 
 export function useSuggestBucket(): UseMutationResult<BucketSuggestion, Error, string> {
   return useMutation({ mutationFn: suggestBucket });
+}
+
+export function useSuggestItemTasks(): UseMutationResult<TaskMatch[], Error, string> {
+  return useMutation({ mutationFn: suggestItemTasks });
 }
 
 export function useUpdateSettings(): UseMutationResult<AppSettings, Error, AppSettingsPatch> {

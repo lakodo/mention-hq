@@ -47,6 +47,14 @@ class ItemWithLinks(ItemOut):
     links: list[LinkOut] = []
 
 
+class TaskMatchOut(BaseModel):
+    """A brain-proposed match between an item and an existing task."""
+
+    task: TaskRef
+    confidence: float
+    reason: str
+
+
 class TaskOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

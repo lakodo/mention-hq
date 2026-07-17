@@ -15,7 +15,7 @@ import {
   TextInput,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconExternalLink } from '@tabler/icons-react';
+import { IconExternalLink, IconSparkles } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { SourceDot } from '../components/SourceDot';
 import { LINK_STATE_META, sourceMeta } from '../constants';
@@ -26,6 +26,7 @@ import {
   useConfirmLinks,
   useCreateTaskFromItem,
   useRejectLink,
+  useSuggestItemTasks,
   useTasks,
   useTriageItem,
 } from '../api/hooks';
@@ -112,12 +113,35 @@ function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
   const reject = useRejectLink();
   const triage = useTriageItem();
   const createTask = useCreateTaskFromItem();
+  const suggest = useSuggestItemTasks();
 
   const busy = confirm.isPending || reject.isPending || triage.isPending || createTask.isPending;
   const meta = sourceMeta(item.source);
 
   const fail = (error: unknown) =>
     notifications.show({ title: 'Action failed', message: errorMessage(error), color: 'red' });
+
+  const askForTasks = () =>
+    suggest.mutate(item.id, {
+      onSuccess: (matches) => {
+        if (matches.length === 0) {
+          notifications.show({
+            title: 'No match',
+            message: 'The brain found no task this belongs to — file it yourself.',
+            color: 'gray',
+          });
+          return;
+        }
+        // Pre-select the matches in the attach box so you review and confirm them.
+        setSelected(matches.map((m) => m.task.id));
+        notifications.show({
+          title: `Suggested ${matches.length} ${matches.length === 1 ? 'task' : 'tasks'}`,
+          message: matches.map((m) => `${m.task.title} — ${m.reason}`).join('\n'),
+          color: 'violet',
+        });
+      },
+      onError: fail,
+    });
 
   const attach = (taskIds: string[]) => {
     if (taskIds.length === 0) return;
@@ -212,6 +236,17 @@ function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
         />
         <Button size="sm" disabled={busy || selected.length === 0} onClick={() => attach(selected)}>
           Attach
+        </Button>
+        <Button
+          size="sm"
+          variant="light"
+          color="violet"
+          leftSection={<IconSparkles size={15} />}
+          loading={suggest.isPending}
+          disabled={busy}
+          onClick={askForTasks}
+        >
+          Match
         </Button>
         <Button size="sm" variant="light" disabled={busy} onClick={() => setModalOpen(true)}>
           New task

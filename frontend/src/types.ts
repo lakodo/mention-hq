@@ -35,6 +35,12 @@ export interface ItemWithLinks extends Item {
   links: Link[];
 }
 
+export interface TaskMatch {
+  task: TaskRef;
+  confidence: number;
+  reason: string;
+}
+
 export interface Task {
   id: string;
   title: string;

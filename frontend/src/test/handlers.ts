@@ -276,6 +276,8 @@ export const handlers = [
     return HttpResponse.json(task);
   }),
 
+  http.post(`${BASE}/catchup/:itemId/suggest-tasks`, () => HttpResponse.json([])),
+
   http.post(`${BASE}/catchup/:itemId/triage`, async ({ params, request }) => {
     const item = db.catchup.find((i) => i.id === params.itemId);
     if (!item) return notFound(`Item not found: ${String(params.itemId)}`);

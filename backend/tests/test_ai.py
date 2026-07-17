@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.models import Bucket, Task
+from app.models import Bucket, Item, Task
 from app.services import ai
 from app.services.ai import BucketSuggestion
 
@@ -156,6 +156,51 @@ class TestEndpoint:
 
     async def test_suggest_404s_for_an_unknown_task(self, client):
         assert (await client.post("/api/buckets/suggest/nope")).status_code == 404
+
+    async def test_suggest_tasks_keeps_only_confident_real_matches(self, client, db, monkeypatch):
+        for tid, title in [("task:a", "Refund bug"), ("task:b", "CI flake")]:
+            db.add(
+                Task(
+                    id=tid,
+                    title=title,
+                    bucket="Uncategorized",
+                    status="open",
+                    tags=[],
+                    unread=False,
+                    origin="manual",
+                    updated_at=datetime.now(UTC),
+                )
+            )
+        db.add(
+            Item(
+                id="pr:x~1",
+                source="pr",
+                label="fix refunds",
+                url=None,
+                context=None,
+                occurred_at=datetime.now(UTC),
+                extra={},
+            )
+        )
+        await db.commit()
+
+        async def fake_structured(system, prompt, model_cls):
+            return model_cls(
+                matches=[
+                    {"task_id": "task:a", "confidence": 0.9, "reason": "same refund work"},
+                    {"task_id": "task:b", "confidence": 0.2, "reason": "too vague"},
+                    {"task_id": "task:ghost", "confidence": 0.99, "reason": "invented"},
+                ]
+            )
+
+        monkeypatch.setattr(ai, "_claude_cli", lambda: "/usr/bin/claude")
+        monkeypatch.setattr(ai, "_structured", fake_structured)
+
+        body = (await client.post("/api/catchup/pr:x~1/suggest-tasks")).json()
+
+        # Weak (task:b) and invented (task:ghost) are dropped; only the confident real one stays.
+        assert [m["task"]["id"] for m in body] == ["task:a"]
+        assert body[0]["reason"] == "same refund work"
 
     async def test_admin_reports_ai_status(self, client, isolated_secrets):
         body = (await client.get("/api/admin/ai")).json()

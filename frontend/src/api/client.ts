@@ -22,6 +22,7 @@ import type {
   Task,
   TaskCreate,
   TaskFilters,
+  TaskMatch,
   TaskPatch,
 } from '../types';
 
@@ -162,6 +163,11 @@ export async function createTaskFromItem(
   bucket?: string,
 ): Promise<Task> {
   const { data } = await api.post<Task>(`/catchup/${seg(itemId)}/new-task`, { title, bucket });
+  return data;
+}
+
+export async function suggestItemTasks(itemId: string): Promise<TaskMatch[]> {
+  const { data } = await api.post<TaskMatch[]>(`/catchup/${seg(itemId)}/suggest-tasks`);
   return data;
 }
 
