@@ -21,8 +21,8 @@ export function sortTasksByRecency(tasks: Task[], now: number = Date.now()): Tas
 /**
  * Build the board's columns from the buckets the API reports, ordered by position.
  * A task whose bucket has no column of its own is folded into Uncategorized, which
- * is appended only when something actually lands there — so nothing disappears from
- * the board, and an install with no buckets yields no columns.
+ * leads the board when anything lands there — untriaged work is what you act on
+ * first — and is absent otherwise, so an install with no buckets yields no columns.
  */
 export function groupByBucket(
   tasks: Task[],
@@ -49,7 +49,7 @@ export function groupByBucket(
   if (orphans.length) {
     const existing = columns.find((c) => c.name === UNCATEGORIZED);
     if (existing) existing.tasks = sortTasksByRecency([...existing.tasks, ...orphans], now);
-    else columns.push({ name: UNCATEGORIZED, tasks: sortTasksByRecency(orphans, now) });
+    else columns.unshift({ name: UNCATEGORIZED, tasks: sortTasksByRecency(orphans, now) });
   }
 
   return columns.map((c) => ({ ...c, count: c.tasks.length }));

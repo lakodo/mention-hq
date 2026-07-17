@@ -55,6 +55,12 @@ describe('groupByBucket', () => {
     expect(uncategorized?.tasks.map((t) => t.id)).toEqual(['task:orphan']);
   });
 
+  it('leads with Uncategorized so untriaged work is what you see first', () => {
+    const orphan: Task = { ...auth, id: 'task:orphan', bucket: 'Ghost' };
+    const columns = groupByBucket([...tasks, orphan], buckets);
+    expect(columns.map((c) => c.name)).toEqual(['Uncategorized', 'Payments', 'Auth']);
+  });
+
   it('does not invent an Uncategorized column when nothing lands there', () => {
     expect(groupByBucket(tasks, buckets).some((c) => c.name === 'Uncategorized')).toBe(false);
   });
