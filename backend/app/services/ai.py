@@ -95,7 +95,8 @@ def status() -> AIStatus:
     return AIStatus(
         False,
         "none",
-        "No credentials. Run `ant auth login`, or add an API key in Admin.",
+        "No credentials. Add an API key (console.anthropic.com → API Keys), "
+        "or if you use the Anthropic CLI, run `ant auth login`.",
     )
 
 

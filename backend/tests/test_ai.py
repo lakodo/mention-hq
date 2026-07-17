@@ -44,7 +44,7 @@ class TestStatus:
 
         assert current.available is False
         assert current.source == "none"
-        assert "ant auth login" in current.detail, "the message must say what to do next"
+        assert "API key" in current.detail, "the message must say what to do next"
 
     def test_a_stored_key_is_reported_as_keychain(self, isolated_secrets):
         isolated_secrets.set("anthropic", "api_key", "sk-ant-xxx")
@@ -71,7 +71,7 @@ class TestStatus:
 
 class TestSuggest:
     async def test_without_credentials_it_refuses_rather_than_failing(self, db, task):
-        with pytest.raises(RuntimeError, match="ant auth login"):
+        with pytest.raises(RuntimeError, match="API key"):
             await ai.suggest_bucket(db, task)
 
     async def test_a_suggestion_is_returned_verbatim(self, db, task, isolated_secrets, monkeypatch):
@@ -137,7 +137,7 @@ class TestEndpoint:
         response = await client.post("/buckets/suggest/task:1")
 
         assert response.status_code == 503
-        assert "ant auth login" in response.json()["detail"]
+        assert "API key" in response.json()["detail"]
 
     async def test_suggest_404s_for_an_unknown_task(self, client):
         assert (await client.post("/buckets/suggest/nope")).status_code == 404
