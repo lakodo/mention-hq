@@ -40,6 +40,42 @@ describe('TaskDetailView', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('archives a task straight from its row menu', async () => {
+    const user = userEvent.setup();
+    renderApp('/task');
+
+    await screen.findByText('Select a task from the list.');
+    await user.click(
+      screen.getByRole('button', { name: 'Actions for Refresh token rotation on scope change' }),
+    );
+    await user.click(await screen.findByRole('menuitem', { name: /Archive/ }));
+
+    await waitFor(() => expect(db.tasks.find((t) => t.id === AUTH_TASK_ID)?.archived).toBe(true));
+  });
+
+  it('bulk-archives the tasks ticked in the sidebar', async () => {
+    const user = userEvent.setup();
+    renderApp('/task');
+
+    await screen.findByText('Select a task from the list.');
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: 'Select Stripe webhook handling for invoice payments',
+      }),
+    );
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Select Refresh token rotation on scope change' }),
+    );
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+
+    await waitFor(() => {
+      expect(db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)?.archived).toBe(true);
+      expect(db.tasks.find((t) => t.id === AUTH_TASK_ID)?.archived).toBe(true);
+    });
+  });
+
   it('gives Slack its own section ahead of the other sources', async () => {
     renderApp(detailRoute(PAYMENTS_TASK_ID));
 

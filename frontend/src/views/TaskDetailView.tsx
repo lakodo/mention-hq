@@ -7,8 +7,10 @@ import {
   Button,
   Card,
   Center,
+  Checkbox,
   Group,
   Loader,
+  Menu,
   Stack,
   Text,
   TextInput,
@@ -20,10 +22,12 @@ import {
   IconArchiveOff,
   IconChevronLeft,
   IconChevronRight,
+  IconDots,
   IconExternalLink,
   IconSearch,
   IconSparkles,
   IconTrash,
+  IconX,
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -49,6 +53,10 @@ import {
 } from '../lib/tasks';
 import { formatAgo } from '../lib/time';
 import type { BucketSuggestion, Item, Task } from '../types';
+
+const DELETE_WARNING =
+  'Their items are kept but return to Catch-up to be triaged again. ' +
+  'To keep them filed, archive instead.';
 
 interface ItemCardProps {
   item: Item;
@@ -161,6 +169,7 @@ export function TaskDetailView() {
   const [sidebarQuery, setSidebarQuery] = useState('');
   const [groupTags, setGroupTags] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [suggestion, setSuggestion] = useState<BucketSuggestion | null>(null);
 
   const { data: tasks, isLoading } = useTasks(showArchived ? { archived: true } : {});
@@ -250,11 +259,7 @@ export function TaskDetailView() {
 
   const removeTask = () => {
     if (!selected) return;
-    const ok = window.confirm(
-      'Delete this task? Its items are kept but return to Catch-up to be triaged again. ' +
-        'To keep them filed, archive it instead.',
-    );
-    if (!ok) return;
+    if (!window.confirm(`Delete this task? ${DELETE_WARNING}`)) return;
     deleteTask.mutate(selected.id, {
       onSuccess: () => {
         notifications.show({ title: 'Task deleted', message: selected.title, color: 'teal' });
@@ -262,6 +267,78 @@ export function TaskDetailView() {
       },
       onError: fail,
     });
+  };
+
+  const setArchived = (task: Task, archiving: boolean) =>
+    updateTask.mutate(
+      { id: task.id, patch: { archived: archiving } },
+      {
+        onSuccess: () =>
+          notifications.show({
+            title: archiving ? 'Task archived' : 'Task restored',
+            message: task.title,
+            color: 'teal',
+          }),
+        onError: fail,
+      },
+    );
+
+  const deleteOne = (task: Task) => {
+    if (!window.confirm(`Delete this task? ${DELETE_WARNING}`)) return;
+    deleteTask.mutate(task.id, {
+      onSuccess: () => {
+        notifications.show({ title: 'Task deleted', message: task.title, color: 'teal' });
+        if (selected?.id === task.id) navigate('/task');
+      },
+      onError: fail,
+    });
+  };
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const plural = (n: number) => `${n} ${n === 1 ? 'task' : 'tasks'}`;
+
+  const bulkArchive = async () => {
+    const ids = [...selectedIds];
+    const archiving = !showArchived;
+    try {
+      await Promise.all(
+        ids.map((id) => updateTask.mutateAsync({ id, patch: { archived: archiving } })),
+      );
+      notifications.show({
+        title: archiving ? 'Tasks archived' : 'Tasks restored',
+        message: `${plural(ids.length)}.`,
+        color: 'teal',
+      });
+    } catch (error) {
+      fail(error);
+    }
+    clearSelection();
+  };
+
+  const bulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (!window.confirm(`Delete ${plural(ids.length)}? ${DELETE_WARNING}`)) return;
+    try {
+      await Promise.all(ids.map((id) => deleteTask.mutateAsync(id)));
+      notifications.show({
+        title: 'Tasks deleted',
+        message: `${plural(ids.length)}.`,
+        color: 'teal',
+      });
+      if (selected && ids.includes(selected.id)) navigate('/task');
+    } catch (error) {
+      fail(error);
+    }
+    clearSelection();
   };
 
   const { slack, other } = selected ? splitSlackItems(selected) : { slack: [], other: [] };
@@ -274,31 +351,76 @@ export function TaskDetailView() {
     return (
       <Group
         key={task.id}
-        gap={10}
+        gap={8}
         wrap="nowrap"
-        px={collapsed ? 0 : 12}
-        py={8}
+        px={collapsed ? 0 : 8}
+        py={6}
         mx={collapsed ? 'auto' : 8}
-        onClick={() => navigate(`/task/${encodeURIComponent(task.id)}`)}
-        title={task.title}
         justify={collapsed ? 'center' : 'flex-start'}
         style={{
           borderRadius: 6,
-          cursor: 'pointer',
           background: active ? 'var(--mantine-color-gray-1)' : 'transparent',
         }}
       >
-        {source ? <SourceDot source={source} /> : <Box w={8} />}
         {!collapsed && (
-          <Text
-            fz="sm"
-            truncate
-            fw={task.unread ? 700 : 400}
-            c={active ? undefined : 'dimmed'}
-            style={{ opacity: task.unread ? 1 : 0.65 }}
-          >
-            {task.title}
-          </Text>
+          <Checkbox
+            size="xs"
+            checked={selectedIds.has(task.id)}
+            aria-label={`Select ${task.title}`}
+            onChange={() => toggleSelect(task.id)}
+          />
+        )}
+        <Group
+          gap={10}
+          wrap="nowrap"
+          style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+          onClick={() => navigate(`/task/${encodeURIComponent(task.id)}`)}
+          title={task.title}
+          justify={collapsed ? 'center' : 'flex-start'}
+        >
+          {source ? <SourceDot source={source} /> : <Box w={8} />}
+          {!collapsed && (
+            <Text
+              fz="sm"
+              truncate
+              fw={task.unread ? 700 : 400}
+              c={active ? undefined : 'dimmed'}
+              style={{ opacity: task.unread ? 1 : 0.65 }}
+            >
+              {task.title}
+            </Text>
+          )}
+        </Group>
+        {!collapsed && (
+          <Menu position="bottom-end" withArrow>
+            <Menu.Target>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                aria-label={`Actions for ${task.title}`}
+              >
+                <IconDots size={15} />
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item
+                leftSection={
+                  task.archived ? <IconArchiveOff size={14} /> : <IconArchive size={14} />
+                }
+                onClick={() => setArchived(task, !task.archived)}
+              >
+                {task.archived ? 'Restore' : 'Archive'}
+              </Menu.Item>
+              <Menu.Item
+                color="red"
+                leftSection={<IconTrash size={14} />}
+                onClick={() => deleteOne(task)}
+              >
+                Delete
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         )}
       </Group>
     );
@@ -348,7 +470,7 @@ export function TaskDetailView() {
           </Tooltip>
         </Group>
 
-        {!collapsed && (
+        {!collapsed && selectedIds.size === 0 && (
           <Group px={12} pt={8} gap={8}>
             <Button
               size="xs"
@@ -362,10 +484,51 @@ export function TaskDetailView() {
               variant={showArchived ? 'filled' : 'default'}
               color="gray"
               leftSection={<IconArchive size={14} />}
-              onClick={() => setShowArchived((a) => !a)}
+              onClick={() => {
+                setShowArchived((a) => !a);
+                clearSelection();
+              }}
             >
               Archived
             </Button>
+          </Group>
+        )}
+
+        {!collapsed && selectedIds.size > 0 && (
+          <Group px={12} pt={8} gap={8} wrap="nowrap">
+            <Text fz="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+              {selectedIds.size} selected
+            </Text>
+            <Button
+              size="xs"
+              variant="light"
+              color="gray"
+              leftSection={showArchived ? <IconArchiveOff size={14} /> : <IconArchive size={14} />}
+              loading={updateTask.isPending}
+              onClick={bulkArchive}
+            >
+              {showArchived ? 'Restore' : 'Archive'}
+            </Button>
+            <Button
+              size="xs"
+              variant="light"
+              color="red"
+              leftSection={<IconTrash size={14} />}
+              loading={deleteTask.isPending}
+              onClick={bulkDelete}
+            >
+              Delete
+            </Button>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size="sm"
+              ml="auto"
+              aria-label="Clear selection"
+              onClick={clearSelection}
+            >
+              <IconX size={14} />
+            </ActionIcon>
           </Group>
         )}
 
