@@ -154,7 +154,7 @@ def _external_id(match: dict) -> str:
 
 def _to_item(match: dict, names: dict[str, str]) -> RawItem:
     channel = match.get("channel") or {}
-    raw = match.get("text") or ""
+    raw = _message_text(match)
     ts = match.get("ts", "0")
     thread_ts = match.get("thread_ts") or ts
 
@@ -192,12 +192,77 @@ def _display_name(user: dict) -> str:
 
 def _mention_ids(match: dict) -> set[str]:
     """User ids the rendering will need a name for: bare in-text mentions and a DM's peer."""
-    ids = {m.group(1) for m in _BARE_MENTION.finditer(match.get("text") or "")}
+    ids = {m.group(1) for m in _BARE_MENTION.finditer(_message_text(match))}
     channel = match.get("channel") or {}
     peer = _dm_peer(channel)
     if peer:
         ids.add(peer)
     return ids
+
+
+def _message_text(match: dict) -> str:
+    """The message's readable content, wherever it lives.
+
+    A person's own message keeps it in `text`, but an app (a GitHub PR notice, a Linear
+    bot, a quiz bot answering in a DM) puts everything in Block Kit `blocks` or in
+    `attachments`, leaving `text` empty. Reading those is what stops such messages showing
+    up as "(no text)".
+    """
+    text = (match.get("text") or "").strip()
+    if text:
+        return text
+    blocks = _blocks_text(match.get("blocks"))
+    if blocks:
+        return blocks
+    for attachment in match.get("attachments") or []:
+        found = (
+            _blocks_text(attachment.get("blocks"))
+            or attachment.get("text")
+            or attachment.get("fallback")
+            or attachment.get("title")
+            or attachment.get("pretext")
+        )
+        if found:
+            return str(found).strip()
+    return ""
+
+
+def _blocks_text(blocks: list | None) -> str:
+    parts: list[str] = []
+    for block in blocks or []:
+        kind = block.get("type")
+        if kind in ("section", "header"):
+            main = (block.get("text") or {}).get("text")
+            if main:
+                parts.append(main)
+            parts += [f.get("text", "") for f in block.get("fields") or [] if f.get("text")]
+        elif kind == "context":
+            parts += [e.get("text", "") for e in block.get("elements") or [] if e.get("text")]
+        elif kind == "rich_text":
+            parts.append(_rich_text(block))
+    return " ".join(part for part in parts if part).strip()
+
+
+def _rich_text(block: dict) -> str:
+    """Flatten a rich_text block back to a line, in Slack's own `<...>` markup so `_render`
+    resolves the mentions, links and emoji it contains just like it does for plain text."""
+    out: list[str] = []
+    for section in block.get("elements") or []:
+        for element in section.get("elements") or []:
+            kind = element.get("type")
+            if kind == "text":
+                out.append(element.get("text", ""))
+            elif kind == "link":
+                out.append(element.get("text") or element.get("url", ""))
+            elif kind == "emoji":
+                out.append(f":{element.get('name', '')}:")
+            elif kind == "user":
+                out.append(f"<@{element.get('user_id', '')}>")
+            elif kind == "usergroup":
+                out.append(f"<!subteam^{element.get('usergroup_id', '')}>")
+            elif kind == "broadcast":
+                out.append(f"<!{element.get('range', '')}>")
+    return "".join(out)
 
 
 def _dm_peer(channel: dict) -> str:

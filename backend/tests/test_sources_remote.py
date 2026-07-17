@@ -374,6 +374,60 @@ class TestSlack:
         assert directory.remembered == {"U9": "Bruno"}
 
     @respx.mock
+    async def test_an_app_message_reads_its_block_kit_content(self, slack):
+        # A GitHub app posts a PR notice with no top-level text — it lives in a section block.
+        match = {
+            "ts": "1752660000.000100",
+            "thread_ts": "1752660000.000100",
+            "text": "",
+            "permalink": "https://acme.slack.com/archives/C01/p1",
+            "channel": {"id": "C01", "name": "mo"},
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "New PR <https://github.com/x/y/pull/1|docs: add guideline> | +6 -0",
+                    },
+                }
+            ],
+        }
+        respx.get("https://slack.com/api/search.messages").mock(
+            return_value=httpx.Response(200, json={"ok": True, "messages": {"matches": [match]}})
+        )
+
+        assert (await slack.fetch())[0].label == "New PR docs: add guideline | +6 -0"
+
+    @respx.mock
+    async def test_a_rich_text_block_message_is_read(self, slack):
+        match = {
+            "ts": "1752660000.000100",
+            "thread_ts": "1752660000.000100",
+            "text": "",
+            "permalink": "https://acme.slack.com/archives/C01/p1",
+            "channel": {"id": "C01", "name": "mo"},
+            "blocks": [
+                {
+                    "type": "rich_text",
+                    "elements": [
+                        {
+                            "type": "rich_text_section",
+                            "elements": [
+                                {"type": "text", "text": "the perfect example of a "},
+                                {"type": "text", "text": "CEO fraud scam"},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        respx.get("https://slack.com/api/search.messages").mock(
+            return_value=httpx.Response(200, json={"ok": True, "messages": {"matches": [match]}})
+        )
+
+        assert (await slack.fetch())[0].label == "the perfect example of a CEO fraud scam"
+
+    @respx.mock
     async def test_a_message_with_no_text_is_named_by_its_file(self, slack):
         match = {
             "ts": "1752660000.000100",
