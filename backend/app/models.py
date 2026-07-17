@@ -219,6 +219,7 @@ class Bucket(Base):
     keywords: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
+    archived_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class AppConfig(Base):

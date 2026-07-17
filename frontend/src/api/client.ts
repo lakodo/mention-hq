@@ -4,6 +4,7 @@ import type {
   AppSettings,
   AppSettingsPatch,
   Bucket,
+  BucketArchive,
   BucketCreate,
   BucketPatch,
   BucketSuggestion,
@@ -89,8 +90,18 @@ export async function patchBucket(name: string, patch: BucketPatch): Promise<Buc
   return data;
 }
 
-export async function deleteBucket(name: string): Promise<void> {
-  await api.delete(`/buckets/${seg(name)}`);
+export async function deleteBucket(name: string, cascadeTasks = false): Promise<void> {
+  await api.delete(`/buckets/${seg(name)}`, { params: { cascade_tasks: cascadeTasks } });
+}
+
+export async function archiveBucket(name: string, payload: BucketArchive): Promise<Bucket> {
+  const { data } = await api.post<Bucket>(`/buckets/${seg(name)}/archive`, payload);
+  return data;
+}
+
+export async function restoreBucket(name: string): Promise<Bucket> {
+  const { data } = await api.post<Bucket>(`/buckets/${seg(name)}/restore`);
+  return data;
 }
 
 export async function reassignBuckets(): Promise<Bucket[]> {

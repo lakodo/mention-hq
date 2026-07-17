@@ -1,18 +1,22 @@
 import {
+  ActionIcon,
   Badge,
   Box,
   Button,
   Card,
   Center,
+  Checkbox,
   Group,
   Loader,
+  Menu,
   Modal,
   Stack,
   Text,
   TextInput,
 } from '@mantine/core';
+import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
-import { IconPlus } from '@tabler/icons-react';
+import { IconArchive, IconDots, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ReadToggle } from '../components/ReadToggle';
@@ -20,12 +24,19 @@ import { SourceDots } from '../components/SourceDot';
 import { StatusPill } from '../components/StatusPill';
 import { statusMeta } from '../constants';
 import { errorMessage } from '../api/client';
-import { useBuckets, useCreateBucket, useTasks, useUpdateTask } from '../api/hooks';
+import {
+  useArchiveBucket,
+  useBuckets,
+  useCreateBucket,
+  useDeleteBucket,
+  useTasks,
+  useUpdateTask,
+} from '../api/hooks';
 import { filterTasks } from '../lib/search';
 import { groupByBucket, itemCountLabel, newestItemAt, uniqueSources } from '../lib/tasks';
 import { formatAgo } from '../lib/time';
 import { useHq } from '../shell/HqContext';
-import type { Task } from '../types';
+import type { Bucket, Task } from '../types';
 
 function AddBucket({ ghost }: { ghost?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -153,12 +164,67 @@ export function BoardView() {
   const { data: tasks, isLoading: tasksLoading } = useTasks();
   const { data: buckets, isLoading: bucketsLoading } = useBuckets();
   const updateTask = useUpdateTask();
+  const archiveBucket = useArchiveBucket();
+  const deleteBucket = useDeleteBucket();
   const [focused, setFocused] = useState<string | null>(null);
 
   const columns = useMemo(
     () => groupByBucket(filterTasks(tasks ?? [], query), buckets ?? []),
     [tasks, buckets, query],
   );
+
+  const openArchive = (bucket: Bucket) => {
+    let cascade = false;
+    modals.openConfirmModal({
+      title: `Archive "${bucket.name}"?`,
+      children: (
+        <Checkbox
+          label={`Also archive its ${bucket.count} task${bucket.count !== 1 ? 's' : ''}`}
+          onChange={(e) => {
+            cascade = e.currentTarget.checked;
+          }}
+        />
+      ),
+      labels: { confirm: 'Archive', cancel: 'Cancel' },
+      onConfirm: () =>
+        archiveBucket.mutate(
+          { name: bucket.name, payload: { cascade_tasks: cascade } },
+          {
+            onSuccess: () =>
+              notifications.show({ title: 'Bucket archived', message: bucket.name, color: 'teal' }),
+            onError: (err) =>
+              notifications.show({ title: 'Error', message: errorMessage(err), color: 'red' }),
+          },
+        ),
+    });
+  };
+
+  const openDelete = (bucket: Bucket) => {
+    let cascade = false;
+    modals.openConfirmModal({
+      title: `Delete "${bucket.name}"?`,
+      children: (
+        <Checkbox
+          label={`Also delete its ${bucket.count} task${bucket.count !== 1 ? 's' : ''}`}
+          onChange={(e) => {
+            cascade = e.currentTarget.checked;
+          }}
+        />
+      ),
+      labels: { confirm: 'Delete', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () =>
+        deleteBucket.mutate(
+          { name: bucket.name, cascadeTasks: cascade },
+          {
+            onSuccess: () =>
+              notifications.show({ title: 'Bucket deleted', message: bucket.name, color: 'teal' }),
+            onError: (err) =>
+              notifications.show({ title: 'Error', message: errorMessage(err), color: 'red' }),
+          },
+        ),
+    });
+  };
 
   if (tasksLoading || bucketsLoading) {
     return (
@@ -199,6 +265,7 @@ export function BoardView() {
       {columns.map((column) => {
         const isFocused = focused === column.name;
         const dimmed = focused !== null && !isFocused;
+        const bucketMeta = buckets?.find((b) => b.name === column.name);
 
         return (
           <Box
@@ -216,15 +283,52 @@ export function BoardView() {
               px={4}
               py={8}
               mb={10}
-              onClick={() => setFocused((f) => (f === column.name ? null : column.name))}
-              style={{ cursor: 'pointer', borderBottom: '1px solid var(--mantine-color-gray-3)' }}
+              style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
             >
-              <Text fw={600} fz="sm">
-                {column.name}
-              </Text>
-              <Badge radius="xl" variant="filled">
-                {column.count}
-              </Badge>
+              <Group
+                gap={8}
+                style={{ flex: 1, cursor: 'pointer', minWidth: 0 }}
+                wrap="nowrap"
+                onClick={() => setFocused((f) => (f === column.name ? null : column.name))}
+              >
+                <Text fw={600} fz="sm" truncate>
+                  {column.name}
+                </Text>
+                <Badge radius="xl" variant="filled" style={{ flexShrink: 0 }}>
+                  {column.count}
+                </Badge>
+              </Group>
+
+              {bucketMeta && (
+                <Menu withinPortal position="bottom-end" shadow="sm">
+                  <Menu.Target>
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
+                      size="sm"
+                      aria-label={`Options for ${column.name}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <IconDots size={14} />
+                    </ActionIcon>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Item
+                      leftSection={<IconArchive size={14} />}
+                      onClick={() => openArchive(bucketMeta)}
+                    >
+                      Archive bucket
+                    </Menu.Item>
+                    <Menu.Item
+                      color="red"
+                      leftSection={<IconTrash size={14} />}
+                      onClick={() => openDelete(bucketMeta)}
+                    >
+                      Delete bucket
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
+              )}
             </Group>
 
             {column.tasks.length === 0 && (

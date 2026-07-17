@@ -8,6 +8,7 @@ import {
 import {
   addIdentity,
   addSource,
+  archiveBucket,
   confirmLinks,
   createBucket,
   createPerson,
@@ -42,6 +43,7 @@ import {
   rejectLink,
   removeIdentity,
   removeSource,
+  restoreBucket,
   suggestBucket,
   suggestItemTasks,
   createTriageRule,
@@ -56,6 +58,7 @@ import type {
   AppSettings,
   AppSettingsPatch,
   Bucket,
+  BucketArchive,
   BucketCreate,
   BucketPatch,
   BucketSuggestion,
@@ -326,9 +329,25 @@ export function useUpdateBucket(): UseMutationResult<
   });
 }
 
-export function useDeleteBucket(): UseMutationResult<void, Error, string> {
+export function useDeleteBucket(): UseMutationResult<void, Error, { name: string; cascadeTasks?: boolean }> {
   const invalidate = useBucketInvalidation();
-  return useMutation({ mutationFn: deleteBucket, onSuccess: invalidate });
+  return useMutation({
+    mutationFn: ({ name, cascadeTasks }) => deleteBucket(name, cascadeTasks),
+    onSuccess: invalidate,
+  });
+}
+
+export function useArchiveBucket(): UseMutationResult<Bucket, Error, { name: string; payload: BucketArchive }> {
+  const invalidate = useBucketInvalidation();
+  return useMutation({
+    mutationFn: ({ name, payload }) => archiveBucket(name, payload),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRestoreBucket(): UseMutationResult<Bucket, Error, string> {
+  const invalidate = useBucketInvalidation();
+  return useMutation({ mutationFn: restoreBucket, onSuccess: invalidate });
 }
 
 export function useReassignBuckets(): UseMutationResult<Bucket[], Error, void> {
