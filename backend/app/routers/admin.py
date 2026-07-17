@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import get_db
 from app.models import Item, SourceInstance
 from app.schemas import (
@@ -14,6 +15,7 @@ from app.schemas import (
     AIStatusOut,
     AppSettingsOut,
     AppSettingsPatch,
+    BackupOut,
     ConfigFieldOut,
     DetectionOut,
     SourceConfigUpdate,
@@ -31,6 +33,7 @@ from app.services.app_config import (
     set_auto_sync,
     set_value,
 )
+from app.services.backup import backup_database
 from app.services.sources_factory import (
     BY_KIND,
     SOURCE_CLASSES,
@@ -67,6 +70,22 @@ async def patch_settings(patch: AppSettingsPatch, db: AsyncSession = Depends(get
     if changed:
         await db.commit()
     return await get_settings_(db)
+
+
+@router.post("/backup", response_model=BackupOut)
+async def backup_now() -> BackupOut:
+    """Drop a timestamped copy of the database into `backups/` beside the live file."""
+    try:
+        path = backup_database(get_settings())
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    stat = path.stat()
+    return BackupOut(
+        filename=path.name,
+        path=str(path),
+        size_bytes=stat.st_size,
+        created_at=datetime.fromtimestamp(stat.st_mtime, UTC),
+    )
 
 
 @router.get("/ai", response_model=AIStatusOut)

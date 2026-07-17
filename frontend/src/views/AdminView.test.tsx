@@ -268,6 +268,15 @@ describe('AdminView', () => {
     expect(await screen.findByText('Command Centre')).toBeInTheDocument();
   });
 
+  it('backs up the database on demand and names the saved file', async () => {
+    const user = userEvent.setup();
+    renderApp('/admin');
+
+    await user.click(await screen.findByRole('button', { name: 'Back up now' }));
+
+    expect(await screen.findByText(/hq-20260717-220000\.db/)).toBeInTheDocument();
+  });
+
   it('lists the buckets with their keywords and task counts', async () => {
     renderApp('/admin');
 

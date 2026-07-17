@@ -436,6 +436,15 @@ export const handlers = [
     return HttpResponse.json(db.settings);
   }),
 
+  http.post(`${BASE}/admin/backup`, () =>
+    HttpResponse.json({
+      filename: 'hq-20260717-220000.db',
+      path: '/app/backups/hq-20260717-220000.db',
+      size_bytes: 40960,
+      created_at: '2026-07-17T22:00:00Z',
+    }),
+  ),
+
   http.get(`${BASE}/admin/source-kinds`, () => HttpResponse.json(db.sourceKinds)),
 
   http.get(`${BASE}/admin/sources`, () => HttpResponse.json(db.sources)),

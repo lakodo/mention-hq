@@ -35,6 +35,7 @@ import { errorMessage } from '../api/client';
 import {
   useAIStatus,
   useAddSource,
+  useBackupDatabase,
   useBuckets,
   useCreateBucket,
   useDeleteBucket,
@@ -102,6 +103,34 @@ function AppNameSection() {
           Save
         </Button>
       </Group>
+    </Card>
+  );
+}
+
+function DatabaseSection() {
+  const backup = useBackupDatabase();
+
+  return (
+    <Card withBorder radius="md" p="md">
+      <Title order={5} mb="xs">
+        Database
+      </Title>
+      <Text fz="xs" c="dimmed" mb="sm">
+        Save a timestamped copy into <code>backups/</code> next to the live file. Migrations do this
+        automatically; use this before anything else risky.
+      </Text>
+      <Button
+        variant="light"
+        loading={backup.isPending}
+        onClick={() =>
+          backup.mutate(undefined, {
+            onSuccess: (b) => ok('Backed up', `Saved to ${b.filename}.`),
+            onError: fail,
+          })
+        }
+      >
+        Back up now
+      </Button>
     </Card>
   );
 }
@@ -885,6 +914,7 @@ export function AdminView() {
     <Box style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
       <Stack gap="lg" style={{ maxWidth: 1100 }}>
         <AppNameSection />
+        <DatabaseSection />
         <BucketsSection />
         <SourcesSection />
         <AISection />

@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query';
 import {
   addIdentity,
+  backupDatabase,
   addSource,
   archiveBucket,
   confirmLinks,
@@ -57,6 +58,7 @@ import type {
   AIStatus,
   AppSettings,
   AppSettingsPatch,
+  Backup,
   Bucket,
   BucketArchive,
   BucketCreate,
@@ -329,7 +331,11 @@ export function useUpdateBucket(): UseMutationResult<
   });
 }
 
-export function useDeleteBucket(): UseMutationResult<void, Error, { name: string; cascadeTasks?: boolean }> {
+export function useDeleteBucket(): UseMutationResult<
+  void,
+  Error,
+  { name: string; cascadeTasks?: boolean }
+> {
   const invalidate = useBucketInvalidation();
   return useMutation({
     mutationFn: ({ name, cascadeTasks }) => deleteBucket(name, cascadeTasks),
@@ -337,7 +343,11 @@ export function useDeleteBucket(): UseMutationResult<void, Error, { name: string
   });
 }
 
-export function useArchiveBucket(): UseMutationResult<Bucket, Error, { name: string; payload: BucketArchive }> {
+export function useArchiveBucket(): UseMutationResult<
+  Bucket,
+  Error,
+  { name: string; payload: BucketArchive }
+> {
   const invalidate = useBucketInvalidation();
   return useMutation({
     mutationFn: ({ name, payload }) => archiveBucket(name, payload),
@@ -403,6 +413,10 @@ export function useUpdateSettings(): UseMutationResult<AppSettings, Error, AppSe
     mutationFn: patchSettings,
     onSuccess: (settings) => qc.setQueryData(queryKeys.settings(), settings),
   });
+}
+
+export function useBackupDatabase(): UseMutationResult<Backup, Error, void> {
+  return useMutation({ mutationFn: backupDatabase });
 }
 
 function useInvalidateSources() {

@@ -304,6 +304,13 @@ class AppSettingsPatch(BaseModel):
     auto_sync: bool | None = None
 
 
+class BackupOut(BaseModel):
+    filename: str
+    path: str
+    size_bytes: int
+    created_at: datetime
+
+
 class SyncSourceResult(BaseModel):
     source: str
     items_fetched: int = 0

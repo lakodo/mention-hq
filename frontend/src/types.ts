@@ -231,6 +231,13 @@ export interface AppSettingsPatch {
   auto_sync?: boolean;
 }
 
+export interface Backup {
+  filename: string;
+  path: string;
+  size_bytes: number;
+  created_at: string;
+}
+
 export type AICredentialSource = 'keychain' | 'environment' | 'cli-login' | 'claude-cli' | 'none';
 
 export interface AIStatus {

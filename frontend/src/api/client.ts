@@ -3,6 +3,7 @@ import type {
   AIStatus,
   AppSettings,
   AppSettingsPatch,
+  Backup,
   Bucket,
   BucketArchive,
   BucketCreate,
@@ -229,6 +230,11 @@ export async function fetchSettings(): Promise<AppSettings> {
 
 export async function patchSettings(patch: AppSettingsPatch): Promise<AppSettings> {
   const { data } = await api.patch<AppSettings>('/admin/settings', patch);
+  return data;
+}
+
+export async function backupDatabase(): Promise<Backup> {
+  const { data } = await api.post<Backup>('/admin/backup');
   return data;
 }
 

@@ -32,9 +32,15 @@ tasks:
       - uv run alembic revision --autogenerate -m "{{.CLI_ARGS}}"
       - echo "Review the generated file before committing it."
 
-  db-upgrade:
-    desc: Apply pending migrations
+  db-backup:
+    desc: Copy the database into backups/ with a timestamp (skips cleanly if there is none)
     cmds:
+      - uv run python -c "from app.config import get_settings; from app.services.backup import backup_database; print('backed up →', backup_database(get_settings()))" || echo "no database to back up, skipping"
+
+  db-upgrade:
+    desc: Back up, then apply pending migrations
+    cmds:
+      - task: db-backup
       - uv run alembic upgrade head
 
   db-downgrade:
