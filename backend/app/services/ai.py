@@ -12,6 +12,10 @@ and the user accepts. Nothing here writes a bucket.
 
 from __future__ import annotations
 
+import asyncio
+import json
+import re
+import shutil
 from dataclasses import dataclass
 
 import structlog
@@ -26,6 +30,7 @@ log = structlog.get_logger(__name__)
 
 MODEL = "claude-opus-4-8"
 SECRET_NAMESPACE = "anthropic"
+CLI_TIMEOUT_S = 120
 
 SYSTEM_PROMPT = """You sort a person's work into topic buckets on a personal dashboard.
 
@@ -54,7 +59,7 @@ class BucketSuggestion(BaseModel):
 @dataclass
 class AIStatus:
     available: bool
-    source: str  # "keychain" | "environment" | "cli-login" | "none"
+    source: str  # "keychain" | "environment" | "cli-login" | "claude-cli" | "none"
     detail: str
 
 
@@ -75,12 +80,12 @@ def _client():
     return AsyncAnthropic(api_key=key) if key else AsyncAnthropic()
 
 
-def status() -> AIStatus:
-    try:
-        import anthropic  # noqa: F401
-    except ImportError:
-        return AIStatus(False, "none", "The anthropic package is not installed")
+def _claude_cli() -> str | None:
+    """The path to the local `claude` CLI, if it's installed — the subscription-priced brain."""
+    return shutil.which("claude")
 
+
+def status() -> AIStatus:
     if _stored_key():
         return AIStatus(True, "keychain", "Using the API key you saved in Admin")
 
@@ -92,11 +97,14 @@ def status() -> AIStatus:
     if _has_cli_profile():
         return AIStatus(True, "cli-login", "Using your local `ant auth login` session")
 
+    if _claude_cli():
+        return AIStatus(True, "claude-cli", "Using your local `claude` CLI (subscription pricing)")
+
     return AIStatus(
         False,
         "none",
-        "No credentials. Add an API key (console.anthropic.com → API Keys), "
-        "or if you use the Anthropic CLI, run `ant auth login`.",
+        "No credentials. Add an API key (console.anthropic.com → API Keys), run "
+        "`ant auth login`, or install the `claude` CLI to use your subscription.",
     )
 
 
@@ -110,35 +118,19 @@ def _has_cli_profile() -> bool:
 
 
 async def suggest_bucket(db: AsyncSession, task: Task) -> BucketSuggestion:
-    if not status().available:
-        raise RuntimeError(status().detail)
+    current = status()
+    if not current.available:
+        raise RuntimeError(current.detail)
 
     matcher = await load_matcher(db)
     existing = [rule.name for rule in matcher.rules]
+    prompt = _build_prompt(task, existing)
 
-    sources = sorted({item.source for item in task.items})
-    mention_lines = "\n".join(f"- [{m.source}] {m.label}" for m in task.items[:8])
+    if current.source == "claude-cli":
+        suggestion = await _suggest_via_cli(prompt)
+    else:
+        suggestion = await _suggest_via_sdk(prompt)
 
-    prompt = f"""Existing buckets: {", ".join(existing) if existing else "none yet"}
-
-Task: {task.title}
-Tags: {", ".join(task.tags) or "none"}
-Appears in: {", ".join(sources)}
-
-Where it was mentioned:
-{mention_lines}"""
-
-    client = _client()
-    response = await client.messages.parse(
-        model=MODEL,
-        max_tokens=1024,
-        system=SYSTEM_PROMPT,
-        output_config={"effort": "low"},
-        messages=[{"role": "user", "content": prompt}],
-        output_format=BucketSuggestion,
-    )
-
-    suggestion = response.parsed_output
     # The model can call a bucket new that already exists, differing only in case.
     matched = next((name for name in existing if name.lower() == suggestion.bucket.lower()), None)
     if matched:
@@ -148,5 +140,97 @@ Where it was mentioned:
         suggestion.bucket = UNCATEGORIZED
         suggestion.is_new = False
 
-    log.info("bucket_suggested", task=task.id, bucket=suggestion.bucket, is_new=suggestion.is_new)
+    log.info(
+        "bucket_suggested",
+        task=task.id,
+        bucket=suggestion.bucket,
+        is_new=suggestion.is_new,
+        via=current.source,
+    )
     return suggestion
+
+
+def _build_prompt(task: Task, existing: list[str]) -> str:
+    sources = sorted({item.source for item in task.items})
+    mention_lines = "\n".join(f"- [{m.source}] {m.label}" for m in task.items[:8])
+    return f"""Existing buckets: {", ".join(existing) if existing else "none yet"}
+
+Task: {task.title}
+Tags: {", ".join(task.tags) or "none"}
+Appears in: {", ".join(sources)}
+
+Where it was mentioned:
+{mention_lines}"""
+
+
+async def _suggest_via_sdk(prompt: str) -> BucketSuggestion:
+    client = _client()
+    response = await client.messages.parse(
+        model=MODEL,
+        max_tokens=1024,
+        system=SYSTEM_PROMPT,
+        output_config={"effort": "low"},
+        messages=[{"role": "user", "content": prompt}],
+        output_format=BucketSuggestion,
+    )
+    return response.parsed_output
+
+
+async def _suggest_via_cli(prompt: str) -> BucketSuggestion:
+    schema = json.dumps(BucketSuggestion.model_json_schema())
+    ask = (
+        f"{SYSTEM_PROMPT}\n\n{prompt}\n\n"
+        f"Respond with ONLY a JSON object — no markdown fences, no prose — matching this "
+        f"JSON schema:\n{schema}"
+    )
+    raw = await _run_claude_cli(ask)
+    return BucketSuggestion.model_validate(_extract_json(raw))
+
+
+async def _run_claude_cli(prompt: str) -> str:
+    """Run `claude -p` once and return the assistant's text. `--output-format json` wraps the
+    reply in an envelope whose `result` is what we want."""
+    claude = _claude_cli()
+    if claude is None:
+        raise RuntimeError("The `claude` CLI is not on PATH")
+
+    proc = await asyncio.create_subprocess_exec(
+        claude,
+        "-p",
+        prompt,
+        "--output-format",
+        "json",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=CLI_TIMEOUT_S)
+    except TimeoutError as exc:
+        proc.kill()
+        raise RuntimeError("The `claude` CLI timed out") from exc
+
+    if proc.returncode != 0:
+        detail = err.decode(errors="replace").strip() or "unknown error"
+        raise RuntimeError(f"The `claude` CLI failed: {detail[:300]}")
+
+    text = out.decode(errors="replace")
+    try:
+        envelope = json.loads(text)
+    except json.JSONDecodeError:
+        return text
+    return envelope.get("result", "") if isinstance(envelope, dict) else text
+
+
+def _extract_json(text: str) -> dict:
+    """Pull the JSON object out of a reply, tolerating stray markdown fences or prose."""
+    text = text.strip()
+    fenced = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.DOTALL)
+    if fenced:
+        text = fenced.group(1)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        block = re.search(r"\{.*\}", text, re.DOTALL)
+        if block:
+            return json.loads(block.group(0))
+        raise RuntimeError("The `claude` CLI did not return JSON") from exc

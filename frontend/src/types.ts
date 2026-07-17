@@ -202,7 +202,7 @@ export interface AppSettingsPatch {
   auto_sync?: boolean;
 }
 
-export type AICredentialSource = 'keychain' | 'environment' | 'cli-login' | 'none';
+export type AICredentialSource = 'keychain' | 'environment' | 'cli-login' | 'claude-cli' | 'none';
 
 export interface AIStatus {
   available: boolean;

@@ -17,6 +17,13 @@ from app.services import ai
 from app.services.ai import BucketSuggestion
 
 
+@pytest.fixture(autouse=True)
+def _no_local_claude(monkeypatch):
+    # The test host may have the real `claude` CLI on PATH; pin it off so credential
+    # resolution is deterministic. A test that wants it re-patches this.
+    monkeypatch.setattr(ai, "_claude_cli", lambda: None)
+
+
 @pytest.fixture
 def task(db) -> Task:
     return Task(
@@ -45,6 +52,14 @@ class TestStatus:
         assert current.available is False
         assert current.source == "none"
         assert "API key" in current.detail, "the message must say what to do next"
+
+    def test_a_local_claude_cli_is_a_usable_brain(self, isolated_secrets, monkeypatch):
+        monkeypatch.setattr(ai, "_claude_cli", lambda: "/usr/local/bin/claude")
+
+        current = ai.status()
+
+        assert current.available is True
+        assert current.source == "claude-cli"
 
     def test_a_stored_key_is_reported_as_keychain(self, isolated_secrets):
         isolated_secrets.set("anthropic", "api_key", "sk-ant-xxx")
