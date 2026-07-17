@@ -1,4 +1,5 @@
-export type Source = 'pr' | 'issue' | 'linear' | 'slack' | 'branch' | 'todo' | 'markdown' | 'dust';
+export type Source =
+  'pr' | 'issue' | 'linear' | 'slack' | 'branch' | 'todo' | 'markdown' | 'dust' | 'note';
 
 export type Status = 'open' | 'in_progress' | 'merged' | 'done';
 

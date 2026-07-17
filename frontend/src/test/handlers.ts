@@ -235,6 +235,42 @@ export const handlers = [
     HttpResponse.json(db.catchup.filter((item) => item.triaged && item.triage_reason)),
   ),
 
+  http.post(`${BASE}/items`, async ({ request }) => {
+    const body = (await request.json()) as { text: string; task_ids?: string[] };
+    const taskIds = body.task_ids ?? [];
+    const item: ItemWithLinks = {
+      id: `note:${Math.random().toString(16).slice(2, 10)}`,
+      source: 'note',
+      label: body.text.slice(0, 1000),
+      url: null,
+      context: null,
+      occurred_at: new Date().toISOString(),
+      triaged: taskIds.length > 0,
+      triage_reason: null,
+      triaged_at: null,
+      pr_status: null,
+      pr_review_requested: false,
+      links: taskIds.map((taskId) => {
+        const task = db.tasks.find((t) => t.id === taskId)!;
+        return {
+          task: { id: task.id, title: task.title, bucket: task.bucket },
+          state: 'confirmed' as const,
+          engine: null,
+          confidence: 1,
+          reason: 'You said so',
+        };
+      }),
+    };
+    db.catchup.push(item);
+    return HttpResponse.json(item, { status: 201 });
+  }),
+
+  http.delete(`${BASE}/items/:itemId`, ({ params }) => {
+    db.catchup = db.catchup.filter((i) => i.id !== params.itemId);
+    for (const task of db.tasks) task.items = task.items.filter((i) => i.id !== params.itemId);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   http.post(`${BASE}/catchup/:itemId/confirm`, async ({ params, request }) => {
     const item = db.catchup.find((i) => i.id === params.itemId);
     if (!item) return notFound(`Item not found: ${String(params.itemId)}`);

@@ -97,9 +97,7 @@ async def patch_bucket(name: str, payload: BucketPatch, db: AsyncSession = Depen
 
 
 @router.post("/{name}/archive", response_model=BucketOut)
-async def archive_bucket(
-    name: str, payload: BucketArchive, db: AsyncSession = Depends(get_db)
-) -> BucketOut:
+async def archive_bucket(name: str, payload: BucketArchive, db: AsyncSession = Depends(get_db)) -> BucketOut:
     bucket = await db.get(Bucket, name)
     if bucket is None:
         raise HTTPException(status_code=404, detail=f"Bucket not found: {name}")

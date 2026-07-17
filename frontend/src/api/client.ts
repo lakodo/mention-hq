@@ -122,6 +122,15 @@ export async function fetchCatchup(limit?: number): Promise<ItemWithLinks[]> {
   return data;
 }
 
+export async function createNote(text: string, taskIds: string[]): Promise<ItemWithLinks> {
+  const { data } = await api.post<ItemWithLinks>('/items', { text, task_ids: taskIds });
+  return data;
+}
+
+export async function deleteItem(itemId: string): Promise<void> {
+  await api.delete(`/items/${seg(itemId)}`);
+}
+
 export async function fetchItems(limit?: number): Promise<ItemWithLinks[]> {
   const { data } = await api.get<ItemWithLinks[]>('/items', { params: { limit } });
   return data;

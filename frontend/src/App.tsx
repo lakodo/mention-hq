@@ -7,6 +7,7 @@ import { createQueryClient } from './queryClient';
 import { AppLayout } from './shell/AppLayout';
 import { AdminView } from './views/AdminView';
 import { BoardView } from './views/BoardView';
+import { BrainDumpView } from './views/BrainDumpView';
 import { CatchupView } from './views/CatchupView';
 import { LogView } from './views/LogView';
 import { PeopleView } from './views/PeopleView';
@@ -20,6 +21,7 @@ export function AppRoutes() {
         <Route index element={<BoardView />} />
         <Route path="timeline" element={<TimelineView />} />
         <Route path="catchup" element={<CatchupView />} />
+        <Route path="braindump" element={<BrainDumpView />} />
         <Route path="people" element={<PeopleView />} />
         <Route path="log" element={<LogView />} />
         <Route path="admin" element={<AdminView />} />

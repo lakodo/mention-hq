@@ -13,10 +13,12 @@ import {
   confirmLinks,
   confirmTaskCandidate,
   createBucket,
+  createNote,
   createPerson,
   createTask,
   createTaskFromItem,
   deleteBucket,
+  deleteItem,
   deletePerson,
   deleteTask,
   detectSource,
@@ -243,6 +245,23 @@ function useCatchupInvalidation() {
     void qc.invalidateQueries({ queryKey: ['task'] });
     void qc.invalidateQueries({ queryKey: queryKeys.buckets() });
   };
+}
+
+export function useCreateNote(): UseMutationResult<
+  ItemWithLinks,
+  Error,
+  { text: string; taskIds: string[] }
+> {
+  const invalidate = useCatchupInvalidation();
+  return useMutation({
+    mutationFn: ({ text, taskIds }) => createNote(text, taskIds),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteItem(): UseMutationResult<void, Error, string> {
+  const invalidate = useCatchupInvalidation();
+  return useMutation({ mutationFn: deleteItem, onSuccess: invalidate });
 }
 
 /** Attaching an item to one or more tasks also triages it, so it leaves the inbox. */

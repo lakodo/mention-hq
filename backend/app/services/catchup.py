@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, Task
 from app.services.buckets import load_matcher
+from app.sources.keys import all_reference_keys
 
 
 async def untriaged(db: AsyncSession, limit: int = 100) -> list[Item]:
@@ -115,6 +116,51 @@ async def create_task_from_item(
 
     stmt = select(Task).where(Task.id == task.id).execution_options(populate_existing=True)
     return (await db.execute(stmt)).scalars().one()
+
+
+async def create_note(db: AsyncSession, text: str, task_ids: list[str]) -> Item:
+    """A brain-dump: a hand-typed item. With no tasks it lands in catch-up like anything
+    else; with tasks it is filed straight onto them. It has no source instance, so a sync
+    keeps it (nothing re-fetches it) and the engine can still propose tasks for it."""
+    body = text.strip()
+    now = datetime.now(UTC)
+    item_id = f"note:{uuid.uuid4().hex[:12]}"
+    item = Item(
+        id=item_id,
+        source="note",
+        instance_id=None,
+        label=body[:1000],
+        url=None,
+        context=None,
+        occurred_at=now,
+        first_seen_at=now,
+        triaged=bool(task_ids),
+        extra={
+            "text": body,
+            "identity_keys": [],
+            "reference_keys": sorted(all_reference_keys(body)),
+        },
+    )
+    db.add(item)
+    await db.flush()
+
+    for task_id in task_ids:
+        if await db.get(Task, task_id) is None:
+            raise LookupError(f"Task not found: {task_id}")
+        await _decide(db, item_id, task_id, CONFIRMED)
+
+    await db.commit()
+    return await _reload(db, item_id)
+
+
+async def delete_item(db: AsyncSession, item_id: str) -> None:
+    """Remove an item outright — its links cascade. For clearing out leftovers, e.g. items a
+    since-deleted source left behind."""
+    item = await db.get(Item, item_id)
+    if item is None:
+        raise LookupError(f"Item not found: {item_id}")
+    await db.delete(item)
+    await db.commit()
 
 
 async def mark_triaged(db: AsyncSession, item_id: str, triaged: bool = True) -> Item:

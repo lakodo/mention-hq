@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Anchor,
   Badge,
   Button,
@@ -10,8 +11,9 @@ import {
   Switch,
   Text,
   TextInput,
+  Tooltip,
 } from '@mantine/core';
-import { IconRefresh, IconSearch } from '@tabler/icons-react';
+import { IconBulb, IconRefresh, IconSearch } from '@tabler/icons-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCatchup } from '../api/hooks';
 import { formatAgo } from '../lib/time';
@@ -77,7 +79,7 @@ export function Header() {
   return (
     <Group
       component="header"
-      gap="xl"
+      gap="md"
       wrap="nowrap"
       px="lg"
       py="sm"
@@ -102,11 +104,22 @@ export function Header() {
         )}
       </Stack>
 
-      <Group gap={8} wrap="nowrap">
-        <Group gap={4} p={3} style={{ borderRadius: 8, background: 'var(--mantine-color-gray-1)' }}>
+      <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
+        <Tooltip label="Brain dump — capture a thought" withArrow>
+          <ActionIcon
+            size="lg"
+            variant={path.startsWith('/braindump') ? 'filled' : 'light'}
+            color="indigo"
+            aria-label="Brain dump"
+            onClick={() => navigate('/braindump')}
+          >
+            <IconBulb size={18} />
+          </ActionIcon>
+        </Tooltip>
+        <Group gap={2} p={3} style={{ borderRadius: 8, background: 'var(--mantine-color-gray-1)' }}>
           {PRIMARY_TABS.map(tabButton)}
         </Group>
-        <Group gap={4} p={3} style={{ borderRadius: 8, background: 'var(--mantine-color-gray-0)' }}>
+        <Group gap={2} p={3} style={{ borderRadius: 8, background: 'var(--mantine-color-gray-0)' }}>
           {SECONDARY_TABS.map(tabButton)}
         </Group>
       </Group>

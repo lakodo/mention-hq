@@ -44,6 +44,7 @@ async def _make_task(db, task_id="task:1", title="A task", bucket="Uncategorized
         title=title,
         bucket=bucket,
         status="open",
+        priority=50,
         tags=[],
         unread=True,
         origin="auto",
@@ -442,6 +443,47 @@ async def test_match_status_reports_whether_a_pass_is_running(client):
 
 async def test_match_stop_is_accepted_even_when_nothing_runs(client):
     assert (await client.post("/api/catchup/match-stop")).status_code == 204
+
+
+async def test_deleting_an_item_removes_it_and_its_links(client, db):
+    await _make_task(db)
+    item = await _make_item(db)
+    await db.commit()
+    await client.post(f"/api/catchup/{item.id}/confirm", json={"task_ids": ["task:1"]})
+
+    response = await client.delete(f"/api/items/{item.id}")
+    assert response.status_code == 204
+
+    assert item.id not in {i["id"] for i in (await client.get("/api/items")).json()}
+    # The link cascaded with the item.
+    assert await db.get(Link, {"task_id": "task:1", "item_id": item.id}) is None
+
+
+async def test_deleting_an_unknown_item_404s(client):
+    assert (await client.delete("/api/items/nope")).status_code == 404
+
+
+async def test_brain_dump_creates_an_item_in_catchup(client):
+    response = await client.post("/api/items", json={"text": "remember to renew the SSL cert"})
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["source"] == "note"
+    assert body["label"].startswith("remember to renew")
+    assert body["triaged"] is False
+    assert [i["id"] for i in (await client.get("/api/catchup")).json()] == [body["id"]]
+
+
+async def test_brain_dump_with_a_task_files_it_straight_away(client, db):
+    await _make_task(db)
+    await db.commit()
+
+    response = await client.post("/api/items", json={"text": "a thought for task 1", "task_ids": ["task:1"]})
+    body = response.json()
+
+    assert body["triaged"] is True
+    assert [link["task"]["id"] for link in body["links"]] == ["task:1"]
+    assert (await client.get("/api/catchup")).json() == []
 
 
 async def test_priority_defaults_to_50_and_can_be_set(client):

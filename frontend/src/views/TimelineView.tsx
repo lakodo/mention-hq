@@ -18,15 +18,28 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
-import { IconLink, IconPlus, IconSortAscending, IconSortDescending } from '@tabler/icons-react';
+import {
+  IconLink,
+  IconPlus,
+  IconSortAscending,
+  IconSortDescending,
+  IconTrash,
+} from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SourceDot } from '../components/SourceDot';
 import { PrStatusPill } from '../components/PrStatusPill';
 import { sourceMeta } from '../constants';
 import { errorMessage } from '../api/client';
-import { useConfirmLinks, useCreateTaskFromItem, useItems, useTasks } from '../api/hooks';
+import {
+  useConfirmLinks,
+  useCreateTaskFromItem,
+  useDeleteItem,
+  useItems,
+  useTasks,
+} from '../api/hooks';
 import { filterItems } from '../lib/search';
 import { formatAgo } from '../lib/time';
 import { useHq } from '../shell/HqContext';
@@ -192,6 +205,7 @@ function TimelineRow({
 }) {
   const navigate = useNavigate();
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
+  const deleteItem = useDeleteItem();
   const tasks = confirmedTasks(item);
   // Triaged with nothing filed under it means it was skipped — dim it and say so.
   const skipped = item.triaged && tasks.length === 0;
@@ -288,6 +302,39 @@ function TimelineRow({
           <Menu.Dropdown>
             <Menu.Item leftSection={<IconLink size={14} />} onClick={openModal}>
               Attach / new task…
+            </Menu.Item>
+            <Menu.Item
+              color="red"
+              leftSection={<IconTrash size={14} />}
+              onClick={() =>
+                modals.openConfirmModal({
+                  title: `Delete this item?`,
+                  children: (
+                    <Text size="sm">
+                      It is removed from HQ and any task it is on. The source is untouched.
+                    </Text>
+                  ),
+                  labels: { confirm: 'Delete', cancel: 'Cancel' },
+                  confirmProps: { color: 'red' },
+                  onConfirm: () =>
+                    deleteItem.mutate(item.id, {
+                      onSuccess: () =>
+                        notifications.show({
+                          title: 'Item deleted',
+                          message: item.label,
+                          color: 'teal',
+                        }),
+                      onError: (error) =>
+                        notifications.show({
+                          title: 'Action failed',
+                          message: errorMessage(error),
+                          color: 'red',
+                        }),
+                    }),
+                })
+              }
+            >
+              Delete item
             </Menu.Item>
           </Menu.Dropdown>
         </Menu>

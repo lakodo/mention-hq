@@ -23,6 +23,7 @@ export const SOURCE_META: Record<Source, SourceMeta> = {
   todo: { label: 'Todo', dot: '#0ca678' },
   markdown: { label: 'Doc', dot: '#1c7ed6' },
   dust: { label: 'Dust', dot: '#f08c00' },
+  note: { label: 'Note', dot: '#5c7cfa' },
 };
 
 const UNKNOWN_SOURCE: SourceMeta = { label: 'Source', dot: '#868e96' };

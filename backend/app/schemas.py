@@ -139,6 +139,11 @@ class CreateTaskFromItemRequest(BaseModel):
     priority: int = Field(default=50, ge=0, le=100)
 
 
+class BrainDumpRequest(BaseModel):
+    text: str = Field(min_length=1)
+    task_ids: list[str] = []
+
+
 class TriageRequest(BaseModel):
     triaged: bool = True
 

@@ -47,6 +47,30 @@ describe('TimelineView', () => {
     expect(within(untriaged).getByText('To triage')).toBeInTheDocument();
   });
 
+  it('deletes an item from its row menu after confirming', async () => {
+    const user = userEvent.setup();
+    renderApp('/timeline');
+
+    const rows = await screen.findAllByTestId('timeline-row');
+    const target = rows.find((row) =>
+      within(row).queryByText('thread: can someone look at the webhook retry storm?'),
+    )!;
+    await user.click(within(target).getByRole('button', { name: 'Row actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Delete item/ }));
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    // The row is gone (the label may still flash in the success toast, so scope to rows).
+    await waitFor(() =>
+      expect(
+        screen
+          .queryAllByTestId('timeline-row')
+          .some((row) =>
+            within(row).queryByText('thread: can someone look at the webhook retry storm?'),
+          ),
+      ).toBe(false),
+    );
+  });
+
   it('filters rows through the header search', async () => {
     const user = userEvent.setup();
     renderApp('/timeline');
