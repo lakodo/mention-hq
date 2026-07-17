@@ -1,0 +1,19 @@
+# Template. `task proxy:set` copies this to ops/Caddyfile (gitignored) with your chosen
+# domain filled in — you don't edit this file by hand.
+#
+# It serves the whole app under one bare local domain. Run the two dev servers (`task dev`)
+# and the proxy (`task proxy`) side by side. /api goes to the API, everything else to Vite
+# (the SPA and its hot-reload socket), so the page and its API calls share one origin — no
+# CORS.
+#
+# http:// keeps Caddy on port 80 with no TLS — a made-up local name has no real certificate.
+
+http://__DOMAIN__ {
+	handle /api/* {
+		reverse_proxy localhost:13000
+	}
+
+	handle {
+		reverse_proxy localhost:13001
+	}
+}

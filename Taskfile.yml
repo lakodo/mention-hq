@@ -28,22 +28,28 @@ tasks:
       - back:dev
       - front:dev
 
-  proxy:
-    desc: Serve the app at your bare domain (run alongside `task dev`; needs Caddyfile + hosts entry)
+  proxy:set:
+    desc: Choose the local domain to serve the app under, and write ops/Caddyfile
     cmds:
-      # Your Caddyfile is gitignored — it carries whatever local name you picked. Scaffold
-      # it from the template on first run and point the user at the domain to edit.
       - |
-        test -f Caddyfile || {
-          cp Caddyfile.example Caddyfile
-          echo "Created Caddyfile from the template. Edit the domain in it, then add it to"
-          echo "your hosts file (e.g. echo '127.0.0.1 myhq' | sudo tee -a /etc/hosts) and"
-          echo "re-run: task proxy"
+        read -rp "Local domain (e.g. myhq): " domain
+        [ -n "$domain" ] || { echo "No domain given — nothing written."; exit 1; }
+        sed "s/__DOMAIN__/$domain/g" ops/Caddyfile.example > ops/Caddyfile
+        echo "Wrote ops/Caddyfile for http://$domain"
+        echo "Point the name at your machine (once), then run: task proxy"
+        echo "  echo \"127.0.0.1 $domain\" | sudo tee -a /etc/hosts"
+
+  proxy:
+    desc: Serve the app at your bare domain (run alongside `task dev`; needs `task proxy:set` first)
+    cmds:
+      - |
+        test -f ops/Caddyfile || {
+          echo "No ops/Caddyfile yet. Run: task proxy:set"
           exit 1
         }
       # Caddy binds port 80, which is privileged — so sudo, and an absolute path because
       # sudo drops the devbox PATH that put caddy there. `task dev` must already be running.
-      - 'sudo "$(command -v caddy)" run --config Caddyfile --adapter caddyfile'
+      - 'sudo "$(command -v caddy)" run --config ops/Caddyfile --adapter caddyfile'
 
   serve:
     desc: Build the UI and serve the whole app from the API alone, on :13000

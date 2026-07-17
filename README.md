@@ -107,14 +107,14 @@ the proxy runs there, so you never type a port.
 **2. Run the app behind the proxy.**
 
 ```bash
-cp Caddyfile.example Caddyfile              # then edit the domain inside it to match
-task dev                                    # both servers, one terminal
-task proxy                                  # the proxy, another terminal (needs sudo for port 80)
+task proxy:set    # asks for your domain, writes ops/Caddyfile (also prints the hosts line)
+task dev          # both servers, one terminal
+task proxy        # the proxy, another terminal (needs sudo for port 80)
 ```
 
-Now open **http://myhq**. `Caddyfile` is gitignored — it holds *your* name; the versioned
-`Caddyfile.example` is the template, and `task proxy` scaffolds the file for you on first
-run if it is missing.
+Now open **http://myhq**. `ops/Caddyfile` is gitignored — it holds *your* name; the versioned
+`ops/Caddyfile.example` is the template `task proxy:set` fills in. (`proxy:set` prints the
+`/etc/hosts` command from step 1, so in practice you can start there.)
 
 ### Frontend on its own
 
