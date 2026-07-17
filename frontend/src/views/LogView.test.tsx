@@ -11,9 +11,7 @@ describe('LogView', () => {
     const runs = await screen.findAllByTestId('log-run');
     expect(runs).toHaveLength(2);
     expect(
-      screen.getByText(
-        /Synced 2 sources · 5 items fetched · 2 tasks added · 1 tasks updated · 0.8s/,
-      ),
+      screen.getByText(/Synced 2 sources · 5 items fetched · 2 new · 1 proposed · 0.8s/),
     ).toBeInTheDocument();
   });
 
@@ -38,7 +36,7 @@ describe('LogView', () => {
 
     const runs = await screen.findAllByTestId('log-run');
     expect(runs[0]).toHaveTextContent('Linear rejected the token');
-    expect(runs[1]).toHaveTextContent('2 tasks added');
+    expect(runs[1]).toHaveTextContent('2 new');
   });
 
   it('says so when nothing has synced yet', async () => {

@@ -230,7 +230,9 @@ class SyncLog(Base):
     # [{"source": "github", "items_fetched": 3, "error": null}, ...]
     sources: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
     items_fetched: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    tasks_added: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    items_added: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    items_updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    proposals: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     tasks_updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     duration_seconds: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     error: Mapped[str | None] = mapped_column(Text)

@@ -217,14 +217,14 @@ class AppSettingsPatch(BaseModel):
 class SyncSourceResult(BaseModel):
     source: str
     items_fetched: int = 0
-    tasks_added: int = 0
-    tasks_updated: int = 0
     error: str | None = None
 
 
 class SyncResult(BaseModel):
     sources_synced: list[str]
-    tasks_added: int
+    items_added: int
+    items_updated: int
+    proposals: int
     tasks_updated: int
     duration_seconds: float
     errors: list[str] = []
@@ -253,7 +253,9 @@ class SyncLogOut(BaseModel):
     finished_at: datetime | None
     sources: list[SyncLogSourceOut]
     items_fetched: int
-    tasks_added: int
+    items_added: int
+    items_updated: int
+    proposals: int
     tasks_updated: int
     duration_seconds: float
     error: str | None

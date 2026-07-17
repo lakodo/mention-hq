@@ -299,7 +299,14 @@ async def test_a_second_sync_is_refused_while_one_is_running(client, monkeypatch
         await release.wait()
         from app.schemas import SyncResult
 
-        return SyncResult(sources_synced=[], tasks_added=0, tasks_updated=0, duration_seconds=0.0)
+        return SyncResult(
+            sources_synced=[],
+            items_added=0,
+            items_updated=0,
+            proposals=0,
+            tasks_updated=0,
+            duration_seconds=0.0,
+        )
 
     monkeypatch.setattr(sync_router, "sync_all", slow_sync)
 

@@ -1,7 +1,8 @@
-"""End-to-end sync: fetch, route through the engine, persist.
+"""Sync: fetch, upsert items, propose against existing tasks.
 
-The promise under test is the one the user relies on: an engine may guess as often as it
-likes, but a decision, once made, is never undone by a later sync.
+The model this pins: an item is not a task. A sync brings items in and, at most, proposes
+attaching them to tasks that already exist. It never creates a task. Tasks are the user's —
+made by hand or by promoting an item in catch-up — and a sync never invents one.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import pytest
 from sqlalchemy import select
 
 from app.config import Settings
-from app.models import CONFIRMED, PROPOSED, REJECTED, Bucket, Item, Link, SourceInstance, SyncLog, Task
+from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, SourceInstance, SyncLog, Task
 from app.services import sync as sync_module
 from app.services.sources_factory import Connected
 from app.services.sync import sync_all
@@ -44,8 +45,6 @@ def settings() -> Settings:
 
 @pytest.fixture
 def use_sources(monkeypatch):
-    """Connect the given adapters, each as its own source the user added."""
-
     def _install(*sources, name: str = "GitHub"):
         connected = [
             Connected(
@@ -69,87 +68,138 @@ async def _tasks(db) -> list[Task]:
     return list((await db.execute(select(Task))).scalars().all())
 
 
+async def _items(db) -> list[Item]:
+    return list((await db.execute(select(Item))).scalars().all())
+
+
 async def _links(db) -> list[Link]:
     return list((await db.execute(select(Link))).scalars().all())
 
 
-async def test_an_item_with_no_home_creates_its_own_task(db, settings, use_sources, item):
-    use_sources(FakeSource([item("pr", "r~1", title="Add webhook handler"), item("todo", "t1")]))
+async def seed_task(db, task_id: str, title: str) -> Task:
+    """A task the user made by hand."""
+    task = Task(
+        id=task_id,
+        title=title,
+        bucket="Uncategorized",
+        status="open",
+        tags=[],
+        unread=False,
+        origin="manual",
+        title_override=True,
+        updated_at=datetime.now(UTC),
+    )
+    db.add(task)
+    await db.flush()
+    return task
+
+
+async def attach(db, task_id: str, item_id: str, source: str, *, identity=(), reference=()) -> Item:
+    """Put an item on a task with a confirmed link, so the task carries its keys."""
+    item = Item(
+        id=item_id,
+        source=source,
+        label=item_id,
+        url=None,
+        context=None,
+        occurred_at=datetime.now(UTC),
+        extra={"identity_keys": list(identity), "reference_keys": list(reference)},
+    )
+    db.add(item)
+    db.add(Link(task_id=task_id, item_id=item_id, state=CONFIRMED))
+    await db.flush()
+    return item
+
+
+# --- an item is not a task -------------------------------------------------------------
+
+
+async def test_a_sync_brings_items_not_tasks(db, settings, use_sources, item):
+    use_sources(FakeSource([item("pr", "acme~api~1", title="Add webhook handler"), item("todo", "t1")]))
 
     result = await sync_all(db, settings)
 
-    assert result.tasks_added == 2
-    assert {t.title for t in await _tasks(db)} == {"Add webhook handler", "todo t1"}
+    assert result.items_added == 2
+    assert len(await _items(db)) == 2
+    assert await _tasks(db) == [], "a fresh import creates no tasks"
 
 
-async def test_the_item_that_creates_a_task_is_confirmed_on_it(db, settings, use_sources, item):
-    """That attachment isn't a guess, so it isn't presented as one."""
-    use_sources(FakeSource([item("pr", "r~1", title="Add webhook handler")]))
+async def test_a_homeless_item_waits_in_catch_up(db, settings, use_sources, item):
+    use_sources(FakeSource([item("pr", "acme~api~1", title="Nothing matches this")]))
+
     await sync_all(db, settings)
 
-    link = (await _links(db))[0]
-    assert link.state == CONFIRMED
-    assert link.engine is None
+    only = (await _items(db))[0]
+    assert only.triaged is False, "it sits untriaged until you deal with it"
+    assert await _links(db) == [], "and belongs to no task"
 
 
-async def test_a_referencing_item_is_proposed_not_attached(db, settings, use_sources, item):
-    use_sources(
-        FakeSource(
-            [
-                item("linear", "1", identity_keys={"PAY-88"}, title="Refund bug"),
-                item("slack", "C1:1", reference_keys={"PAY-88"}),
-            ]
+async def test_a_legacy_auto_task_is_purged(db, settings, use_sources, item):
+    """Earlier syncs made a task per item; those are cleared, and the item returns."""
+    db.add(
+        Task(
+            id="pr:acme~api~1",
+            title="Add webhook handler",
+            bucket="Uncategorized",
+            status="open",
+            tags=[],
+            unread=True,
+            origin="auto",
+            updated_at=datetime.now(UTC),
         )
     )
+    await db.flush()
+    use_sources(FakeSource([item("pr", "acme~api~1", title="Add webhook handler")]))
 
     await sync_all(db, settings)
 
-    proposed = [link for link in await _links(db) if link.item_id == "slack:C1:1"]
+    assert await _tasks(db) == []
+    assert len(await _items(db)) == 1
+
+
+# --- proposing against existing tasks --------------------------------------------------
+
+
+async def test_an_item_is_proposed_against_a_task_that_shares_its_key(db, settings, use_sources, item):
+    await seed_task(db, "task:refunds", "Refund bug")
+    await attach(db, "task:refunds", "linear:1", "linear", identity=["ENG-42"])
+    await db.commit()
+
+    use_sources(FakeSource([item("slack", "C1:1", reference_keys={"ENG-42"})]))
+    await sync_all(db, settings)
+
+    proposed = [link for link in await _links(db) if link.state == PROPOSED]
     assert len(proposed) == 1
-    assert proposed[0].state == PROPOSED
+    assert proposed[0].task_id == "task:refunds"
     assert proposed[0].engine == "keys"
-    assert proposed[0].confidence == 0.9
-    assert "PAY-88" in proposed[0].reason
+    assert "ENG-42" in proposed[0].reason
 
 
-async def test_a_proposal_does_not_spawn_a_competing_task(db, settings, use_sources, item):
-    use_sources(
-        FakeSource(
-            [
-                item("linear", "1", identity_keys={"PAY-88"}, title="Refund bug"),
-                item("slack", "C1:1", reference_keys={"PAY-88"}),
-            ]
-        )
-    )
+async def test_an_item_is_proposed_against_a_task_with_a_similar_title(db, settings, use_sources, item):
+    await seed_task(db, "task:ci", "Migrate CI to the new runner pool")
+    await db.commit()
+
+    use_sources(FakeSource([item("branch", "repo:owner~ci-runner-pool", title="Migrate CI runner pool")]))
     await sync_all(db, settings)
 
-    assert len(await _tasks(db)) == 1
+    proposed = [link for link in await _links(db) if link.state == PROPOSED]
+    assert len(proposed) == 1
+    assert proposed[0].engine == "title-similarity"
 
 
-async def test_an_item_the_engine_has_no_opinion_on_gets_its_own_task(db, settings, use_sources, item):
-    use_sources(
-        FakeSource(
-            [
-                item("linear", "1", identity_keys={"PAY-88"}, title="Refund bug"),
-                item("todo", "t1", label="Renew domain for personal site"),
-            ]
-        )
-    )
+async def test_with_no_tasks_yet_nothing_is_proposed(db, settings, use_sources, item):
+    use_sources(FakeSource([item("pr", "acme~api~1", title="Add webhook handler")]))
     await sync_all(db, settings)
 
-    assert len(await _tasks(db)) == 2
+    assert await _links(db) == []
 
 
 async def test_proposals_are_rebuilt_every_sync(db, settings, use_sources, item):
-    """An engine may change its mind, so its guesses are not persisted state."""
-    use_sources(
-        FakeSource(
-            [
-                item("linear", "1", identity_keys={"PAY-88"}, title="Refund bug"),
-                item("slack", "C1:1", reference_keys={"PAY-88"}),
-            ]
-        )
-    )
+    await seed_task(db, "task:refunds", "Refund bug")
+    await attach(db, "task:refunds", "linear:1", "linear", identity=["ENG-42"])
+    await db.commit()
+    use_sources(FakeSource([item("slack", "C1:1", reference_keys={"ENG-42"})]))
+
     await sync_all(db, settings)
     await sync_all(db, settings)
 
@@ -157,18 +207,21 @@ async def test_proposals_are_rebuilt_every_sync(db, settings, use_sources, item)
     assert len(proposed) == 1, "the same proposal must not accumulate"
 
 
+# --- decisions are untouchable ---------------------------------------------------------
+
+
 async def test_a_confirmed_link_survives_resync(db, settings, use_sources, item):
     from app.services import catchup
 
-    use_sources(FakeSource([item("pr", "r~1", title="A"), item("todo", "t1", label="Totally other")]))
+    await seed_task(db, "task:mine", "Something I track")
+    await db.commit()
+    use_sources(FakeSource([item("pr", "acme~api~1", title="A PR")]))
     await sync_all(db, settings)
 
-    task_a = (await db.execute(select(Task).where(Task.title == "A"))).scalars().one()
-    await catchup.confirm(db, "todo:t1", [task_a.id])
-
+    await catchup.confirm(db, "pr:acme~api~1", ["task:mine"])
     await sync_all(db, settings)
 
-    link = await db.get(Link, {"task_id": task_a.id, "item_id": "todo:t1"})
+    link = await db.get(Link, {"task_id": "task:mine", "item_id": "pr:acme~api~1"})
     assert link is not None
     assert link.state == CONFIRMED
 
@@ -176,169 +229,144 @@ async def test_a_confirmed_link_survives_resync(db, settings, use_sources, item)
 async def test_a_rejected_link_is_never_proposed_again(db, settings, use_sources, item):
     from app.services import catchup
 
-    use_sources(
-        FakeSource(
-            [
-                item("linear", "1", identity_keys={"PAY-88"}, title="Refund bug"),
-                item("slack", "C1:1", reference_keys={"PAY-88"}),
-            ]
-        )
-    )
-    await sync_all(db, settings)
-    task = (await db.execute(select(Task).where(Task.title == "Refund bug"))).scalars().one()
-
-    await catchup.reject(db, "slack:C1:1", task.id)
+    await seed_task(db, "task:refunds", "Refund bug")
+    await attach(db, "task:refunds", "linear:1", "linear", identity=["ENG-42"])
+    await db.commit()
+    use_sources(FakeSource([item("slack", "C1:1", reference_keys={"ENG-42"})]))
     await sync_all(db, settings)
 
-    link = await db.get(Link, {"task_id": task.id, "item_id": "slack:C1:1"})
-    assert link.state == REJECTED, "a dismissed guess must not come back"
-
-
-async def test_a_rejected_item_falls_back_to_its_own_task(db, settings, use_sources, item):
-    """Rejecting a link means "not this task", not "not anywhere" — the item still exists."""
-    from app.services import catchup
-
-    use_sources(
-        FakeSource(
-            [
-                item("linear", "1", identity_keys={"PAY-88"}, title="Refund bug"),
-                item("slack", "C1:1", reference_keys={"PAY-88"}),
-            ]
-        )
-    )
+    await catchup.reject(db, "slack:C1:1", "task:refunds")
     await sync_all(db, settings)
-    task = (await db.execute(select(Task).where(Task.title == "Refund bug"))).scalars().one()
-    await catchup.reject(db, "slack:C1:1", task.id)
+
+    link = await db.get(Link, {"task_id": "task:refunds", "item_id": "slack:C1:1"})
+    assert link.state == REJECTED
+
+
+async def test_a_manual_task_is_never_purged(db, settings, use_sources, item):
+    await seed_task(db, "task:mine", "Mine to keep")
+    await db.commit()
+    use_sources(FakeSource([]))
 
     await sync_all(db, settings)
 
-    titles = {t.title for t in await _tasks(db)}
-    assert len(titles) == 2, "the rejected item must not vanish from the board"
-    assert "slack C1:1" in titles
+    assert await db.get(Task, "task:mine") is not None
 
 
-async def test_new_tasks_start_unread(db, settings, use_sources, item):
-    use_sources(FakeSource([item("pr", "r~1")]))
-    await sync_all(db, settings)
-    assert (await _tasks(db))[0].unread is True
+# --- refreshing a task from its items --------------------------------------------------
 
 
-async def test_resync_is_idempotent(db, settings, use_sources, item):
-    use_sources(FakeSource([item("pr", "r~1", title="Add webhook handler")]))
-    await sync_all(db, settings)
-    second = await sync_all(db, settings)
-
-    assert second.tasks_added == 0
-    assert len(await _tasks(db)) == 1
-
-
-async def test_manual_bucket_survives_resync(db, settings, use_sources, item):
-    db.add(Bucket(name="Payments", keywords=["payments"], position=1))
-    await db.flush()
-    use_sources(FakeSource([item("pr", "r~1", title="Something unmatched")]))
-    await sync_all(db, settings)
-
-    task = (await _tasks(db))[0]
-    task.bucket = "Payments"
-    task.bucket_override = True
+async def test_a_task_status_follows_the_items_on_it(db, settings, use_sources, item):
+    await seed_task(db, "task:pr", "Tracking a PR")
+    await attach(db, "task:pr", "pr:acme~api~1", "pr")
     await db.commit()
 
-    await sync_all(db, settings)
-    await db.refresh(task)
-    assert task.bucket == "Payments"
-
-
-async def test_keywords_assign_a_bucket(db, settings, use_sources, item):
-    db.add(Bucket(name="Payments", keywords=["refund"], position=1))
-    await db.flush()
-    use_sources(FakeSource([item("pr", "r~1", title="Refund flow throws")]))
-
-    await sync_all(db, settings)
-    assert (await _tasks(db))[0].bucket == "Payments"
-
-
-async def test_read_task_becomes_unread_when_an_item_moves(db, settings, use_sources, item, now):
-    use_sources(FakeSource([item("pr", "r~1", occurred_at=now - timedelta(hours=2))]))
+    use_sources(FakeSource([item("pr", "acme~api~1", title="A PR", status="merged")]))
     await sync_all(db, settings)
 
-    task = (await _tasks(db))[0]
-    task.unread = False
+    refreshed = await db.get(Task, "task:pr")
+    await db.refresh(refreshed)
+    assert refreshed.status == "merged"
+
+
+# --- items -----------------------------------------------------------------------------
+
+
+async def test_a_vanished_item_is_removed(db, settings, use_sources, item):
+    use_sources(FakeSource([item("pr", "acme~api~1")]))
+    await sync_all(db, settings)
+
+    use_sources(FakeSource([]))
+    await sync_all(db, settings)
+
+    assert await _items(db) == []
+
+
+async def test_a_new_item_un_triages_when_it_moves(db, settings, use_sources, item, now):
+    use_sources(FakeSource([item("pr", "acme~api~1", occurred_at=now - timedelta(hours=2))]))
+    await sync_all(db, settings)
+
+    stored = (await _items(db))[0]
+    stored.triaged = True
     await db.commit()
 
-    use_sources(FakeSource([item("pr", "r~1", occurred_at=now)]))
+    use_sources(FakeSource([item("pr", "acme~api~1", occurred_at=now)]))
     await sync_all(db, settings)
 
-    await db.refresh(task)
-    assert task.unread is True, "new activity must resurface the task"
+    assert (await _items(db))[0].triaged is False
 
 
-async def test_a_failing_source_does_not_erase_its_stored_items(db, settings, use_sources, item):
-    """A GitHub 500 must not empty the board."""
-    use_sources(FakeSource([item("pr", "r~1", title="Add webhook handler")]))
+# --- several accounts of one kind ------------------------------------------------------
+
+
+async def test_two_accounts_both_bring_their_items(db, settings, use_sources, item):
+    use_sources(
+        FakeSource([item("pr", "acme~api~1", title="Work PR")]),
+        FakeSource([item("pr", "me~blog~2", title="Weekend PR")]),
+    )
     await sync_all(db, settings)
 
-    use_sources(FakeSource([], fail=True))
+    assert {i.id for i in await _items(db)} == {"pr:acme~api~1", "pr:me~blog~2"}
+
+
+async def test_each_item_records_which_account_fetched_it(db, settings, use_sources, item):
+    use_sources(
+        FakeSource([item("pr", "acme~api~1")]),
+        FakeSource([item("pr", "me~blog~2")]),
+    )
+    await sync_all(db, settings)
+
+    owners = {i.id: i.instance_id for i in await _items(db)}
+    assert owners == {"pr:acme~api~1": "github-0", "pr:me~blog~2": "github-1"}
+
+
+async def test_one_account_failing_keeps_the_others_items(db, settings, use_sources, item):
+    work = FakeSource([item("pr", "acme~api~1")])
+    personal = FakeSource([item("pr", "me~blog~2")])
+    use_sources(work, personal)
+    await sync_all(db, settings)
+
+    use_sources(FakeSource([], fail=True), personal)
     result = await sync_all(db, settings)
 
     assert result.errors
-    assert len(await _tasks(db)) == 1
+    assert {i.id for i in await _items(db)} == {"pr:acme~api~1", "pr:me~blog~2"}
 
 
-async def test_vanished_item_drops_its_auto_task(db, settings, use_sources, item):
-    use_sources(FakeSource([item("pr", "r~1")]))
+async def test_a_failing_source_keeps_its_stored_items(db, settings, use_sources, item):
+    use_sources(FakeSource([item("pr", "acme~api~1")]))
     await sync_all(db, settings)
 
-    use_sources(FakeSource([]))
+    use_sources(FakeSource([], fail=True))
     await sync_all(db, settings)
 
-    assert await _tasks(db) == []
-    assert (await db.execute(select(Item))).scalars().all() == []
+    assert len(await _items(db)) == 1
 
 
-async def test_manual_task_outlives_its_items(db, settings, use_sources, item):
-    db.add(
-        Task(
-            id="task:manual",
-            title="Mine",
-            bucket="Uncategorized",
-            status="open",
-            tags=[],
-            unread=False,
-            origin="manual",
-            updated_at=datetime.now(UTC),
-        )
-    )
-    await db.flush()
-
-    use_sources(FakeSource([]))
-    await sync_all(db, settings)
-
-    assert await db.get(Task, "task:manual") is not None
+# --- reporting -------------------------------------------------------------------------
 
 
-async def test_task_takes_the_title_of_its_best_source(db, settings, use_sources, item):
-    """A Linear issue names a subject; a Slack message does not."""
+async def test_the_result_counts_items_and_proposals(db, settings, use_sources, item):
+    await seed_task(db, "task:refunds", "Refund bug")
+    await attach(db, "task:refunds", "linear:1", "linear", identity=["ENG-42"])
+    await db.commit()
     use_sources(
-        FakeSource(
-            [
-                item("slack", "C1:1", label="can someone look at this?", identity_keys={"PAY-88"}),
-                item("linear", "1", identity_keys={"PAY-88"}, title="Refund flow throws"),
-            ]
-        )
+        FakeSource([item("slack", "C1:1", reference_keys={"ENG-42"}), item("todo", "t1", label="loose end")])
     )
-    await sync_all(db, settings)
 
-    assert (await _tasks(db))[0].title == "Refund flow throws"
+    result = await sync_all(db, settings)
+
+    assert result.items_added == 2
+    assert result.proposals == 1
 
 
 async def test_sync_writes_one_log_row_per_run(db, settings, use_sources, item):
-    use_sources(FakeSource([item("pr", "r~1")]))
+    use_sources(FakeSource([item("pr", "acme~api~1")]))
     await sync_all(db, settings)
 
     logs = (await db.execute(select(SyncLog))).scalars().all()
-    assert len(logs) == 1, "one row per run, not per source"
+    assert len(logs) == 1
     assert logs[0].error is None
-    assert logs[0].tasks_added == 1
+    assert logs[0].items_added == 1
     assert logs[0].sources == [
         {"source": "GitHub 0", "kind": "github", "items_fetched": 1, "configured": True, "error": None}
     ]
@@ -357,88 +385,3 @@ async def test_unknown_source_is_rejected(db, settings, use_sources, item):
     use_sources(FakeSource([]))
     with pytest.raises(ValueError, match="Unknown source"):
         await sync_all(db, settings, only="nope")
-
-
-async def test_a_weak_candidate_does_not_hide_the_item(db, settings, use_sources, item):
-    """A title lookalike is a suggestion to review, not a home."""
-    use_sources(
-        FakeSource(
-            [
-                item("todo", "t1", label="Bump lodash in the api package"),
-                item("pr", "r~1", title="Bump lodash in the web package"),
-            ]
-        )
-    )
-    await sync_all(db, settings)
-
-    titles = {t.title for t in await _tasks(db)}
-    assert titles == {"Bump lodash in the api package", "Bump lodash in the web package"}, (
-        "each item keeps a task of its own"
-    )
-
-    proposed = [link for link in await _links(db) if link.state == PROPOSED]
-    assert proposed, "and the lookalike still surfaces as a candidate to review"
-
-
-async def test_a_ticket_reference_is_trusted_to_home_an_item(db, settings, use_sources, item):
-    use_sources(
-        FakeSource(
-            [
-                item("linear", "1", identity_keys={"ENG-42"}, title="Refund bug"),
-                item("slack", "C1:1", reference_keys={"ENG-42"}),
-            ]
-        )
-    )
-    await sync_all(db, settings)
-
-    assert len(await _tasks(db)) == 1, "an explicit reference is strong enough to attach to"
-
-
-async def test_two_accounts_of_the_same_kind_both_sync(db, settings, use_sources, item):
-    """A work GitHub and a personal one are two sources, not a conflict."""
-    use_sources(
-        FakeSource([item("pr", "acme~api~1", title="Work PR")]),
-        FakeSource([item("pr", "me~blog~2", title="Weekend PR")]),
-    )
-
-    await sync_all(db, settings)
-
-    assert {t.title for t in await _tasks(db)} == {"Work PR", "Weekend PR"}
-
-
-async def test_each_item_records_which_account_fetched_it(db, settings, use_sources, item):
-    use_sources(
-        FakeSource([item("pr", "acme~api~1", title="Work PR")]),
-        FakeSource([item("pr", "me~blog~2", title="Weekend PR")]),
-    )
-
-    await sync_all(db, settings)
-
-    owners = {row.id: row.instance_id for row in (await db.execute(select(Item))).scalars().all()}
-    assert owners == {"pr:acme~api~1": "github-0", "pr:me~blog~2": "github-1"}
-
-
-async def test_one_account_failing_leaves_the_others_items_alone(db, settings, use_sources, item):
-    """The regression this guards: keeping items by kind would drop the healthy account's."""
-    work = FakeSource([item("pr", "acme~api~1", title="Work PR")])
-    personal = FakeSource([item("pr", "me~blog~2", title="Weekend PR")])
-    use_sources(work, personal)
-    await sync_all(db, settings)
-
-    use_sources(FakeSource([], fail=True), personal)
-    result = await sync_all(db, settings)
-
-    assert result.errors
-    assert {t.title for t in await _tasks(db)} == {"Work PR", "Weekend PR"}
-
-
-async def test_syncing_one_account_leaves_the_other_untouched(db, settings, use_sources, item):
-    use_sources(
-        FakeSource([item("pr", "acme~api~1", title="Work PR")]),
-        FakeSource([item("pr", "me~blog~2", title="Weekend PR")]),
-    )
-    await sync_all(db, settings)
-
-    await sync_all(db, settings, only="github-1")
-
-    assert {t.title for t in await _tasks(db)} == {"Work PR", "Weekend PR"}

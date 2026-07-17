@@ -125,6 +125,7 @@ export interface Detection {
 
 export interface SyncLogSource {
   source: string;
+  kind: string;
   items_fetched: number;
   configured: boolean;
   error: string | null;
@@ -136,7 +137,9 @@ export interface SyncLogEntry {
   finished_at: string | null;
   sources: SyncLogSource[];
   items_fetched: number;
-  tasks_added: number;
+  items_added: number;
+  items_updated: number;
+  proposals: number;
   tasks_updated: number;
   duration_seconds: number;
   error: string | null;
@@ -144,7 +147,9 @@ export interface SyncLogEntry {
 
 export interface SyncResult {
   sources_synced: string[];
-  tasks_added: number;
+  items_added: number;
+  items_updated: number;
+  proposals: number;
   tasks_updated: number;
   duration_seconds: number;
   errors: string[];

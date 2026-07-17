@@ -18,8 +18,8 @@ function runSummary(entry: SyncLogEntry): string {
   return [
     `Synced ${sources} ${sources === 1 ? 'source' : 'sources'}`,
     `${entry.items_fetched} items fetched`,
-    `${entry.tasks_added} tasks added`,
-    `${entry.tasks_updated} tasks updated`,
+    `${entry.items_added} new`,
+    `${entry.proposals} proposed`,
     `${entry.duration_seconds.toFixed(1)}s`,
   ].join(' · ');
 }

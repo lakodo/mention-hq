@@ -13,8 +13,8 @@ import type { SyncResult } from '../types';
 
 function syncMessage(result: SyncResult): string {
   const parts = [`${result.sources_synced.length} sources`];
-  if (result.tasks_added) parts.push(`${result.tasks_added} added`);
-  parts.push(`${result.tasks_updated} updated`);
+  if (result.items_added) parts.push(`${result.items_added} new`);
+  if (result.proposals) parts.push(`${result.proposals} proposed`);
   return parts.join(' · ');
 }
 

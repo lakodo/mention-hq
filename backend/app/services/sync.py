@@ -77,16 +77,18 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
     refreshed = {o.instance_id for o in outcomes if o.authoritative}
     kept = await _stored_items_to_keep(db, refreshed)
 
-    added, updated = await _persist(db, _merge(kept, fetched))
+    result = await _persist(db, _merge(kept, fetched))
 
     duration = round(time.perf_counter() - started, 2)
-    _write_log(db, outcomes, added, updated, started_at, duration)
+    _write_log(db, outcomes, result, started_at, duration)
     await db.commit()
 
     return SyncResult(
         sources_synced=[o.name for o in outcomes if o.authoritative],
-        tasks_added=added,
-        tasks_updated=updated,
+        items_added=result.items_added,
+        items_updated=result.items_updated,
+        proposals=result.proposals,
+        tasks_updated=result.tasks_updated,
         duration_seconds=duration,
         errors=[f"{o.name}: {o.error}" for o in outcomes if o.error],
         results=[
@@ -142,14 +144,19 @@ def _row_to_raw(row: Item) -> RawItem:
     )
 
 
-async def _persist(db: AsyncSession, owned: list[tuple[str | None, RawItem]]) -> tuple[int, int]:
-    items = [item for _, item in owned]
-    await _upsert_items(db, owned)
-    await _clear_stale_proposals(db)
+@dataclass
+class _PersistResult:
+    items_added: int
+    items_updated: int
+    proposals: int
+    tasks_updated: int
 
-    # Best title source first, then oldest first: whichever item ends up creating a task
-    # should be the one that names it best.
-    ordered = sorted(items, key=lambda i: (_rank(TITLE_PRIORITY, i.source), i.occurred_at))
+
+async def _persist(db: AsyncSession, owned: list[tuple[str | None, RawItem]]) -> _PersistResult:
+    items = [item for _, item in owned]
+    items_added, items_updated = await _upsert_items(db, owned)
+    await _clear_stale_proposals(db)
+    await _purge_auto_tasks(db)
 
     matcher = await load_matcher(db)
     # Read once and carry through the loop. Re-reading per item would be a query per item
@@ -157,16 +164,12 @@ async def _persist(db: AsyncSession, owned: list[tuple[str | None, RawItem]]) ->
     decisions = await _decisions_by_item(db)
     views = await _task_views(db)
 
-    added = 0
-    for raw in ordered:
-        created = await _route(db, raw, views, decisions.get(raw.id, {}), matcher)
-        if created is not None:
-            views.append(created)
-            added += 1
+    proposals = 0
+    for raw in items:
+        proposals += await _propose(db, raw, views, decisions.get(raw.id, {}))
 
-    updated = await _refresh_tasks(db, {i.id: i for i in items}, matcher)
-    await _drop_orphan_tasks(db)
-    return added, updated
+    tasks_updated = await _refresh_tasks(db, {i.id: i for i in items}, matcher)
+    return _PersistResult(items_added, items_updated, proposals, tasks_updated)
 
 
 async def _decisions_by_item(db: AsyncSession) -> dict[str, dict[str, str]]:
@@ -203,9 +206,10 @@ async def _task_views(db: AsyncSession) -> list[TaskView]:
     ]
 
 
-async def _upsert_items(db: AsyncSession, owned: list[tuple[str | None, RawItem]]) -> None:
+async def _upsert_items(db: AsyncSession, owned: list[tuple[str | None, RawItem]]) -> tuple[int, int]:
     existing = {row.id: row for row in (await db.execute(select(Item))).scalars().all()}
     incoming = {item.id for _, item in owned}
+    added = updated = 0
 
     for instance_id, raw in owned:
         payload = {
@@ -232,7 +236,9 @@ async def _upsert_items(db: AsyncSession, owned: list[tuple[str | None, RawItem]
                     extra=payload,
                 )
             )
+            added += 1
         else:
+            changed = row.label != raw.label or row.occurred_at != raw.occurred_at
             row.label = raw.label
             row.url = raw.url
             row.context = raw.context
@@ -243,11 +249,13 @@ async def _upsert_items(db: AsyncSession, owned: list[tuple[str | None, RawItem]
             if raw.occurred_at > row.occurred_at:
                 row.triaged = False
             row.occurred_at = raw.occurred_at
+            updated += int(changed)
 
     gone = set(existing) - incoming
     if gone:
         await db.execute(delete(Item).where(Item.id.in_(gone)))
     await db.flush()
+    return added, updated
 
 
 async def _clear_stale_proposals(db: AsyncSession) -> None:
@@ -256,17 +264,21 @@ async def _clear_stale_proposals(db: AsyncSession) -> None:
     await db.flush()
 
 
-async def _route(
+async def _propose(
     db: AsyncSession,
     raw: RawItem,
     tasks: list[TaskView],
     decided: dict[str, str],
-    matcher,
-) -> TaskView | None:
-    """Send one item through the engine. Returns a view of the task it created, if any."""
+) -> int:
+    """Propose which existing tasks an item might belong to. Never creates a task.
+
+    An item is not a task. It lives in the timeline and the catch-up inbox until the user
+    attaches it to a task or promotes it into one. All the engine does is suggest existing
+    tasks to attach it to; on a board with no tasks yet, it suggests nothing.
+    """
     if any(state == CONFIRMED for state in decided.values()):
         # The user already placed this item. The engine has nothing to add.
-        return None
+        return 0
 
     candidates = [t for t in tasks if decided.get(t.id) != REJECTED]
 
@@ -283,49 +295,7 @@ async def _route(
             )
         )
     await db.flush()
-
-    if any(p.confidence >= TRUSTED_ENOUGH_TO_HOME for p, _ in proposals):
-        return None
-
-    # Every other case gives the item a task of its own: a weak proposal is a suggestion,
-    # not a home. Rejecting a link likewise says "not this task", not "not anywhere".
-    return await _create_task_for(db, raw, matcher)
-
-
-async def _create_task_for(db: AsyncSession, raw: RawItem, matcher) -> Task:
-    title = raw.task_title()
-    task = Task(
-        id=raw.id,
-        title=title,
-        bucket=matcher.assign(title, raw.tags),
-        status=raw.status or "open",
-        tags=sorted(raw.tags),
-        unread=True,
-        origin="auto",
-        updated_at=raw.occurred_at,
-        synced_at=datetime.now(UTC),
-    )
-    db.add(task)
-    await db.flush()
-    # An item that had to invent a task obviously belongs to it — that isn't a guess.
-    db.add(
-        Link(
-            task_id=task.id,
-            item_id=raw.id,
-            state=CONFIRMED,
-            engine=None,
-            confidence=1.0,
-            reason="This item created the task",
-            decided_at=datetime.now(UTC),
-        )
-    )
-    await db.flush()
-    return TaskView(
-        id=task.id,
-        title=task.title,
-        identity_keys=frozenset(raw.identity_keys),
-        reference_keys=frozenset(raw.reference_keys),
-    )
+    return len(proposals)
 
 
 async def _refresh_tasks(db: AsyncSession, by_id: dict[str, RawItem], matcher) -> int:
@@ -365,13 +335,16 @@ async def _refresh_tasks(db: AsyncSession, by_id: dict[str, RawItem], matcher) -
     return updated
 
 
-async def _drop_orphan_tasks(db: AsyncSession) -> None:
-    """Auto tasks exist only to hold items; manual ones are yours and stay."""
-    tasks = (await db.execute(select(Task))).scalars().all()
-    orphans = [t.id for t in tasks if t.origin == "auto" and not t.items]
-    if orphans:
-        await db.execute(delete(Task).where(Task.id.in_(orphans)))
-        await db.flush()
+async def _purge_auto_tasks(db: AsyncSession) -> None:
+    """Remove tasks a past sync auto-created.
+
+    An item is not a task. Earlier syncs made one per homeless item; that was wrong, so
+    those are cleared here. Their items keep their triaged flag, so anything you'd already
+    dealt with stays dealt with, and the rest returns to catch-up. Manual tasks are yours
+    and are never touched.
+    """
+    await db.execute(delete(Task).where(Task.origin == "auto"))
+    await db.flush()
 
 
 def _rank(order: list[str], value: str) -> int:
@@ -384,8 +357,7 @@ def _rank(order: list[str], value: str) -> int:
 def _write_log(
     db: AsyncSession,
     outcomes: list[_FetchOutcome],
-    added: int,
-    updated: int,
+    result: _PersistResult,
     started_at: datetime,
     duration: float,
 ) -> None:
@@ -405,8 +377,10 @@ def _write_log(
                 for o in outcomes
             ],
             items_fetched=sum(len(o.items) for o in outcomes),
-            tasks_added=added,
-            tasks_updated=updated,
+            items_added=result.items_added,
+            items_updated=result.items_updated,
+            proposals=result.proposals,
+            tasks_updated=result.tasks_updated,
             duration_seconds=duration,
             error="; ".join(errors) or None,
         )
