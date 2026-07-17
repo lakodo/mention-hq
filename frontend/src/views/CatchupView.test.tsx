@@ -40,6 +40,30 @@ describe('CatchupView', () => {
 
     await waitFor(() => expect(screen.queryByTestId('catchup-card')).not.toBeInTheDocument());
     expect(screen.getByText(/No items match/)).toBeInTheDocument();
+
+    // The way out of an over-narrow search is right there in the empty state (the header
+    // carries the other clear control, so target the last one).
+    const clears = screen.getAllByRole('button', { name: 'Clear search' });
+    await user.click(clears[clears.length - 1]);
+    await waitFor(() => expect(screen.getAllByTestId('catchup-card').length).toBeGreaterThan(0));
+    expect(screen.getByLabelText('Search')).toHaveValue('');
+  });
+
+  it('offers a task made from one item when triaging the next', async () => {
+    const user = userEvent.setup();
+    renderApp('/catchup');
+
+    const cards = await screen.findAllByTestId('catchup-card');
+    await user.click(within(cards[0]).getByRole('button', { name: 'New task' }));
+    const title = await screen.findByLabelText('Title');
+    await user.clear(title);
+    await user.type(title, 'Fresh subject');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    // Without a manual refresh, the new task is attachable to the item still in the inbox.
+    const remaining = await screen.findAllByTestId('catchup-card');
+    await user.click(within(remaining[0]).getByPlaceholderText('Attach to tasks…'));
+    expect(await within(remaining[0]).findByText(/Fresh subject/)).toBeInTheDocument();
   });
 
   it('argues a proposal with its engine, confidence and reason', async () => {

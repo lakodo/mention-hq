@@ -1,6 +1,7 @@
 import {
   Anchor,
   Button,
+  CloseButton,
   Divider,
   Group,
   Loader,
@@ -93,6 +94,11 @@ export function Header() {
             placeholder="Search… try bucket:infra or tag:ci"
             aria-label="Search"
             leftSection={<IconSearch size={14} />}
+            rightSection={
+              query ? (
+                <CloseButton size="sm" aria-label="Clear search" onClick={() => setQuery('')} />
+              ) : null
+            }
             value={query}
             onChange={(e) => setQuery(e.currentTarget.value)}
             w={280}

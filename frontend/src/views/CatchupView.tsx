@@ -27,6 +27,7 @@ import {
   useTasks,
   useTriageItem,
 } from '../api/hooks';
+import { NoMatches } from '../components/NoMatches';
 import { filterItems } from '../lib/search';
 import { formatAgo } from '../lib/time';
 import { useHq } from '../shell/HqContext';
@@ -213,12 +214,7 @@ function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
         </Button>
       </Group>
 
-      <Modal
-        opened={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="New task from this item"
-        withinPortal={false}
-      >
+      <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="New task from this item">
         <Stack gap="sm">
           <TextInput
             label="Title"
@@ -233,7 +229,9 @@ function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
             value={bucket}
             onChange={setBucket}
             clearable
-            comboboxProps={{ withinPortal: false }}
+            searchable
+            comboboxProps={{ withinPortal: true }}
+            maxDropdownHeight={240}
           />
           <Group justify="flex-end">
             <Button variant="subtle" onClick={() => setModalOpen(false)}>
@@ -285,13 +283,7 @@ export function CatchupView() {
   }
 
   if (visible.length === 0) {
-    return (
-      <Center style={{ flex: 1 }}>
-        <Text c="dimmed" fz="sm">
-          No items match “{query}”.
-        </Text>
-      </Center>
-    );
+    return <NoMatches query={query} />;
   }
 
   return (

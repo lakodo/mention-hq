@@ -1,6 +1,7 @@
 import { Anchor, Badge, Box, Center, Group, Loader, Stack, Text } from '@mantine/core';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { NoMatches } from '../components/NoMatches';
 import { SourceDot } from '../components/SourceDot';
 import { sourceMeta } from '../constants';
 import { useItems } from '../api/hooks';
@@ -30,14 +31,15 @@ export function TimelineView() {
   }
 
   if (rows.length === 0) {
+    if (items && items.length > 0) {
+      return <NoMatches query={query} />;
+    }
     return (
       <Center style={{ flex: 1 }}>
         <Stack align="center" gap="xs">
           <Text fw={600}>Nothing on the timeline</Text>
           <Text c="dimmed" fz="sm">
-            {items && items.length > 0
-              ? `No items match “${query}”.`
-              : 'Sync a source to pull in items.'}
+            Sync a source to pull in items.
           </Text>
         </Stack>
       </Center>
