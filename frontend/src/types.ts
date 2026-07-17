@@ -80,6 +80,7 @@ export interface Bucket {
   keywords: string[];
   position: number;
   count: number;
+  archived: boolean;
 }
 
 export interface PersonIdentity {
@@ -281,4 +282,8 @@ export interface BucketCreate {
 export interface BucketPatch {
   keywords?: string[];
   position?: number;
+}
+
+export interface BucketArchive {
+  cascade_tasks: boolean;
 }

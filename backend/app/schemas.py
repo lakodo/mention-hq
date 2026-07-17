@@ -126,10 +126,13 @@ class TriageRequest(BaseModel):
 
 
 class BucketOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     name: str
     keywords: list[str]
     position: int
     count: int
+    archived: bool = False
 
 
 class BucketCreate(BaseModel):
@@ -141,6 +144,10 @@ class BucketCreate(BaseModel):
 class BucketPatch(BaseModel):
     keywords: list[str] | None = None
     position: int | None = None
+
+
+class BucketArchive(BaseModel):
+    cascade_tasks: bool = False
 
 
 class ConfigFieldOut(BaseModel):
