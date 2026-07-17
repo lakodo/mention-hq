@@ -5,6 +5,8 @@ Needs a *user* token (xoxp-) with the `search:read` scope — a bot token cannot
 
 from __future__ import annotations
 
+import html
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar
@@ -17,6 +19,11 @@ from app.sources.keys import all_reference_keys
 API_ROOT = "https://slack.com/api"
 SEARCH_WINDOW_DAYS = 14
 MAX_LABEL_CHARS = 100
+
+# A Slack member id: U (user) or W (Enterprise Grid) then its base-32-ish tail.
+_USER_ID = re.compile(r"[UW][A-Z0-9]{7,}")
+# Bare user mention (`<@U123>`) — one carrying a name (`<@U123|joe>`) needs no lookup.
+_BARE_MENTION = re.compile(r"<@([UW][A-Z0-9]+)>")
 
 
 # Slack takes a manifest — which spares the user picking scopes out of a long list and
@@ -94,7 +101,7 @@ class SlackSource(Source):
     async def fetch(self) -> list[RawItem]:
         if not self.is_configured():
             return []
-        by_id: dict[str, RawItem] = {}
+        matches: dict[str, dict] = {}
         async with httpx.AsyncClient(timeout=20) as client:
             user_id = await self._user_id(client)
             queries = [f"from:<@{user_id}>", f"to:<@{user_id}>"]
@@ -105,10 +112,24 @@ class SlackSource(Source):
                     {"query": f"{query} after:{_after_date()}", "count": 50, "sort": "timestamp"},
                 )
                 for match in payload.get("messages", {}).get("matches", []):
-                    item = _to_item(match)
                     # The same thread surfaces once per matching message; keep one per thread.
-                    by_id.setdefault(item.id, item)
-        return list(by_id.values())
+                    matches.setdefault(_external_id(match), match)
+
+            names = await self._resolve_users(
+                client, {uid for match in matches.values() for uid in _mention_ids(match)}
+            )
+        return [_to_item(match, names) for match in matches.values()]
+
+    async def _resolve_users(self, client: httpx.AsyncClient, ids: set[str]) -> dict[str, str]:
+        """Best-effort id -> display name. A missing users:read scope just leaves names raw."""
+        names: dict[str, str] = {}
+        for uid in ids:
+            try:
+                payload = await self._call(client, "users.info", {"user": uid})
+            except (RuntimeError, httpx.HTTPError):
+                continue
+            names[uid] = _display_name(payload.get("user") or {})
+        return names
 
 
 def _after_date() -> str:
@@ -117,25 +138,118 @@ def _after_date() -> str:
     return (datetime.now(UTC) - timedelta(days=SEARCH_WINDOW_DAYS)).strftime("%Y-%m-%d")
 
 
-def _to_item(match: dict) -> RawItem:
-    channel = match.get("channel", {}) or {}
-    channel_name = channel.get("name") or channel.get("id") or "dm"
-    text = (match.get("text") or "").strip()
+def _external_id(match: dict) -> str:
+    channel = match.get("channel") or {}
+    ts = match.get("ts", "0")
+    return f"{channel.get('id', 'unknown')}:{match.get('thread_ts') or ts}"
+
+
+def _to_item(match: dict, names: dict[str, str]) -> RawItem:
+    channel = match.get("channel") or {}
+    raw = match.get("text") or ""
     ts = match.get("ts", "0")
     thread_ts = match.get("thread_ts") or ts
 
-    label = text[:MAX_LABEL_CHARS] + ("…" if len(text) > MAX_LABEL_CHARS else "")
+    rendered = _render(raw, names)
+    label = rendered or _fallback_label(match)
+    if len(label) > MAX_LABEL_CHARS:
+        label = label[:MAX_LABEL_CHARS].rstrip() + "…"
 
     return RawItem(
         source="slack",
         external_id=f"{channel.get('id', 'unknown')}:{thread_ts}",
-        label=label or "(no text)",
+        label=label,
         occurred_at=datetime.fromtimestamp(float(ts), tz=UTC),
         url=match.get("permalink"),
-        context=f"#{channel_name}",
+        context=_channel_label(channel, names),
         status=None,
         # Slack never names a subject; it only ever points at one. So it contributes
-        # references but no identity, and never wins the task title.
-        reference_keys=all_reference_keys(text),
-        extra={"channel_name": channel_name, "thread_ts": thread_ts},
+        # references but no identity, and never wins the task title. Keys read the raw text
+        # so a ticket ref inside a link or mention isn't lost to rendering.
+        reference_keys=all_reference_keys(raw),
+        extra={"thread_ts": thread_ts},
     )
+
+
+def _display_name(user: dict) -> str:
+    profile = user.get("profile") or {}
+    return (
+        profile.get("display_name")
+        or profile.get("real_name")
+        or user.get("real_name")
+        or user.get("name")
+        or user.get("id", "someone")
+    )
+
+
+def _mention_ids(match: dict) -> set[str]:
+    """User ids the rendering will need a name for: bare in-text mentions and a DM's peer."""
+    ids = {m.group(1) for m in _BARE_MENTION.finditer(match.get("text") or "")}
+    channel = match.get("channel") or {}
+    peer = _dm_peer(channel)
+    if peer:
+        ids.add(peer)
+    return ids
+
+
+def _dm_peer(channel: dict) -> str:
+    """The other person's id for a DM, or "" when this isn't a one-to-one channel."""
+    if channel.get("is_mpim"):
+        return ""
+    name = (channel.get("name") or "").strip()
+    if channel.get("is_im") or _USER_ID.fullmatch(name):
+        return channel.get("user") or (name if _USER_ID.fullmatch(name) else "")
+    return ""
+
+
+def _channel_label(channel: dict, names: dict[str, str]) -> str:
+    if channel.get("is_mpim"):
+        return "group DM"
+    peer = _dm_peer(channel)
+    if peer or channel.get("is_im"):
+        who = names.get(peer)
+        return f"DM with @{who}" if who else "direct message"
+    name = (channel.get("name") or "").strip()
+    if name:
+        return f"#{name}"
+    return f"#{channel.get('id')}" if channel.get("id") else "Slack"
+
+
+def _fallback_label(match: dict) -> str:
+    """A message can be all file or attachment and no text — name it by what it carries."""
+    for file in match.get("files") or []:
+        title = file.get("title") or file.get("name")
+        if title:
+            return f"shared a file: {title}"
+    for attachment in match.get("attachments") or []:
+        for key in ("fallback", "title", "text", "pretext"):
+            if attachment.get(key):
+                return " ".join(str(attachment[key]).split())
+    return "(no message text)"
+
+
+def _render(text: str, names: dict[str, str]) -> str:
+    """Turn Slack's control markup into plain, readable text.
+
+    Slack wraps mentions, channels and links in angle brackets — `<@U123|joe>`,
+    `<#C1|eng>`, `<https://x|label>` — and escapes only `& < >` in the visible text. Left
+    raw these dominate the line, so each becomes what a person would read.
+    """
+    if not text:
+        return ""
+
+    def mention(m: re.Match) -> str:
+        uid, name = m.group(1), m.group(2)
+        return f"@{name or names.get(uid) or 'someone'}"
+
+    text = re.sub(r"<@([UW][A-Z0-9]+)(?:\|([^>]+))?>", mention, text)
+    text = re.sub(r"<#[CG][A-Z0-9]+(?:\|([^>]+))?>", lambda m: f"#{m.group(1) or 'channel'}", text)
+    text = re.sub(r"<!subteam\^[A-Z0-9]+(?:\|([^>]+))?>", lambda m: f"@{m.group(1) or 'team'}", text)
+    text = re.sub(r"<!(here|channel|everyone)>", lambda m: f"@{m.group(1)}", text)
+    text = re.sub(r"<!date\^\d+\^[^>|]*(?:\|([^>]+))?>", lambda m: m.group(1) or "", text)
+    # Links keep their label, or the bare URL when they carry none.
+    text = re.sub(r"<(?:https?://|mailto:)[^>|]+\|([^>]+)>", lambda m: m.group(1), text)
+    text = re.sub(r"<(?:mailto:)?((?:https?://)?[^>|]+)>", lambda m: m.group(1), text)
+
+    text = html.unescape(text)
+    return " ".join(text.split()).strip()

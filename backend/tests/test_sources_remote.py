@@ -261,3 +261,77 @@ class TestSlack:
         )
 
         assert (await slack.fetch())[0].label.endswith("…")
+
+    @respx.mock
+    async def test_markup_is_rendered_into_readable_text(self, slack):
+        match = {
+            **SLACK_SEARCH["messages"]["matches"][0],
+            "text": (
+                "hey <@U9|bruno.vegreville> can you review "
+                "<https://github.com/x/y/pull/1|PR #1>? cc <!here> &amp; thanks"
+            ),
+        }
+        respx.get("https://slack.com/api/search.messages").mock(
+            return_value=httpx.Response(200, json={"ok": True, "messages": {"matches": [match]}})
+        )
+
+        item = (await slack.fetch())[0]
+        assert item.label == "hey @bruno.vegreville can you review PR #1? cc @here & thanks"
+
+    @respx.mock
+    async def test_a_bare_mention_and_dm_channel_resolve_to_names(self, slack):
+        match = {
+            "ts": "1752660000.000100",
+            "thread_ts": "1752660000.000100",
+            "text": "ping <@U9>",
+            "permalink": "https://acme.slack.com/archives/D01/p1",
+            "channel": {"id": "D01", "name": "U9", "is_im": True, "user": "U9"},
+        }
+        respx.get("https://slack.com/api/search.messages").mock(
+            return_value=httpx.Response(200, json={"ok": True, "messages": {"matches": [match]}})
+        )
+        respx.get("https://slack.com/api/users.info").mock(
+            return_value=httpx.Response(
+                200, json={"ok": True, "user": {"id": "U9", "profile": {"display_name": "Bruno"}}}
+            )
+        )
+
+        item = (await slack.fetch())[0]
+        assert item.label == "ping @Bruno"
+        assert item.context == "DM with @Bruno"
+
+    @respx.mock
+    async def test_a_missing_users_read_scope_leaves_a_dm_readable(self, slack):
+        match = {
+            "ts": "1752660000.000100",
+            "thread_ts": "1752660000.000100",
+            "text": "ping <@U9>",
+            "permalink": "https://acme.slack.com/archives/D01/p1",
+            "channel": {"id": "D01", "name": "U9", "is_im": True, "user": "U9"},
+        }
+        respx.get("https://slack.com/api/search.messages").mock(
+            return_value=httpx.Response(200, json={"ok": True, "messages": {"matches": [match]}})
+        )
+        respx.get("https://slack.com/api/users.info").mock(
+            return_value=httpx.Response(200, json={"ok": False, "error": "missing_scope"})
+        )
+
+        item = (await slack.fetch())[0]
+        assert item.label == "ping @someone"
+        assert item.context == "direct message"
+
+    @respx.mock
+    async def test_a_message_with_no_text_is_named_by_its_file(self, slack):
+        match = {
+            "ts": "1752660000.000100",
+            "thread_ts": "1752660000.000100",
+            "text": "",
+            "permalink": "https://acme.slack.com/archives/C01/p1",
+            "channel": {"id": "C01", "name": "eng"},
+            "files": [{"title": "design-v2.fig"}],
+        }
+        respx.get("https://slack.com/api/search.messages").mock(
+            return_value=httpx.Response(200, json={"ok": True, "messages": {"matches": [match]}})
+        )
+
+        assert (await slack.fetch())[0].label == "shared a file: design-v2.fig"
