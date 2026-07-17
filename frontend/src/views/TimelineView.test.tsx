@@ -56,4 +56,42 @@ describe('TimelineView', () => {
 
     await waitFor(() => expect(screen.getAllByTestId('timeline-row')).toHaveLength(1));
   });
+
+  it('filters rows by the column text box', async () => {
+    const user = userEvent.setup();
+    renderApp('/timeline');
+
+    await screen.findAllByTestId('timeline-row');
+    await user.type(screen.getByLabelText('Filter by text'), 'webhook retry storm');
+
+    await waitFor(() => expect(screen.getAllByTestId('timeline-row')).toHaveLength(1));
+  });
+
+  it('filters by task state to only items already on a task', async () => {
+    const user = userEvent.setup();
+    renderApp('/timeline');
+
+    const all = await screen.findAllByTestId('timeline-row');
+    await user.click(screen.getByText('Any task state'));
+    await user.click(await screen.findByText('On a task'));
+
+    await waitFor(() =>
+      expect(screen.getAllByTestId('timeline-row').length).toBeLessThan(all.length),
+    );
+    for (const row of screen.getAllByTestId('timeline-row')) {
+      expect(within(row).queryByText('To triage')).not.toBeInTheDocument();
+    }
+  });
+
+  it('clears the filters from the empty state', async () => {
+    const user = userEvent.setup();
+    renderApp('/timeline');
+
+    await screen.findAllByTestId('timeline-row');
+    await user.type(screen.getByLabelText('Filter by text'), 'zzz-nothing-matches');
+    expect(await screen.findByText('Nothing matches these filters.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    await waitFor(() => expect(screen.getAllByTestId('timeline-row').length).toBeGreaterThan(0));
+  });
 });
