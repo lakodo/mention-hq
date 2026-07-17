@@ -115,7 +115,7 @@ something you dismissed.
 
 Buckets start empty on purpose — HQ can't know what you work on, and a wrong guess fills
 the board with someone else's taxonomy. Create them in Admin, or ask Claude to suggest one
-for a task (it needs `ant auth login`, or an API key in Admin).
+for a task (it needs an API key in Admin, or a local `ant auth login`).
 
 ## Sources
 
@@ -130,7 +130,9 @@ for a task (it needs `ant auth login`, or an API key in Admin).
 | Dust | — | not implemented yet |
 
 A source with no credentials reports itself unconfigured and is skipped; it never fails
-the sync. HQ only ever reads — it will not create an issue or post a message.
+the sync. A sync only ever reads. The one place HQ can write is Slack — its app can be
+granted scopes to react to or reply to a thread from the board — and only on your action,
+never automatically.
 
 ## Commands
 
@@ -156,3 +158,7 @@ todos/      The original spec. Superseded by the design.
 ```
 
 `CLAUDE.md` holds the conventions and the architecture in more depth.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Use it freely, at your own risk.
