@@ -23,7 +23,7 @@ import { useNavigate } from 'react-router-dom';
 import { ReadToggle } from '../components/ReadToggle';
 import { SourceDots } from '../components/SourceDot';
 import { StatusPill } from '../components/StatusPill';
-import { statusMeta } from '../constants';
+import { statusMeta, UNCATEGORIZED } from '../constants';
 import { errorMessage } from '../api/client';
 import {
   useArchiveBucket,
@@ -188,7 +188,7 @@ export function BoardView() {
   );
 
   const bucketNames = useMemo(
-    () => (buckets ?? []).map((b) => b.name).concat(['Uncategorized']),
+    () => [...new Set([...(buckets ?? []).map((b) => b.name), UNCATEGORIZED])],
     [buckets],
   );
 

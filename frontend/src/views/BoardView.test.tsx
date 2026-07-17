@@ -77,6 +77,22 @@ describe('BoardView', () => {
     expect(screen.queryByText('No buckets yet')).not.toBeInTheDocument();
   });
 
+  it('does not crash when a real bucket is named Uncategorized', async () => {
+    server.use(
+      http.get('http://localhost:8000/api/buckets', () =>
+        HttpResponse.json([
+          { name: 'Uncategorized', keywords: [], position: 0, count: 1, archived: false },
+        ]),
+      ),
+    );
+    renderApp('/');
+
+    // The implicit Uncategorized column and the real bucket collapse into one, and the
+    // move-to-bucket Select gets a single "Uncategorized" option rather than a duplicate.
+    const column = await screen.findByTestId('bucket-column-Uncategorized');
+    expect(within(column).getByText('Uncategorized')).toBeInTheDocument();
+  });
+
   it('filters the board through the header search', async () => {
     const user = userEvent.setup();
     renderApp('/');
