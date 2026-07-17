@@ -178,6 +178,10 @@ class Item(Base):
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     # False until you've ruled on this item in catch-up. Drives that inbox.
     triaged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    # How it left the inbox: "Skipped", "Rule: <name>", or None (still in the inbox, or filed
+    # onto a task rather than skipped). Read by the skipped view.
+    triage_reason: Mapped[str | None] = mapped_column(String)
+    triaged_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
     extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
@@ -297,3 +301,24 @@ class PersonIdentity(Base):
     person: Mapped[Person] = relationship(back_populates="identities")
 
     __table_args__ = (UniqueConstraint("kind", "value", name="uq_person_identity_kind_value"),)
+
+
+class TriageRule(Base):
+    """A standing "skip this" rule, so noise never reaches the catch-up inbox.
+
+    An incoming item that matches an enabled rule is auto-skipped (triaged, with the rule
+    named as its reason) before it can pile up — the app-shipped equivalent of a mail filter.
+    Rules only skip; they never attach an item to a task.
+    """
+
+    __tablename__ = "triage_rules"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    # Source kinds this fires on ("slack", "pr", …). Empty = every source.
+    sources: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    # "starts_with" | "contains" — how `value` is tested against an item's label.
+    condition: Mapped[str] = mapped_column(String, nullable=False)
+    value: Mapped[str] = mapped_column(String, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())

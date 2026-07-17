@@ -32,6 +32,15 @@ up cold.
   Claude/OpenAI API key — fixes "Suggest bucket" failing with no key. Runs `claude -p … --output-format json`,
   parses the result against the schema. Credential order still prefers a stored key.
 - **Log** opens scrolled to the newest run.
+- **AI brain: on-demand item→task Match.** A "Match" button in Catch-up asks the brain which
+  existing tasks an item belongs to (0.6 confidence floor, id-validated) and pre-fills the
+  attach box to review. Matching is never forced — no match is the expected outcome.
+- **Read on open.** Opening a task marks it read (un-bolds it on the board and in the list).
+- **Triage rules.** `TriageRule` table + `/api/triage-rules` (list/create/patch/delete). A
+  "Triage rules" modal on Catch-up: add a rule (name, source multiselect / any, starts-with |
+  contains, value); an incoming item that matches is auto-skipped before it reaches the inbox,
+  with the rule recorded as its `triage_reason`. Applied on sync and retroactively on rule
+  create. Items also carry `triaged_at` and `triage_reason` now (manual skip = "Skipped").
 - **Housekeeping.** A `commit-msg` hook rejects assistant-attribution trailers. Scrubbed real
   colleague names / employer identifiers out of fixtures & tests (→ Ada Lovelace, Grace Hopper,
   Katherine Johnson, `acme/webapp`). Modal dropdowns portal so options stop clipping.
@@ -49,6 +58,26 @@ up cold.
 ---
 
 ## Backlog (features)
+
+- **Auto-match (after rules — now unblocked).** Run the item→task Match automatically, at least
+  once per inbox item: if an item has never been matched, call the brain (a later run may see
+  new tasks / more context and match); if it already has a proposal, don't recall the brain.
+  Add a **"Match all"** button to force a re-match over every inbox item. Never match skipped
+  items (respect `triaged`). Rules run first so noise is skipped before the brain sees it.
+  Likely needs a per-item "matched_at"/attempted marker so we don't re-call for nothing.
+
+- **Skipped items view (reason recorded, ready to build).** `Item.triage_reason` + `triaged_at`
+  now exist. Build a view of skipped items (triaged, not on a task) showing *why* (manual
+  "Skipped" vs "Rule: <name>"), defaulting to the last week, with a customizable window in the
+  frontend. Add an endpoint like `GET /items/skipped?since=…` (or filter on `/items`), and let
+  the user un-skip (return to inbox) from there.
+
+- **Task description.** Add `Task.description` (migration). Editable when creating a task and on
+  the task screen. Feed it into the brain **match** prompt (and bucket/next-action prompts) so a
+  described task matches better. Include in `TaskOut`/`TaskCreate`/`TaskPatch`.
+
+- **Create an empty task from the Tasks screen.** A "New task" button on the Tasks view that
+  creates an empty task (`POST /tasks`) and navigates to it (so you can fill title/description).
 
 - **Delete & archive a bucket, with a "cascade to its tasks?" prompt.** (Next up; not started —
   the tree is clean.) Plan: add `Bucket.archived_at` (nullable) + migration.

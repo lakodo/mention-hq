@@ -55,6 +55,28 @@ class TaskMatchOut(BaseModel):
     reason: str
 
 
+class TriageRuleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    sources: list[str]
+    condition: str  # "starts_with" | "contains"
+    value: str
+    enabled: bool
+
+
+class TriageRuleCreate(BaseModel):
+    name: str = ""
+    sources: list[str] = []  # source kinds, or empty for all
+    condition: str
+    value: str
+
+
+class TriageRulePatch(BaseModel):
+    enabled: bool | None = None
+
+
 class TaskOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -42,6 +42,9 @@ import {
   removeSource,
   suggestBucket,
   suggestItemTasks,
+  createTriageRule,
+  deleteTriageRule,
+  fetchTriageRules,
   testSource,
   triageItem,
   updatePerson,
@@ -70,6 +73,8 @@ import type {
   TaskMatch,
   TaskFilters,
   TaskPatch,
+  TriageRule,
+  TriageRuleCreate,
 } from '../types';
 
 export const queryKeys = {
@@ -84,6 +89,7 @@ export const queryKeys = {
   sourceKinds: () => ['admin', 'source-kinds'] as const,
   settings: () => ['admin', 'settings'] as const,
   ai: () => ['admin', 'ai'] as const,
+  triageRules: () => ['triage-rules'] as const,
 };
 
 export function useTasks(filters: TaskFilters = {}): UseQueryResult<Task[]> {
@@ -315,6 +321,30 @@ export function useSuggestBucket(): UseMutationResult<BucketSuggestion, Error, s
 
 export function useSuggestItemTasks(): UseMutationResult<TaskMatch[], Error, string> {
   return useMutation({ mutationFn: suggestItemTasks });
+}
+
+export function useTriageRules(): UseQueryResult<TriageRule[]> {
+  return useQuery({ queryKey: queryKeys.triageRules(), queryFn: fetchTriageRules });
+}
+
+function useTriageRulesInvalidation() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: queryKeys.triageRules() });
+    // A rule skips inbox items on apply, so the catch-up list changes too.
+    void qc.invalidateQueries({ queryKey: queryKeys.catchup() });
+    void qc.invalidateQueries({ queryKey: queryKeys.items() });
+  };
+}
+
+export function useCreateTriageRule(): UseMutationResult<TriageRule, Error, TriageRuleCreate> {
+  const invalidate = useTriageRulesInvalidation();
+  return useMutation({ mutationFn: createTriageRule, onSuccess: invalidate });
+}
+
+export function useDeleteTriageRule(): UseMutationResult<void, Error, string> {
+  const invalidate = useTriageRulesInvalidation();
+  return useMutation({ mutationFn: deleteTriageRule, onSuccess: invalidate });
 }
 
 export function useUpdateSettings(): UseMutationResult<AppSettings, Error, AppSettingsPatch> {

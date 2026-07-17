@@ -1,10 +1,12 @@
 import {
+  ActionIcon,
   Anchor,
   Badge,
   Box,
   Button,
   Card,
   Center,
+  Divider,
   Group,
   Loader,
   Modal,
@@ -15,7 +17,13 @@ import {
   TextInput,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconExternalLink, IconSparkles } from '@tabler/icons-react';
+import {
+  IconExternalLink,
+  IconFilterPlus,
+  IconPlus,
+  IconSparkles,
+  IconTrash,
+} from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { SourceDot } from '../components/SourceDot';
 import { LINK_STATE_META, sourceMeta } from '../constants';
@@ -25,10 +33,13 @@ import {
   useCatchup,
   useConfirmLinks,
   useCreateTaskFromItem,
+  useCreateTriageRule,
+  useDeleteTriageRule,
   useRejectLink,
   useSuggestItemTasks,
   useTasks,
   useTriageItem,
+  useTriageRules,
 } from '../api/hooks';
 import { NoMatches } from '../components/NoMatches';
 import { filterItems } from '../lib/search';
@@ -295,6 +306,129 @@ function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
   );
 }
 
+const SOURCE_KINDS = ['pr', 'issue', 'linear', 'slack', 'branch', 'todo', 'markdown', 'dust'];
+
+function TriageRules() {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [sources, setSources] = useState<string[]>([]);
+  const [condition, setCondition] = useState<'starts_with' | 'contains'>('contains');
+  const [value, setValue] = useState('');
+
+  const { data: rules } = useTriageRules();
+  const create = useCreateTriageRule();
+  const remove = useDeleteTriageRule();
+
+  const fail = (error: unknown) =>
+    notifications.show({ title: 'Action failed', message: errorMessage(error), color: 'red' });
+
+  const add = () => {
+    if (!value.trim()) return;
+    create.mutate(
+      { name: name.trim(), sources, condition, value: value.trim() },
+      {
+        onSuccess: () => {
+          setName('');
+          setValue('');
+          setSources([]);
+          notifications.show({
+            title: 'Rule added',
+            message: 'Matching items are skipped.',
+            color: 'teal',
+          });
+        },
+        onError: fail,
+      },
+    );
+  };
+
+  return (
+    <>
+      <Button
+        size="xs"
+        variant="default"
+        leftSection={<IconFilterPlus size={14} />}
+        onClick={() => setOpen(true)}
+      >
+        Triage rules{rules?.length ? ` (${rules.length})` : ''}
+      </Button>
+      <Modal opened={open} onClose={() => setOpen(false)} title="Triage rules" size="lg">
+        <Stack gap="sm">
+          <Text fz="xs" c="dimmed">
+            A matching item is skipped automatically before it reaches the inbox.
+          </Text>
+
+          {rules && rules.length === 0 && (
+            <Text fz="sm" c="dimmed">
+              No rules yet.
+            </Text>
+          )}
+          {rules?.map((rule) => (
+            <Group key={rule.id} justify="space-between" wrap="nowrap" gap={8}>
+              <Text fz="sm" truncate style={{ minWidth: 0 }}>
+                <b>{rule.name}</b> — {rule.condition === 'starts_with' ? 'starts with' : 'contains'}{' '}
+                “{rule.value}”
+                {rule.sources.length ? ` in ${rule.sources.join(', ')}` : ' (any source)'}
+              </Text>
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                aria-label={`Delete rule ${rule.name}`}
+                onClick={() => remove.mutate(rule.id, { onError: fail })}
+              >
+                <IconTrash size={14} />
+              </ActionIcon>
+            </Group>
+          ))}
+
+          <Divider label="Add a rule" labelPosition="left" />
+          <Group grow align="flex-end">
+            <Select
+              label="When it"
+              data={[
+                { value: 'contains', label: 'contains' },
+                { value: 'starts_with', label: 'starts with' },
+              ]}
+              value={condition}
+              onChange={(v) => setCondition((v as 'starts_with' | 'contains') ?? 'contains')}
+            />
+            <TextInput
+              label="this text"
+              placeholder="New PR"
+              value={value}
+              onChange={(e) => setValue(e.currentTarget.value)}
+              onKeyDown={(e) => e.key === 'Enter' && add()}
+            />
+          </Group>
+          <MultiSelect
+            label="In sources"
+            description="Leave empty to match every source"
+            data={SOURCE_KINDS}
+            value={sources}
+            onChange={setSources}
+          />
+          <TextInput
+            label="Name (optional)"
+            placeholder="Ignore PR-bot posts"
+            value={name}
+            onChange={(e) => setName(e.currentTarget.value)}
+          />
+          <Group justify="flex-end">
+            <Button
+              leftSection={<IconPlus size={15} />}
+              onClick={add}
+              loading={create.isPending}
+              disabled={!value.trim()}
+            >
+              Add rule
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </>
+  );
+}
+
 export function CatchupView() {
   const { query } = useHq();
   const { data: items, isLoading } = useCatchup();
@@ -342,10 +476,13 @@ export function CatchupView() {
 
   return (
     <Box style={{ flex: 1, overflow: 'auto', padding: '16px 20px 20px' }}>
-      <Text fz="xs" c="dimmed" px={4} pb={10}>
-        {visible.length} {visible.length === 1 ? 'item' : 'items'} to triage
-        {query ? ` (of ${items.length})` : ''}
-      </Text>
+      <Group justify="space-between" px={4} pb={10} style={{ maxWidth: 860 }}>
+        <Text fz="xs" c="dimmed">
+          {visible.length} {visible.length === 1 ? 'item' : 'items'} to triage
+          {query ? ` (of ${items.length})` : ''}
+        </Text>
+        <TriageRules />
+      </Group>
       <Stack gap="sm" style={{ maxWidth: 860 }}>
         {visible.map((item) => (
           <CatchupCard

@@ -24,6 +24,8 @@ import type {
   TaskFilters,
   TaskMatch,
   TaskPatch,
+  TriageRule,
+  TriageRuleCreate,
 } from '../types';
 
 // Relative, so the browser resolves it against wherever the app is served — behind the
@@ -169,6 +171,20 @@ export async function createTaskFromItem(
 export async function suggestItemTasks(itemId: string): Promise<TaskMatch[]> {
   const { data } = await api.post<TaskMatch[]>(`/catchup/${seg(itemId)}/suggest-tasks`);
   return data;
+}
+
+export async function fetchTriageRules(): Promise<TriageRule[]> {
+  const { data } = await api.get<TriageRule[]>('/triage-rules');
+  return data;
+}
+
+export async function createTriageRule(payload: TriageRuleCreate): Promise<TriageRule> {
+  const { data } = await api.post<TriageRule>('/triage-rules', payload);
+  return data;
+}
+
+export async function deleteTriageRule(id: string): Promise<void> {
+  await api.delete(`/triage-rules/${seg(id)}`);
 }
 
 export async function triageItem(itemId: string, triaged: boolean): Promise<ItemWithLinks> {

@@ -20,6 +20,7 @@ import type {
   Link,
   Person,
   SourceKind,
+  TriageRule,
   SourceStatus,
   SyncLogEntry,
   Task,
@@ -33,6 +34,7 @@ interface Db {
   buckets: Bucket[];
   catchup: ItemWithLinks[];
   people: Person[];
+  triageRules: TriageRule[];
   sources: SourceStatus[];
   sourceKinds: SourceKind[];
   /** What a local CLI would answer, per kind. A test overwrites it to steer detection. */
@@ -47,6 +49,7 @@ export const db: Db = {
   buckets: [],
   catchup: [],
   people: [],
+  triageRules: [],
   sources: [],
   sourceKinds: [],
   detections: {},
@@ -70,6 +73,7 @@ export function resetDb(): void {
   db.buckets = makeBuckets();
   db.catchup = makeCatchupItems();
   db.people = makePeople();
+  db.triageRules = [];
   db.sources = makeSources();
   db.sourceKinds = makeSourceKinds();
   db.detections = {
@@ -277,6 +281,27 @@ export const handlers = [
   }),
 
   http.post(`${BASE}/catchup/:itemId/suggest-tasks`, () => HttpResponse.json([])),
+
+  http.get(`${BASE}/triage-rules`, () => HttpResponse.json(db.triageRules)),
+
+  http.post(`${BASE}/triage-rules`, async ({ request }) => {
+    const body = (await request.json()) as Partial<TriageRule>;
+    const rule: TriageRule = {
+      id: `rule:${Math.random().toString(16).slice(2, 10)}`,
+      name: body.name || (body.value ?? ''),
+      sources: body.sources ?? [],
+      condition: body.condition ?? 'contains',
+      value: body.value ?? '',
+      enabled: true,
+    };
+    db.triageRules.push(rule);
+    return HttpResponse.json(rule, { status: 201 });
+  }),
+
+  http.delete(`${BASE}/triage-rules/:id`, ({ params }) => {
+    db.triageRules = db.triageRules.filter((r) => r.id !== params.id);
+    return new HttpResponse(null, { status: 204 });
+  }),
 
   http.post(`${BASE}/catchup/:itemId/triage`, async ({ params, request }) => {
     const item = db.catchup.find((i) => i.id === params.itemId);

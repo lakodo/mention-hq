@@ -105,6 +105,12 @@ async def create_task_from_item(db: AsyncSession, item_id: str, title: str, buck
 async def mark_triaged(db: AsyncSession, item_id: str, triaged: bool = True) -> Item:
     item = await _require_item(db, item_id)
     item.triaged = triaged
+    if triaged:
+        item.triage_reason = "Skipped"
+        item.triaged_at = datetime.now(UTC)
+    else:
+        item.triage_reason = None
+        item.triaged_at = None
     await db.commit()
     return await _reload(db, item_id)
 

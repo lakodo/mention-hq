@@ -41,6 +41,24 @@ export interface TaskMatch {
   reason: string;
 }
 
+export type TriageCondition = 'starts_with' | 'contains';
+
+export interface TriageRule {
+  id: string;
+  name: string;
+  sources: string[];
+  condition: TriageCondition;
+  value: string;
+  enabled: boolean;
+}
+
+export interface TriageRuleCreate {
+  name?: string;
+  sources: string[];
+  condition: TriageCondition;
+  value: string;
+}
+
 export interface Task {
   id: string;
   title: string;

@@ -26,6 +26,7 @@ from app.config import Settings
 from app.engine import TaskView
 from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, SyncLog, Task
 from app.schemas import SyncResult, SyncSourceResult
+from app.services import triage
 from app.services.buckets import load_matcher
 from app.services.people import DbDirectory
 from app.services.sources_factory import Connected, build_connected
@@ -80,6 +81,7 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
     kept = await _stored_items_to_keep(db, refreshed)
 
     result = await _persist(db, _merge(kept, fetched))
+    await _skip_by_rules(db)
 
     duration = round(time.perf_counter() - started, 2)
     _write_log(db, outcomes, result, started_at, duration)
@@ -97,6 +99,12 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
             SyncSourceResult(source=o.name, items_fetched=len(o.items), error=o.error) for o in outcomes
         ],
     )
+
+
+async def _skip_by_rules(db: AsyncSession) -> None:
+    """Auto-skip freshly-synced inbox items that match a triage rule, before they pile up."""
+    items = list((await db.execute(select(Item).where(Item.triaged.is_(False)))).scalars().all())
+    await triage.apply_rules(db, items)
 
 
 async def _fetch(connected: Connected, directory: DbDirectory) -> _FetchOutcome:
