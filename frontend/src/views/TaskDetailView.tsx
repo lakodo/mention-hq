@@ -171,10 +171,7 @@ export function TaskDetailView() {
     () => ordered.filter((task) => matchesSidebarQuery(task, sidebarQuery)),
     [ordered, sidebarQuery],
   );
-  const selected = useMemo(
-    () => ordered.find((task) => task.id === id) ?? ordered[0],
-    [ordered, id],
-  );
+  const selected = useMemo(() => ordered.find((task) => task.id === id), [ordered, id]);
 
   if (isLoading) {
     return (
@@ -184,7 +181,7 @@ export function TaskDetailView() {
     );
   }
 
-  if (!selected) {
+  if (ordered.length === 0) {
     return (
       <Center style={{ flex: 1 }}>
         <Text c="dimmed">No tasks yet.</Text>
@@ -196,6 +193,7 @@ export function TaskDetailView() {
     notifications.show({ title: 'Action failed', message: errorMessage(error), color: 'red' });
 
   const acceptSuggestion = (accepted: BucketSuggestion) => {
+    if (!selected) return;
     const move = () =>
       updateTask.mutate(
         { id: selected.id, patch: { bucket: accepted.bucket } },
@@ -222,25 +220,29 @@ export function TaskDetailView() {
     );
   };
 
-  const askForSuggestion = () =>
+  const askForSuggestion = () => {
+    if (!selected) return;
     suggest.mutate(selected.id, { onSuccess: setSuggestion, onError: fail });
+  };
 
-  const removeTask = () =>
+  const removeTask = () => {
+    if (!selected) return;
     deleteTask.mutate(selected.id, {
       onSuccess: () => {
         notifications.show({ title: 'Task deleted', message: selected.title, color: 'teal' });
-        navigate('/');
+        navigate('/task');
       },
       onError: fail,
     });
+  };
 
-  const { slack, other } = splitSlackItems(selected);
+  const { slack, other } = selected ? splitSlackItems(selected) : { slack: [], other: [] };
   const sidebarGroups = groupTags ? groupByTag(filtered) : [{ tag: '', tasks: filtered }];
   const busy = updateTask.isPending || createBucket.isPending;
 
   const sidebarRow = (task: Task) => {
     const source = primarySource(task);
-    const active = task.id === selected.id;
+    const active = task.id === selected?.id;
     return (
       <Group
         key={task.id}
@@ -354,118 +356,124 @@ export function TaskDetailView() {
       </Box>
 
       <Box style={{ flex: 1, overflow: 'auto', padding: '32px 40px' }} data-testid="task-detail">
-        <Box style={{ maxWidth: 720 }}>
-          <Group gap={8} wrap="nowrap">
-            {primarySource(selected) && <SourceDot source={primarySource(selected)!} />}
-            <Badge variant="default" radius="xl">
-              {selected.bucket}
-            </Badge>
-            <Text fz="sm" c="dimmed" ml="auto">
-              {formatAgo(newestItemAt(selected))}
-            </Text>
-          </Group>
-
-          <Text fz={28} fw={700} lh={1.3} my={14}>
-            {selected.title}
-          </Text>
-
-          <Group gap={8} mb="lg">
-            <StatusPill status={selected.status} />
-            {selected.tags.map((tag) => (
-              <Badge key={tag} variant="default" radius="xl">
-                {tag}
+        {!selected ? (
+          <Center style={{ height: '100%' }}>
+            <Text c="dimmed">Select a task from the list.</Text>
+          </Center>
+        ) : (
+          <Box style={{ maxWidth: 720 }}>
+            <Group gap={8} wrap="nowrap">
+              {primarySource(selected) && <SourceDot source={primarySource(selected)!} />}
+              <Badge variant="default" radius="xl">
+                {selected.bucket}
               </Badge>
-            ))}
-          </Group>
+              <Text fz="sm" c="dimmed" ml="auto">
+                {formatAgo(newestItemAt(selected))}
+              </Text>
+            </Group>
 
-          <Group gap="md" mb="lg">
-            <ReadToggle
-              unread={selected.unread}
-              onToggle={() =>
-                updateTask.mutate({ id: selected.id, patch: { unread: !selected.unread } })
-              }
-            />
-            <Button
-              size="xs"
-              variant="light"
-              color="violet"
-              leftSection={<IconSparkles size={14} />}
-              loading={suggest.isPending}
-              onClick={askForSuggestion}
-            >
-              Suggest bucket
-            </Button>
-            {selected.origin === 'manual' && (
+            <Text fz={28} fw={700} lh={1.3} my={14}>
+              {selected.title}
+            </Text>
+
+            <Group gap={8} mb="lg">
+              <StatusPill status={selected.status} />
+              {selected.tags.map((tag) => (
+                <Badge key={tag} variant="default" radius="xl">
+                  {tag}
+                </Badge>
+              ))}
+            </Group>
+
+            <Group gap="md" mb="lg">
+              <ReadToggle
+                unread={selected.unread}
+                onToggle={() =>
+                  updateTask.mutate({ id: selected.id, patch: { unread: !selected.unread } })
+                }
+              />
               <Button
                 size="xs"
-                variant="subtle"
-                color="red"
-                leftSection={<IconTrash size={14} />}
-                loading={deleteTask.isPending}
-                onClick={removeTask}
+                variant="light"
+                color="violet"
+                leftSection={<IconSparkles size={14} />}
+                loading={suggest.isPending}
+                onClick={askForSuggestion}
               >
-                Delete
+                Suggest bucket
               </Button>
+              {selected.origin === 'manual' && (
+                <Button
+                  size="xs"
+                  variant="subtle"
+                  color="red"
+                  leftSection={<IconTrash size={14} />}
+                  loading={deleteTask.isPending}
+                  onClick={removeTask}
+                >
+                  Delete
+                </Button>
+              )}
+            </Group>
+
+            {suggestion && (
+              <SuggestionPanel
+                task={selected}
+                suggestion={suggestion}
+                onAccept={acceptSuggestion}
+                onDismiss={() => setSuggestion(null)}
+                busy={busy}
+              />
             )}
-          </Group>
 
-          {suggestion && (
-            <SuggestionPanel
-              task={selected}
-              suggestion={suggestion}
-              onAccept={acceptSuggestion}
-              onDismiss={() => setSuggestion(null)}
-              busy={busy}
-            />
-          )}
+            {slack.length > 0 && (
+              <Box mb="lg" data-testid="slack-section">
+                <Text
+                  fz="xs"
+                  fw={700}
+                  tt="uppercase"
+                  mb={8}
+                  data-testid="section-heading"
+                  style={{ color: SLACK_ACCENT, letterSpacing: '0.05em' }}
+                >
+                  Slack
+                </Text>
+                <Stack gap={8}>
+                  {slack.map((item) => (
+                    <ItemCard key={item.id} item={item} />
+                  ))}
+                </Stack>
+              </Box>
+            )}
 
-          {slack.length > 0 && (
-            <Box mb="lg" data-testid="slack-section">
-              <Text
-                fz="xs"
-                fw={700}
-                tt="uppercase"
-                mb={8}
-                data-testid="section-heading"
-                style={{ color: SLACK_ACCENT, letterSpacing: '0.05em' }}
-              >
-                Slack
+            {other.length > 0 && (
+              <Box data-testid="other-section">
+                <Text
+                  fz="xs"
+                  fw={700}
+                  c="dimmed"
+                  tt="uppercase"
+                  mb={8}
+                  data-testid="section-heading"
+                  style={{ letterSpacing: '0.05em' }}
+                >
+                  Other sources
+                </Text>
+                <Stack gap={8}>
+                  {other.map((item) => (
+                    <ItemCard key={item.id} item={item} />
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
+            {selected.items.length === 0 && (
+              <Text c="dimmed" fz="sm">
+                No items attached yet.
               </Text>
-              <Stack gap={8}>
-                {slack.map((item) => (
-                  <ItemCard key={item.id} item={item} />
-                ))}
-              </Stack>
-            </Box>
-          )}
-
-          {other.length > 0 && (
-            <Box data-testid="other-section">
-              <Text
-                fz="xs"
-                fw={700}
-                c="dimmed"
-                tt="uppercase"
-                mb={8}
-                data-testid="section-heading"
-                style={{ letterSpacing: '0.05em' }}
-              >
-                Other sources
-              </Text>
-              <Stack gap={8}>
-                {other.map((item) => (
-                  <ItemCard key={item.id} item={item} />
-                ))}
-              </Stack>
-            </Box>
-          )}
-
-          {selected.items.length === 0 && (
-            <Text c="dimmed" fz="sm">
-              No items attached yet.
-            </Text>
-          )}
-        </Box>
+            )}
+          </Box>
+        )}
       </Box>
     </Box>
   );

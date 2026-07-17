@@ -25,6 +25,21 @@ describe('TaskDetailView', () => {
     expect(within(detail).getByText('backend')).toBeInTheDocument();
   });
 
+  it('lands on /task with nothing selected rather than opening the first task', async () => {
+    renderApp('/task');
+
+    const detail = await panel();
+    expect(within(detail).getByText('Select a task from the list.')).toBeInTheDocument();
+    // The first task must not be auto-opened into the panel...
+    expect(
+      within(detail).queryByText('Stripe webhook handling for invoice payments'),
+    ).not.toBeInTheDocument();
+    // ...but the sidebar still lists tasks to choose from.
+    expect(
+      screen.getAllByText('Stripe webhook handling for invoice payments').length,
+    ).toBeGreaterThan(0);
+  });
+
   it('gives Slack its own section ahead of the other sources', async () => {
     renderApp(detailRoute(PAYMENTS_TASK_ID));
 

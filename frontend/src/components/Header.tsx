@@ -15,7 +15,8 @@ import { formatAgo } from '../lib/time';
 import { useHq } from '../shell/HqContext';
 
 const TABS = [
-  { label: 'Board', path: '/' },
+  { label: 'Buckets', path: '/' },
+  { label: 'Tasks', path: '/task' },
   { label: 'Timeline', path: '/timeline' },
   { label: 'Catch-up', path: '/catchup' },
   { label: 'Log', path: '/log' },
@@ -39,7 +40,7 @@ export function Header() {
   } = useHq();
 
   const path = location.pathname;
-  const isDetail = path.startsWith('/task');
+  const isDetail = path.startsWith('/task/');
   const showToolbar = path === '/' || path === '/timeline' || path === '/catchup';
   const isActive = (tabPath: string) => (tabPath === '/' ? path === '/' : path.startsWith(tabPath));
 
@@ -60,8 +61,8 @@ export function Header() {
           {appName}
         </Text>
         {isDetail ? (
-          <Anchor component={Link} to="/" fz="xs" fw={600}>
-            ← Back to board
+          <Anchor component={Link} to="/task" fz="xs" fw={600}>
+            ← All tasks
           </Anchor>
         ) : (
           <Text fz="xs" c="dimmed">
