@@ -1,4 +1,5 @@
 import { Box, Center, Loader, Text } from '@mantine/core';
+import { useEffect, useRef } from 'react';
 import {
   MONO_FONT,
   TERMINAL_BG,
@@ -47,6 +48,13 @@ export function LogView() {
   const { data: settings } = useSettings();
   const prompt = promptFor(settings?.app_name ?? 'hq');
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // The newest run is at the bottom, so open at the end like a shell rather than the top.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [entries]);
+
   if (isLoading) {
     return (
       <Center style={{ flex: 1, background: TERMINAL_BG }}>
@@ -60,6 +68,7 @@ export function LogView() {
 
   return (
     <Box
+      ref={scrollRef}
       style={{
         flex: 1,
         overflow: 'auto',
