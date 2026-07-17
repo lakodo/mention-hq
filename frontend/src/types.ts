@@ -43,6 +43,7 @@ export interface Task {
   tags: string[];
   unread: boolean;
   origin: Origin;
+  archived: boolean;
   updated_at: string;
   items: Item[];
 }
@@ -183,6 +184,7 @@ export interface TaskFilters {
   source?: Source;
   status?: Status;
   unread?: boolean;
+  archived?: boolean;
   q?: string;
 }
 
@@ -192,6 +194,7 @@ export interface TaskPatch {
   status?: Status;
   title?: string;
   tags?: string[];
+  archived?: boolean;
 }
 
 export interface TaskCreate {

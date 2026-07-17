@@ -30,6 +30,7 @@ export function makeTasks(): Task[] {
       tags: ['backend'],
       unread: true,
       origin: 'auto',
+      archived: false,
       updated_at: minutesAgo(95),
       items: [
         {
@@ -69,6 +70,7 @@ export function makeTasks(): Task[] {
       tags: ['bug'],
       unread: false,
       origin: 'auto',
+      archived: false,
       updated_at: minutesAgo(180),
       items: [
         {
@@ -90,6 +92,7 @@ export function makeTasks(): Task[] {
       tags: ['security'],
       unread: false,
       origin: 'manual',
+      archived: false,
       updated_at: minutesAgo(1440),
       items: [
         {

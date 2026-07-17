@@ -88,9 +88,10 @@ export const handlers = [
     const bucket = url.searchParams.get('bucket');
     const status = url.searchParams.get('status');
     const unread = url.searchParams.get('unread');
+    const archived = url.searchParams.get('archived') === 'true';
     const q = url.searchParams.get('q');
 
-    let tasks = db.tasks;
+    let tasks = db.tasks.filter((t) => Boolean(t.archived) === archived);
     if (bucket) tasks = tasks.filter((t) => t.bucket === bucket);
     if (status) tasks = tasks.filter((t) => t.status === status);
     if (unread !== null) tasks = tasks.filter((t) => String(t.unread) === unread);
@@ -113,6 +114,7 @@ export const handlers = [
       tags: body.tags ?? [],
       unread: false,
       origin: 'manual',
+      archived: false,
       updated_at: new Date().toISOString(),
       items: [],
     };
@@ -131,9 +133,6 @@ export const handlers = [
   http.delete(`${BASE}/tasks/:id`, ({ params }) => {
     const task = db.tasks.find((t) => t.id === params.id);
     if (!task) return notFound(`Task not found: ${String(params.id)}`);
-    if (task.origin === 'auto') {
-      return HttpResponse.json({ detail: 'Auto tasks cannot be deleted' }, { status: 400 });
-    }
     db.tasks = db.tasks.filter((t) => t.id !== params.id);
     return new HttpResponse(null, { status: 204 });
   }),
@@ -237,6 +236,7 @@ export const handlers = [
       tags: [],
       unread: false,
       origin: 'manual',
+      archived: false,
       updated_at: item.occurred_at,
       items: [item],
     };

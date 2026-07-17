@@ -117,6 +117,9 @@ class Task(Base):
     # "manual" tasks were created by the user and outlive their items.
     origin: Mapped[str] = mapped_column(String, nullable=False, default="auto")
     title_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Set to hide a task from the board and lists while keeping it and its items intact —
+    # the alternative to deleting, which releases the items back to catch-up.
+    archived_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     synced_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
 
@@ -134,6 +137,10 @@ class Task(Base):
         attached = [link for link in self.links if link.state != REJECTED]
         attached.sort(key=lambda link: link.item.occurred_at, reverse=True)
         return [link.item for link in attached]
+
+    @property
+    def archived(self) -> bool:
+        return self.archived_at is not None
 
 
 class SourceInstance(Base):

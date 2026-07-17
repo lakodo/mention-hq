@@ -57,6 +57,7 @@ class TaskOut(BaseModel):
     tags: list[str]
     unread: bool
     origin: str
+    archived: bool
     updated_at: datetime
     items: list[ItemOut]
 
@@ -67,6 +68,7 @@ class TaskPatch(BaseModel):
     status: Status | None = None
     title: str | None = None
     tags: list[str] | None = None
+    archived: bool | None = None
 
 
 class TaskCreate(BaseModel):

@@ -4,11 +4,11 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import REJECTED, Item, Link, Task
+from app.models import CONFIRMED, REJECTED, Item, Link, Task
 from app.schemas import TaskCreate, TaskOut, TaskPatch
 from app.services.buckets import UNCATEGORIZED, load_matcher
 
@@ -27,9 +27,12 @@ async def list_tasks(
     status: str | None = None,
     source: str | None = None,
     unread: bool | None = None,
+    archived: bool = Query(False, description="Return archived tasks instead of active ones"),
     q: str | None = Query(None, description="Free-text match on title"),
 ) -> list[Task]:
     stmt = select(Task)
+    # Archived tasks are hidden from every list unless asked for by name.
+    stmt = stmt.where(Task.archived_at.isnot(None) if archived else Task.archived_at.is_(None))
     if bucket:
         stmt = stmt.where(Task.bucket == bucket)
     if status:
@@ -105,6 +108,8 @@ async def patch_task(task_id: str, patch: TaskPatch, db: AsyncSession = Depends(
         task.unread = patch.unread
     if patch.status is not None:
         task.status = patch.status
+    if patch.archived is not None:
+        task.archived_at = datetime.now(UTC) if patch.archived else None
 
     await db.commit()
     return await _load(db, task_id)
@@ -112,12 +117,28 @@ async def patch_task(task_id: str, patch: TaskPatch, db: AsyncSession = Depends(
 
 @router.delete("/{task_id}", status_code=204)
 async def delete_task(task_id: str, db: AsyncSession = Depends(get_db)) -> None:
+    """Delete a task and free its items.
+
+    The items themselves are never deleted — they belong to their source, not to the task.
+    Deleting drops the task's links, and any item left on no other task returns to catch-up
+    untriaged, so it is triaged again rather than lost. Archive is the alternative that keeps
+    the items filed.
+    """
     task = await db.get(Task, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
-    if task.origin != "manual":
-        # An auto task is rebuilt by the next sync from the items on it. Rejecting those
-        # links in catch-up is what actually makes it go away.
-        raise HTTPException(status_code=400, detail="Only manually created tasks can be deleted")
+
+    freed = [link.item_id for link in task.links if link.state != REJECTED]
     await db.delete(task)
+    await db.flush()
+
+    for item_id in freed:
+        still_attached = await db.scalar(
+            select(func.count()).select_from(Link).where(Link.item_id == item_id, Link.state == CONFIRMED)
+        )
+        if not still_attached:
+            item = await db.get(Item, item_id)
+            if item is not None:
+                item.triaged = False
+
     await db.commit()

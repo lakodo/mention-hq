@@ -40,6 +40,7 @@ export async function fetchTasks(filters: TaskFilters = {}): Promise<Task[]> {
       source: filters.source || undefined,
       status: filters.status || undefined,
       unread: filters.unread ?? undefined,
+      archived: filters.archived || undefined,
       q: filters.q || undefined,
     },
   });

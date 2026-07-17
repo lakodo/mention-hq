@@ -16,6 +16,8 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
+  IconArchive,
+  IconArchiveOff,
   IconChevronLeft,
   IconChevronRight,
   IconExternalLink,
@@ -154,12 +156,14 @@ function SuggestionPanel({ task, suggestion, onAccept, onDismiss, busy }: Sugges
 export function TaskDetailView() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { data: tasks, isLoading } = useTasks();
 
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarQuery, setSidebarQuery] = useState('');
   const [groupTags, setGroupTags] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [suggestion, setSuggestion] = useState<BucketSuggestion | null>(null);
+
+  const { data: tasks, isLoading } = useTasks(showArchived ? { archived: true } : {});
 
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
@@ -225,8 +229,32 @@ export function TaskDetailView() {
     suggest.mutate(selected.id, { onSuccess: setSuggestion, onError: fail });
   };
 
+  const toggleArchive = () => {
+    if (!selected) return;
+    const archiving = !selected.archived;
+    updateTask.mutate(
+      { id: selected.id, patch: { archived: archiving } },
+      {
+        onSuccess: () => {
+          notifications.show({
+            title: archiving ? 'Task archived' : 'Task restored',
+            message: archiving ? `${selected.title} — its items stay filed.` : selected.title,
+            color: 'teal',
+          });
+          if (archiving) navigate('/task');
+        },
+        onError: fail,
+      },
+    );
+  };
+
   const removeTask = () => {
     if (!selected) return;
+    const ok = window.confirm(
+      'Delete this task? Its items are kept but return to Catch-up to be triaged again. ' +
+        'To keep them filed, archive it instead.',
+    );
+    if (!ok) return;
     deleteTask.mutate(selected.id, {
       onSuccess: () => {
         notifications.show({ title: 'Task deleted', message: selected.title, color: 'teal' });
@@ -321,7 +349,7 @@ export function TaskDetailView() {
         </Group>
 
         {!collapsed && (
-          <Box px={12} pt={8}>
+          <Group px={12} pt={8} gap={8}>
             <Button
               size="xs"
               variant={groupTags ? 'filled' : 'default'}
@@ -329,7 +357,16 @@ export function TaskDetailView() {
             >
               Group by tags
             </Button>
-          </Box>
+            <Button
+              size="xs"
+              variant={showArchived ? 'filled' : 'default'}
+              color="gray"
+              leftSection={<IconArchive size={14} />}
+              onClick={() => setShowArchived((a) => !a)}
+            >
+              Archived
+            </Button>
+          </Group>
         )}
 
         <Box style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
@@ -367,6 +404,16 @@ export function TaskDetailView() {
               <Badge variant="default" radius="xl">
                 {selected.bucket}
               </Badge>
+              {selected.archived && (
+                <Badge
+                  variant="light"
+                  color="gray"
+                  radius="xl"
+                  leftSection={<IconArchive size={11} />}
+                >
+                  Archived
+                </Badge>
+              )}
               <Text fz="sm" c="dimmed" ml="auto">
                 {formatAgo(newestItemAt(selected))}
               </Text>
@@ -402,18 +449,28 @@ export function TaskDetailView() {
               >
                 Suggest bucket
               </Button>
-              {selected.origin === 'manual' && (
-                <Button
-                  size="xs"
-                  variant="subtle"
-                  color="red"
-                  leftSection={<IconTrash size={14} />}
-                  loading={deleteTask.isPending}
-                  onClick={removeTask}
-                >
-                  Delete
-                </Button>
-              )}
+              <Button
+                size="xs"
+                variant="subtle"
+                color="gray"
+                leftSection={
+                  selected.archived ? <IconArchiveOff size={14} /> : <IconArchive size={14} />
+                }
+                loading={updateTask.isPending}
+                onClick={toggleArchive}
+              >
+                {selected.archived ? 'Restore' : 'Archive'}
+              </Button>
+              <Button
+                size="xs"
+                variant="subtle"
+                color="red"
+                leftSection={<IconTrash size={14} />}
+                loading={deleteTask.isPending}
+                onClick={removeTask}
+              >
+                Delete
+              </Button>
             </Group>
 
             {suggestion && (

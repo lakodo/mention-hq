@@ -253,13 +253,63 @@ async def test_a_rejected_link_does_not_put_the_item_on_the_task(client, db):
     assert (await client.get("/api/tasks?source=branch")).json() == []
 
 
-async def test_manual_task_can_be_deleted_but_auto_cannot(client, db):
-    await _make_task(db, "task:auto")
+async def test_any_task_can_be_deleted(client, db):
+    await _make_task(db, "task:1")
     await db.commit()
-    assert (await client.delete("/api/tasks/task:auto")).status_code == 400
+    assert (await client.delete("/api/tasks/task:1")).status_code == 204
+    assert (await client.get("/api/tasks/task:1")).status_code == 404
 
-    created = (await client.post("/api/tasks", json={"title": "Mine"})).json()
-    assert (await client.delete(f"/api/tasks/{created['id']}")).status_code == 204
+
+async def test_deleting_a_task_keeps_its_items_and_frees_them_to_catch_up(client, db):
+    await _make_task(db)
+    item = await _make_item(db)
+    db.add(Link(task_id="task:1", item_id=item.id, state=CONFIRMED))
+    item.triaged = True
+    await db.commit()
+
+    assert (await client.delete("/api/tasks/task:1")).status_code == 204
+
+    # The item survives the task and returns to catch-up to be triaged again.
+    assert await db.get(Item, item.id) is not None
+    catchup = (await client.get("/api/catchup")).json()
+    assert [i["id"] for i in catchup] == [item.id]
+
+
+async def test_an_item_still_on_another_task_is_not_freed_by_a_delete(client, db):
+    await _make_task(db, "task:1")
+    await _make_task(db, "task:2")
+    item = await _make_item(db)
+    db.add(Link(task_id="task:1", item_id=item.id, state=CONFIRMED))
+    db.add(Link(task_id="task:2", item_id=item.id, state=CONFIRMED))
+    item.triaged = True
+    await db.commit()
+
+    await client.delete("/api/tasks/task:1")
+
+    refreshed = await db.get(Item, item.id)
+    await db.refresh(refreshed)
+    assert refreshed.triaged is True, "still on task:2, so it stays filed"
+    assert (await client.get("/api/catchup")).json() == []
+
+
+async def test_archiving_hides_a_task_but_keeps_its_items(client, db):
+    await _make_task(db)
+    item = await _make_item(db)
+    db.add(Link(task_id="task:1", item_id=item.id, state=CONFIRMED))
+    item.triaged = True
+    await db.commit()
+
+    patched = await client.patch("/api/tasks/task:1", json={"archived": True})
+    assert patched.json()["archived"] is True
+
+    # Gone from the active list and the board, but not from catch-up's ledger and not deleted.
+    assert (await client.get("/api/tasks")).json() == []
+    assert [t["id"] for t in (await client.get("/api/tasks?archived=true")).json()] == ["task:1"]
+    assert (await client.get("/api/catchup")).json() == [], "its item stays filed, not released"
+
+    restored = await client.patch("/api/tasks/task:1", json={"archived": False})
+    assert restored.json()["archived"] is False
+    assert [t["id"] for t in (await client.get("/api/tasks")).json()] == ["task:1"]
 
 
 async def test_admin_reports_source_fields_without_leaking_secrets(client, connect, isolated_secrets):

@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderApp } from '../test/utils';
 import { server } from '../test/server';
 import { db } from '../test/handlers';
@@ -100,20 +100,60 @@ describe('TaskDetailView', () => {
     );
   });
 
-  it('offers delete on a manual task only', async () => {
-    renderApp(detailRoute(AUTH_TASK_ID));
-
-    const detail = await panel();
-    await within(detail).findByText('Refresh token rotation on scope change');
-    expect(within(detail).getByRole('button', { name: /Delete/ })).toBeInTheDocument();
-  });
-
-  it('hides delete on an auto task, which the API would refuse', async () => {
+  it('offers archive and delete on any task', async () => {
     renderApp(detailRoute(PAYMENTS_TASK_ID));
 
     const detail = await panel();
     await within(detail).findByText('Stripe webhook handling for invoice payments');
-    expect(within(detail).queryByRole('button', { name: /Delete/ })).not.toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: /Archive/ })).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: /Delete/ })).toBeInTheDocument();
+  });
+
+  it('archives a task, keeping it out of the active list but not deleting it', async () => {
+    const user = userEvent.setup();
+    renderApp(detailRoute(PAYMENTS_TASK_ID));
+
+    const detail = await panel();
+    await user.click(within(detail).getByRole('button', { name: /Archive/ }));
+
+    await waitFor(() =>
+      expect(db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)?.archived).toBe(true),
+    );
+    // Archived, not deleted — the row is still there.
+    expect(db.tasks.some((t) => t.id === PAYMENTS_TASK_ID)).toBe(true);
+  });
+
+  it('reveals archived tasks behind a toggle and restores them', async () => {
+    const user = userEvent.setup();
+    db.tasks[0].archived = true;
+    renderApp('/task');
+
+    // Hidden from the default sidebar…
+    await screen.findByText('Select a task from the list.');
+    expect(
+      screen.queryByText('Stripe webhook handling for invoice payments'),
+    ).not.toBeInTheDocument();
+
+    // …until the Archived toggle brings them in.
+    await user.click(screen.getByRole('button', { name: /Archived/ }));
+    await user.click(await screen.findByText('Stripe webhook handling for invoice payments'));
+
+    const detail = await panel();
+    await user.click(within(detail).getByRole('button', { name: /Restore/ }));
+    await waitFor(() =>
+      expect(db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)?.archived).toBe(false),
+    );
+  });
+
+  it('deletes a task after confirmation', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderApp(detailRoute(AUTH_TASK_ID));
+
+    const detail = await panel();
+    await user.click(within(detail).getByRole('button', { name: /Delete/ }));
+
+    await waitFor(() => expect(db.tasks.some((t) => t.id === AUTH_TASK_ID)).toBe(false));
   });
 
   it('argues an AI suggestion and never applies it on its own', async () => {
