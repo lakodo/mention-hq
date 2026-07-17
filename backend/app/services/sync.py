@@ -26,7 +26,7 @@ from app.config import Settings
 from app.engine import TaskView
 from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, SyncLog, Task
 from app.schemas import SyncResult, SyncSourceResult
-from app.services import triage
+from app.services import ai, triage
 from app.services.buckets import load_matcher
 from app.services.people import DbDirectory
 from app.services.sources_factory import Connected, build_connected
@@ -82,6 +82,7 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
 
     result = await _persist(db, _merge(kept, fetched))
     await _skip_by_rules(db)
+    await _auto_match(db)
 
     duration = round(time.perf_counter() - started, 2)
     _write_log(db, outcomes, result, started_at, duration)
@@ -105,6 +106,65 @@ async def _skip_by_rules(db: AsyncSession) -> None:
     """Auto-skip freshly-synced inbox items that match a triage rule, before they pile up."""
     items = list((await db.execute(select(Item).where(Item.triaged.is_(False)))).scalars().all())
     await triage.apply_rules(db, items)
+
+
+# How many unmatched inbox items to attempt per sync. Keeps sync bounded when many items
+# arrive at once; remaining items are matched in the next sync or by "Match all".
+_AUTO_MATCH_BATCH = 10
+
+
+async def _auto_match(db: AsyncSession) -> None:
+    """Propose task links for inbox items that the brain has never seen.
+
+    Rules run first, so noise is already skipped before we reach this. Only items without
+    a prior brain attempt (matched_at is None) and without any existing proposal are sent
+    to the brain — a proposal means the engine already has a guess, and no proposal is the
+    normal outcome (most items belong to no existing task). Nothing is written to catch-up
+    here: proposals land there automatically through the engine's Link rows.
+    """
+    if not ai.status().available:
+        return
+
+    # Items still in the inbox, never matched, with no existing proposal.
+    proposed_item_ids = set(
+        (await db.execute(select(Link.item_id).where(Link.state == PROPOSED))).scalars().all()
+    )
+    stmt = (
+        select(Item)
+        .where(Item.triaged.is_(False), Item.matched_at.is_(None))
+        .order_by(Item.first_seen_at)
+        .limit(_AUTO_MATCH_BATCH)
+    )
+    candidates = list((await db.execute(stmt)).scalars().all())
+
+    now = datetime.now(UTC)
+    for item in candidates:
+        if item.id in proposed_item_ids:
+            item.matched_at = now
+            continue
+        try:
+            matches = await ai.suggest_tasks(db, item)
+        except Exception:
+            log.warning("auto_match_failed", item=item.id)
+            continue
+        item.matched_at = now
+        for match in matches:
+            task = await db.get(Task, match.task_id)
+            if task is None:
+                continue
+            existing = await db.get(Link, {"task_id": match.task_id, "item_id": item.id})
+            if existing is None:
+                db.add(
+                    Link(
+                        task_id=match.task_id,
+                        item_id=item.id,
+                        state=PROPOSED,
+                        engine="brain",
+                        confidence=match.confidence,
+                        reason=match.reason,
+                    )
+                )
+    await db.flush()
 
 
 async def _fetch(connected: Connected, directory: DbDirectory) -> _FetchOutcome:

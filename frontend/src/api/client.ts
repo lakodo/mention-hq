@@ -192,6 +192,10 @@ export async function triageItem(itemId: string, triaged: boolean): Promise<Item
   return data;
 }
 
+export async function matchAllItems(): Promise<void> {
+  await api.post('/catchup/match-all');
+}
+
 export async function postSync(source?: string): Promise<SyncResult> {
   const { data } = await api.post<SyncResult>('/sync', source ? { source } : {});
   return data;

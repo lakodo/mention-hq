@@ -115,6 +115,15 @@ async def mark_triaged(db: AsyncSession, item_id: str, triaged: bool = True) -> 
     return await _reload(db, item_id)
 
 
+async def reset_matched_at(db: AsyncSession) -> int:
+    """Clear matched_at for every untriaged item so the auto-matcher re-runs them all."""
+    items = list((await db.execute(select(Item).where(Item.triaged.is_(False)))).scalars().all())
+    for item in items:
+        item.matched_at = None
+    await db.commit()
+    return len(items)
+
+
 async def proposals_for(db: AsyncSession, item_id: str) -> list[Link]:
     stmt = select(Link).where(Link.item_id == item_id, Link.state == PROPOSED)
     return list((await db.execute(stmt)).scalars().all())

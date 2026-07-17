@@ -35,6 +35,7 @@ import {
   useCreateTaskFromItem,
   useCreateTriageRule,
   useDeleteTriageRule,
+  useMatchAllItems,
   useRejectLink,
   useSuggestItemTasks,
   useTasks,
@@ -434,6 +435,24 @@ export function CatchupView() {
   const { data: items, isLoading } = useCatchup();
   const { data: tasks } = useTasks();
   const { data: buckets } = useBuckets();
+  const matchAll = useMatchAllItems();
+  const { runSync, syncing } = useHq();
+
+  const fail = (error: unknown) =>
+    notifications.show({ title: 'Action failed', message: errorMessage(error), color: 'red' });
+
+  const handleMatchAll = () =>
+    matchAll.mutate(undefined, {
+      onSuccess: () => {
+        notifications.show({
+          title: 'Re-matching queued',
+          message: 'Items will be matched on the next sync.',
+          color: 'violet',
+        });
+        runSync();
+      },
+      onError: fail,
+    });
 
   const taskOptions = useMemo(
     () =>
@@ -481,7 +500,18 @@ export function CatchupView() {
           {visible.length} {visible.length === 1 ? 'item' : 'items'} to triage
           {query ? ` (of ${items.length})` : ''}
         </Text>
-        <TriageRules />
+        <Group gap={8}>
+          <Button
+            size="xs"
+            variant="default"
+            leftSection={<IconSparkles size={14} />}
+            loading={matchAll.isPending || syncing}
+            onClick={handleMatchAll}
+          >
+            Match all
+          </Button>
+          <TriageRules />
+        </Group>
       </Group>
       <Stack gap="sm" style={{ maxWidth: 860 }}>
         {visible.map((item) => (
