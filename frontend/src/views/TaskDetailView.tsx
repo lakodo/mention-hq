@@ -30,7 +30,7 @@ import {
   IconTrash,
   IconX,
 } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
+import { type MouseEvent as ReactMouseEvent, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ReadToggle } from '../components/ReadToggle';
 import { SourceDot } from '../components/SourceDot';
@@ -177,6 +177,10 @@ export function TaskDetailView() {
   const navigate = useNavigate();
 
   const [collapsed, setCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(
+    () => Number(localStorage.getItem('hq:task-sidebar-width')) || 280,
+  );
+  const [resizing, setResizing] = useState(false);
   const [sidebarQuery, setSidebarQuery] = useState('');
   const [groupTags, setGroupTags] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -439,17 +443,39 @@ export function TaskDetailView() {
     );
   };
 
+  const startResize = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    setResizing(true);
+    document.body.style.userSelect = 'none';
+    const onMove = (e: MouseEvent) =>
+      setSidebarWidth(Math.min(560, Math.max(200, startWidth + e.clientX - startX)));
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+      setResizing(false);
+      setSidebarWidth((w) => {
+        localStorage.setItem('hq:task-sidebar-width', String(w));
+        return w;
+      });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
   return (
     <Box style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
       <Box
         style={{
-          width: collapsed ? 56 : 280,
+          width: collapsed ? 56 : sidebarWidth,
           flexShrink: 0,
           background: 'var(--mantine-color-body)',
           borderRight: '1px solid var(--mantine-color-gray-3)',
           display: 'flex',
           flexDirection: 'column',
-          transition: 'width 0.18s ease',
+          transition: resizing ? 'none' : 'width 0.18s ease',
           overflow: 'hidden',
         }}
       >
@@ -567,6 +593,23 @@ export function TaskDetailView() {
           ))}
         </Box>
       </Box>
+
+      {!collapsed && (
+        <Box
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize task list"
+          onMouseDown={startResize}
+          style={{
+            width: 6,
+            flexShrink: 0,
+            marginLeft: -3,
+            cursor: 'col-resize',
+            zIndex: 1,
+            background: resizing ? 'var(--mantine-color-blue-4)' : 'transparent',
+          }}
+        />
+      )}
 
       <Box style={{ flex: 1, overflow: 'auto', padding: '32px 40px' }} data-testid="task-detail">
         {!selected ? (

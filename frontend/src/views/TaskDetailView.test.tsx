@@ -76,6 +76,11 @@ describe('TaskDetailView', () => {
     });
   });
 
+  it('offers a handle to resize the task list', async () => {
+    renderApp('/task');
+    expect(await screen.findByLabelText('Resize task list')).toBeInTheDocument();
+  });
+
   it('gives Slack its own section ahead of the other sources', async () => {
     renderApp(detailRoute(PAYMENTS_TASK_ID));
 
