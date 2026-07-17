@@ -416,3 +416,29 @@ async def test_the_lock_is_released_after_a_sync_fails(client):
     """A 400 must not wedge every later sync behind a lock nobody holds."""
     assert (await client.post("/api/sync", json={"source": "nope"})).status_code == 400
     assert (await client.post("/api/sync", json={"source": "nope"})).status_code == 400
+
+
+async def test_attaching_a_skipped_item_lifts_it_out_of_skipped(client, db):
+    await _make_task(db)
+    item = await _make_item(db)
+    await db.commit()
+
+    await client.post(f"/api/catchup/{item.id}/triage", json={"triaged": True})
+    skipped = (await client.get("/api/items/skipped")).json()
+    assert item.id in {i["id"] for i in skipped}, "skipping puts it on the skipped list"
+
+    await client.post(f"/api/catchup/{item.id}/confirm", json={"task_ids": ["task:1"]})
+
+    skipped_after = (await client.get("/api/items/skipped")).json()
+    assert item.id not in {i["id"] for i in skipped_after}, "filing it clears the skip"
+
+
+async def test_match_status_reports_whether_a_pass_is_running(client):
+    body = (await client.get("/api/catchup/match-status")).json()
+    assert body["running"] is False
+    assert set(body) == {"running", "total", "done", "remaining"}
+    assert body["remaining"] == max(0, body["total"] - body["done"])
+
+
+async def test_match_stop_is_accepted_even_when_nothing_runs(client):
+    assert (await client.post("/api/catchup/match-stop")).status_code == 204

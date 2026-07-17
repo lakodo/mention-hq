@@ -385,3 +385,80 @@ async def test_unknown_source_is_rejected(db, settings, use_sources, item):
     use_sources(FakeSource([]))
     with pytest.raises(ValueError, match="Unknown source"):
         await sync_all(db, settings, only="nope")
+
+
+class TestDrainMatching:
+    """The drain loop that "Match all" runs, exercised without the brain or a database.
+
+    _match_candidates, _match_one and _count_unmatched are stubbed so the test is about the
+    orchestration: does a drain work the whole inbox in batches, report progress, and stop?
+    """
+
+    @pytest.fixture(autouse=True)
+    def _reset(self):
+        sync_module._progress = sync_module.MatchProgress()
+        sync_module._cancel.clear()
+
+    def _stub_inbox(self, monkeypatch, count: int) -> list[str]:
+        remaining = [str(i) for i in range(count)]
+        processed: list[str] = []
+
+        async def candidates():
+            return [(item_id, False) for item_id in remaining[: sync_module._AUTO_MATCH_BATCH]]
+
+        async def match_one(item_id, already_proposed):
+            processed.append(item_id)
+            remaining.remove(item_id)
+
+        async def count():
+            return len(remaining)
+
+        monkeypatch.setattr(sync_module, "_match_candidates", candidates)
+        monkeypatch.setattr(sync_module, "_match_one", match_one)
+        monkeypatch.setattr(sync_module, "_count_unmatched", count)
+        return processed
+
+    async def test_a_drain_works_the_whole_inbox_not_one_batch(self, monkeypatch):
+        processed = self._stub_inbox(monkeypatch, 25)
+
+        await sync_module._auto_match_pass(drain=True)
+
+        assert len(processed) == 25, "all three batches ran, not just the first ten"
+        assert sync_module.match_status().done == 25
+        assert sync_module.match_status().running is False
+
+    async def test_a_background_pass_does_a_single_batch(self, monkeypatch):
+        processed = self._stub_inbox(monkeypatch, 25)
+
+        await sync_module._auto_match_pass(drain=False)
+
+        assert len(processed) == sync_module._AUTO_MATCH_BATCH
+        # A background pass leaves the visible progress alone; only a drain reports it.
+        assert sync_module.match_status().running is False
+        assert sync_module.match_status().done == 0
+
+    async def test_stop_halts_a_drain_after_the_current_item(self, monkeypatch):
+        remaining = [str(i) for i in range(25)]
+        processed: list[str] = []
+
+        async def candidates():
+            return [(item_id, False) for item_id in remaining[:10]]
+
+        async def match_one(item_id, already_proposed):
+            processed.append(item_id)
+            remaining.remove(item_id)
+            if len(processed) == 5:
+                sync_module.stop_matching()
+
+        async def count():
+            return len(remaining)
+
+        monkeypatch.setattr(sync_module, "_match_candidates", candidates)
+        monkeypatch.setattr(sync_module, "_match_one", match_one)
+        monkeypatch.setattr(sync_module, "_count_unmatched", count)
+
+        await sync_module._auto_match_pass(drain=True)
+
+        assert len(processed) == 5
+        assert sync_module.match_status().done == 5
+        assert sync_module.match_status().running is False

@@ -12,6 +12,7 @@ import type {
   Detection,
   IdentityInput,
   ItemWithLinks,
+  MatchStatus,
   Person,
   PersonCreate,
   PersonPatch,
@@ -211,6 +212,15 @@ export async function triageItem(itemId: string, triaged: boolean): Promise<Item
 
 export async function matchAllItems(): Promise<void> {
   await api.post('/catchup/match-all');
+}
+
+export async function fetchMatchStatus(): Promise<MatchStatus> {
+  const { data } = await api.get<MatchStatus>('/catchup/match-status');
+  return data;
+}
+
+export async function stopMatching(): Promise<void> {
+  await api.post('/catchup/match-stop');
 }
 
 export async function postSync(source?: string): Promise<SyncResult> {

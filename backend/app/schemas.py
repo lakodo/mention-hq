@@ -311,6 +311,13 @@ class BackupOut(BaseModel):
     created_at: datetime
 
 
+class MatchStatusOut(BaseModel):
+    running: bool
+    total: int
+    done: int
+    remaining: int
+
+
 class SyncSourceResult(BaseModel):
     source: str
     items_fetched: int = 0

@@ -229,6 +229,10 @@ export const handlers = [
     return HttpResponse.json(all);
   }),
 
+  http.get(`${BASE}/items/skipped`, () =>
+    HttpResponse.json(db.catchup.filter((item) => item.triaged && item.triage_reason)),
+  ),
+
   http.post(`${BASE}/catchup/:itemId/confirm`, async ({ params, request }) => {
     const item = db.catchup.find((i) => i.id === params.itemId);
     if (!item) return notFound(`Item not found: ${String(params.itemId)}`);
@@ -250,6 +254,7 @@ export const handlers = [
       }
     }
     item.triaged = true;
+    item.triage_reason = null;
     return HttpResponse.json(item);
   }),
 
@@ -285,6 +290,12 @@ export const handlers = [
 
   http.post(`${BASE}/catchup/:itemId/suggest-tasks`, () => HttpResponse.json([])),
 
+  http.get(`${BASE}/catchup/match-status`, () =>
+    HttpResponse.json({ running: false, total: 0, done: 0, remaining: 0 }),
+  ),
+
+  http.post(`${BASE}/catchup/match-stop`, () => new HttpResponse(null, { status: 204 })),
+
   http.get(`${BASE}/triage-rules`, () => HttpResponse.json(db.triageRules)),
 
   http.post(`${BASE}/triage-rules`, async ({ request }) => {
@@ -311,6 +322,8 @@ export const handlers = [
     if (!item) return notFound(`Item not found: ${String(params.itemId)}`);
     const { triaged } = (await request.json()) as { triaged: boolean };
     item.triaged = triaged;
+    item.triage_reason = triaged ? 'Skipped' : null;
+    item.triaged_at = triaged ? new Date().toISOString() : null;
     return HttpResponse.json(item);
   }),
 

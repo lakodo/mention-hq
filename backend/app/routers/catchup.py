@@ -10,21 +10,35 @@ from app.schemas import (
     ConfirmRequest,
     CreateTaskFromItemRequest,
     ItemWithLinks,
+    MatchStatusOut,
     TaskMatchOut,
     TaskOut,
     TriageRequest,
 )
 from app.services import ai, catchup
-from app.services.sync import schedule_auto_match
+from app.services.sync import match_status, schedule_auto_match, stop_matching
 
 router = APIRouter(prefix="/catchup", tags=["catchup"])
 
 
 @router.post("/match-all", status_code=204)
 async def match_all(db: AsyncSession = Depends(get_db)) -> None:
-    """Clear the match flag on every inbox item, then match them in the background."""
+    """Clear the match flag on every inbox item, then work through them in the background."""
     await catchup.reset_matched_at(db)
-    schedule_auto_match()
+    schedule_auto_match(drain=True)
+
+
+@router.get("/match-status", response_model=MatchStatusOut)
+async def get_match_status() -> MatchStatusOut:
+    status = match_status()
+    return MatchStatusOut(
+        running=status.running, total=status.total, done=status.done, remaining=status.remaining
+    )
+
+
+@router.post("/match-stop", status_code=204)
+async def match_stop() -> None:
+    stop_matching()
 
 
 @router.post("/{item_id}/suggest-tasks", response_model=list[TaskMatchOut])

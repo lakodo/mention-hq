@@ -20,7 +20,6 @@ const TABS = [
   { label: 'Tasks', path: '/task' },
   { label: 'Timeline', path: '/timeline' },
   { label: 'Catch-up', path: '/catchup' },
-  { label: 'Skipped', path: '/skipped' },
   { label: 'People', path: '/people' },
   { label: 'Log', path: '/log' },
   { label: 'Admin', path: '/admin' },

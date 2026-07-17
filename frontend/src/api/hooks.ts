@@ -28,10 +28,12 @@ import {
   fetchSkippedItems,
   fetchSourceKinds,
   fetchSources,
+  fetchMatchStatus,
   fetchSyncStatus,
   fetchTask,
   fetchTasks,
   matchAllItems,
+  stopMatching,
   mergePeople,
   patchBucket,
   patchSettings,
@@ -66,6 +68,7 @@ import type {
   BucketSuggestion,
   Detection,
   ItemWithLinks,
+  MatchStatus,
   Person,
   PersonCreate,
   PersonPatch,
@@ -89,6 +92,7 @@ export const queryKeys = {
   task: (id: string) => ['task', id] as const,
   buckets: () => ['buckets'] as const,
   catchup: () => ['catchup'] as const,
+  matchStatus: () => ['catchup', 'match-status'] as const,
   items: () => ['items'] as const,
   skipped: (since?: string) => ['items', 'skipped', since] as const,
   people: () => ['people'] as const,
@@ -379,7 +383,25 @@ export function useMatchAllItems(): UseMutationResult<void, Error, void> {
     mutationFn: matchAllItems,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.catchup() });
+      void qc.invalidateQueries({ queryKey: queryKeys.matchStatus() });
     },
+  });
+}
+
+export function useMatchStatus(): UseQueryResult<MatchStatus> {
+  return useQuery({
+    queryKey: queryKeys.matchStatus(),
+    queryFn: fetchMatchStatus,
+    // Poll only while a pass is running, so an idle app isn't hitting the endpoint.
+    refetchInterval: (query) => (query.state.data?.running ? 1000 : false),
+  });
+}
+
+export function useStopMatching(): UseMutationResult<void, Error, void> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: stopMatching,
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.matchStatus() }),
   });
 }
 

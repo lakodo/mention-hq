@@ -11,6 +11,8 @@ import {
   Loader,
   Modal,
   MultiSelect,
+  Progress,
+  SegmentedControl,
   Select,
   Stack,
   Text,
@@ -37,11 +39,15 @@ import {
   useCreateTriageRule,
   useDeleteTriageRule,
   useMatchAllItems,
+  useMatchStatus,
   useRejectLink,
+  useSkippedItems,
+  useStopMatching,
   useSuggestItemTasks,
   useTasks,
   useTriageItem,
   useTriageRules,
+  useUnSkipItem,
 } from '../api/hooks';
 import { NoMatches } from '../components/NoMatches';
 import { filterItems } from '../lib/search';
@@ -114,9 +120,10 @@ interface CatchupCardProps {
   item: ItemWithLinks;
   taskOptions: { value: string; label: string }[];
   bucketOptions: string[];
+  skipped?: boolean;
 }
 
-function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
+function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: CatchupCardProps) {
   const [selected, setSelected] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [title, setTitle] = useState(item.label);
@@ -125,10 +132,16 @@ function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
   const confirm = useConfirmLinks();
   const reject = useRejectLink();
   const triage = useTriageItem();
+  const unSkip = useUnSkipItem();
   const createTask = useCreateTaskFromItem();
   const suggest = useSuggestItemTasks();
 
-  const busy = confirm.isPending || reject.isPending || triage.isPending || createTask.isPending;
+  const busy =
+    confirm.isPending ||
+    reject.isPending ||
+    triage.isPending ||
+    unSkip.isPending ||
+    createTask.isPending;
   const meta = sourceMeta(item.source);
 
   const fail = (error: unknown) =>
@@ -194,8 +207,13 @@ function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
         <Text fz={11} c="dimmed" fw={600} tt="uppercase" style={{ letterSpacing: '0.04em' }}>
           {meta.label}
         </Text>
+        {skipped && item.triage_reason && (
+          <Badge size="xs" variant="light" color="gray" radius="xl">
+            {item.triage_reason}
+          </Badge>
+        )}
         <Text fz="xs" c="dimmed" ml="auto">
-          {formatAgo(item.occurred_at)}
+          {formatAgo(skipped ? (item.triaged_at ?? item.occurred_at) : item.occurred_at)}
         </Text>
       </Group>
 
@@ -264,15 +282,37 @@ function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
         <Button size="sm" variant="light" disabled={busy} onClick={() => setModalOpen(true)}>
           New task
         </Button>
-        <Button
-          size="sm"
-          variant="subtle"
-          color="gray"
-          disabled={busy}
-          onClick={() => triage.mutate({ itemId: item.id, triaged: true }, { onError: fail })}
-        >
-          Skip
-        </Button>
+        {skipped ? (
+          <Button
+            size="sm"
+            variant="subtle"
+            color="gray"
+            disabled={busy}
+            onClick={() =>
+              unSkip.mutate(item.id, {
+                onSuccess: () =>
+                  notifications.show({
+                    title: 'Returned to inbox',
+                    message: item.label,
+                    color: 'teal',
+                  }),
+                onError: fail,
+              })
+            }
+          >
+            Un-skip
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="subtle"
+            color="gray"
+            disabled={busy}
+            onClick={() => triage.mutate({ itemId: item.id, triaged: true }, { onError: fail })}
+          >
+            Skip
+          </Button>
+        )}
       </Group>
 
       <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="New task from this item">
@@ -431,27 +471,70 @@ function TriageRules() {
   );
 }
 
+const WINDOW_OPTIONS = [
+  { value: '7', label: 'Last 7 days' },
+  { value: '30', label: 'Last 30 days' },
+  { value: '90', label: 'Last 90 days' },
+  { value: '', label: 'All time' },
+];
+
+function sinceParam(days: string): string | undefined {
+  if (!days) return undefined;
+  const d = new Date();
+  d.setDate(d.getDate() - Number(days));
+  return d.toISOString();
+}
+
+function MatchProgress() {
+  const { data: status } = useMatchStatus();
+  const stop = useStopMatching();
+
+  if (!status?.running) return null;
+
+  const value = status.total > 0 ? (status.done / status.total) * 100 : 0;
+  return (
+    <Group gap={8} wrap="nowrap" style={{ flex: 1, maxWidth: 360 }}>
+      <Progress value={value} striped animated size="sm" style={{ flex: 1 }} radius="xl" />
+      <Text fz="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+        {status.remaining} left
+      </Text>
+      <Button
+        size="xs"
+        variant="subtle"
+        color="red"
+        loading={stop.isPending}
+        onClick={() => stop.mutate()}
+      >
+        Stop
+      </Button>
+    </Group>
+  );
+}
+
 export function CatchupView() {
   const { query } = useHq();
-  const { data: items, isLoading } = useCatchup();
+  const [tab, setTab] = useState<'inbox' | 'skipped'>('inbox');
+  const [window, setWindow] = useState('7');
+  const since = useMemo(() => sinceParam(window), [window]);
+
+  const { data: inboxItems, isLoading: inboxLoading } = useCatchup();
+  const { data: skippedItems, isLoading: skippedLoading } = useSkippedItems(since);
   const { data: tasks } = useTasks();
   const { data: buckets } = useBuckets();
+  const { data: matchStatus } = useMatchStatus();
   const matchAll = useMatchAllItems();
-  const { runSync, syncing } = useHq();
 
   const fail = (error: unknown) =>
     notifications.show({ title: 'Action failed', message: errorMessage(error), color: 'red' });
 
   const handleMatchAll = () =>
     matchAll.mutate(undefined, {
-      onSuccess: () => {
+      onSuccess: () =>
         notifications.show({
-          title: 'Re-matching queued',
-          message: 'Items will be matched on the next sync.',
+          title: 'Matching started',
+          message: 'Working through the inbox — watch the progress bar.',
           color: 'violet',
-        });
-        runSync();
-      },
+        }),
       onError: fail,
     });
 
@@ -461,69 +544,106 @@ export function CatchupView() {
     [tasks],
   );
   const bucketOptions = useMemo(() => (buckets ?? []).map((b) => b.name), [buckets]);
-  // Items the engine already has a guess for come first — they're a one-click confirm — with
-  // recency order preserved within each group by the stable sort.
+
+  const skipped = tab === 'skipped';
+  const source = skipped ? skippedItems : inboxItems;
+  const isLoading = skipped ? skippedLoading : inboxLoading;
+  // In the inbox, items the engine already has a guess for come first — a one-click confirm —
+  // with recency order preserved within each group by the stable sort.
   const visible = useMemo(() => {
+    const filtered = filterItems(source ?? [], query);
+    if (skipped) return filtered;
     const hasProposal = (item: ItemWithLinks) =>
       item.links.some((link) => link.state === 'proposed') ? 0 : 1;
-    return [...filterItems(items ?? [], query)].sort((a, b) => hasProposal(a) - hasProposal(b));
-  }, [items, query]);
+    return [...filtered].sort((a, b) => hasProposal(a) - hasProposal(b));
+  }, [source, query, skipped]);
 
-  if (isLoading) {
-    return (
-      <Center style={{ flex: 1 }}>
-        <Loader />
-      </Center>
-    );
-  }
-
-  if (!items || items.length === 0) {
-    return (
-      <Center style={{ flex: 1 }}>
-        <Stack align="center" gap="xs">
-          <Text fw={600}>Inbox zero</Text>
-          <Text c="dimmed" fz="sm">
-            Nothing left to triage.
-          </Text>
-        </Stack>
-      </Center>
-    );
-  }
-
-  if (visible.length === 0) {
-    return <NoMatches query={query} />;
-  }
+  const toggle = (
+    <SegmentedControl
+      size="xs"
+      value={tab}
+      onChange={(v) => setTab(v as 'inbox' | 'skipped')}
+      data={[
+        { value: 'inbox', label: 'Inbox' },
+        { value: 'skipped', label: 'Skipped' },
+      ]}
+    />
+  );
 
   return (
     <Box style={{ flex: 1, overflow: 'auto', padding: '16px 20px 20px' }}>
-      <Group justify="space-between" px={4} pb={10} style={{ maxWidth: 860 }}>
-        <Text fz="xs" c="dimmed">
-          {visible.length} {visible.length === 1 ? 'item' : 'items'} to triage
-          {query ? ` (of ${items.length})` : ''}
-        </Text>
-        <Group gap={8}>
-          <Button
-            size="xs"
-            variant="default"
-            leftSection={<IconSparkles size={14} />}
-            loading={matchAll.isPending || syncing}
-            onClick={handleMatchAll}
-          >
-            Match all
-          </Button>
-          <TriageRules />
+      <Group
+        justify="space-between"
+        align="center"
+        px={4}
+        pb={10}
+        gap={8}
+        style={{ maxWidth: 860 }}
+      >
+        <Group gap={12} align="center">
+          {toggle}
+          <Text fz="xs" c="dimmed">
+            {visible.length} {skipped ? 'skipped' : 'to triage'}
+            {query && source ? ` (of ${source.length})` : ''}
+          </Text>
+        </Group>
+        <Group gap={8} align="center">
+          {skipped ? (
+            <Select
+              size="xs"
+              data={WINDOW_OPTIONS}
+              value={window}
+              onChange={(v) => setWindow(v ?? '7')}
+              w={140}
+              comboboxProps={{ withinPortal: true }}
+            />
+          ) : matchStatus?.running ? (
+            <MatchProgress />
+          ) : (
+            <>
+              <Button
+                size="xs"
+                variant="default"
+                leftSection={<IconSparkles size={14} />}
+                loading={matchAll.isPending}
+                onClick={handleMatchAll}
+              >
+                Match all
+              </Button>
+              <TriageRules />
+            </>
+          )}
         </Group>
       </Group>
-      <Stack gap="sm" style={{ maxWidth: 860 }}>
-        {visible.map((item) => (
-          <CatchupCard
-            key={item.id}
-            item={item}
-            taskOptions={taskOptions}
-            bucketOptions={bucketOptions}
-          />
-        ))}
-      </Stack>
+
+      {isLoading ? (
+        <Center style={{ flex: 1, minHeight: 200 }}>
+          <Loader />
+        </Center>
+      ) : !source || source.length === 0 ? (
+        <Center style={{ flex: 1, minHeight: 200 }}>
+          <Stack align="center" gap="xs">
+            <Text fw={600}>{skipped ? 'Nothing skipped' : 'Inbox zero'}</Text>
+            <Text c="dimmed" fz="sm">
+              {skipped ? 'Items you skip in the inbox appear here.' : 'Nothing left to triage.'}
+            </Text>
+          </Stack>
+        </Center>
+      ) : visible.length === 0 ? (
+        <NoMatches query={query} />
+      ) : (
+        <Stack gap="sm" style={{ maxWidth: 860 }}>
+          {visible.map((item) => (
+            <CatchupCard
+              key={item.id}
+              item={item}
+              taskOptions={taskOptions}
+              bucketOptions={bucketOptions}
+              skipped={skipped}
+            />
+          ))}
+        </Stack>
+      )}
     </Box>
   );
 }

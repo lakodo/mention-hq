@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import engine as engine_registry
@@ -110,35 +110,89 @@ async def _skip_by_rules(db: AsyncSession) -> None:
     await triage.apply_rules(db, items)
 
 
-# How many unmatched inbox items to attempt per pass, so a burst of arrivals doesn't turn
-# into one unbounded run of brain calls. The rest wait for the next pass or "Match all".
+# How many unmatched inbox items to read per batch. A background pass does one batch and
+# stops; a drain ("Match all") loops batches until the inbox is empty. The batch bounds a
+# background pass and sets how often a drain commits and reports progress.
 _AUTO_MATCH_BATCH = 10
 
 # One pass at a time: a pass outlives the sync that scheduled it and auto-sync fires again
 # on a timer, so without this the passes would stack and call the brain in parallel.
 _matching = asyncio.Lock()
 _background: set[asyncio.Task] = set()
+_cancel = asyncio.Event()
 
 
-def schedule_auto_match() -> None:
-    """Run a brain-matching pass detached from the request, so no sync waits on the brain."""
+@dataclass
+class MatchProgress:
+    running: bool = False
+    total: int = 0
+    done: int = 0
+
+    @property
+    def remaining(self) -> int:
+        return max(0, self.total - self.done)
+
+
+_progress = MatchProgress()
+
+
+def match_status() -> MatchProgress:
+    return _progress
+
+
+def stop_matching() -> None:
+    """Ask a running drain to stop after the item it is on."""
+    _cancel.set()
+
+
+def schedule_auto_match(drain: bool = False) -> None:
+    """Run a brain-matching pass detached from the request, so no sync waits on the brain.
+
+    A background pass (drain=False) does a single bounded batch and bails if one is already
+    running. A drain (an explicit "Match all") waits its turn and works the whole inbox,
+    tracking progress and honouring a stop request.
+    """
     if not ai.status().available:
         return
-    task = asyncio.create_task(_auto_match_pass())
+    task = asyncio.create_task(_auto_match_pass(drain))
     _background.add(task)
     task.add_done_callback(_background.discard)
 
 
-async def _auto_match_pass() -> None:
-    if _matching.locked():
+async def _auto_match_pass(drain: bool) -> None:
+    if not drain and _matching.locked():
         return
     async with _matching:
+        _cancel.clear()
+        if drain:
+            _progress.running = True
+            _progress.total = await _count_unmatched()
+            _progress.done = 0
         try:
-            candidates = await _match_candidates()
-            for item_id, already_proposed in candidates:
-                await _match_one(item_id, already_proposed)
+            while True:
+                candidates = await _match_candidates()
+                if not candidates:
+                    break
+                for item_id, already_proposed in candidates:
+                    if _cancel.is_set():
+                        break
+                    await _match_one(item_id, already_proposed)
+                    if drain:
+                        _progress.done += 1
+                if not drain or _cancel.is_set():
+                    break
         except Exception as exc:
             log.warning("auto_match_pass_failed", error=str(exc))
+        finally:
+            _progress.running = False
+
+
+async def _count_unmatched() -> int:
+    async with SessionLocal() as db:
+        stmt = (
+            select(func.count()).select_from(Item).where(Item.triaged.is_(False), Item.matched_at.is_(None))
+        )
+        return (await db.execute(stmt)).scalar_one()
 
 
 async def _match_candidates() -> list[tuple[str, bool]]:

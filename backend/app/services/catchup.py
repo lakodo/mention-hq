@@ -45,6 +45,9 @@ async def confirm(db: AsyncSession, item_id: str, task_ids: list[str]) -> Item:
             raise LookupError(f"Task not found: {task_id}")
         await _decide(db, item_id, task_id, CONFIRMED)
     item.triaged = True
+    # Filing an item means it is handled, not skipped: clearing the reason lifts a skipped
+    # item off the skipped list and onto its task.
+    item.triage_reason = None
     await db.commit()
     return await _reload(db, item_id)
 

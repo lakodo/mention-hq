@@ -238,6 +238,13 @@ export interface Backup {
   created_at: string;
 }
 
+export interface MatchStatus {
+  running: boolean;
+  total: number;
+  done: number;
+  remaining: number;
+}
+
 export type AICredentialSource = 'keychain' | 'environment' | 'cli-login' | 'claude-cli' | 'none';
 
 export interface AIStatus {

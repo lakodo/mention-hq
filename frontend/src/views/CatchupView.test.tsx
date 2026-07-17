@@ -12,11 +12,49 @@ describe('CatchupView', () => {
     renderApp('/catchup');
 
     await waitFor(() => expect(screen.getAllByTestId('catchup-card')).toHaveLength(2));
-    expect(screen.getByText('2 items to triage')).toBeInTheDocument();
+    expect(screen.getByText('2 to triage')).toBeInTheDocument();
     expect(
       screen.getByText('thread: can someone look at the webhook retry storm?'),
     ).toBeInTheDocument();
     expect(screen.getByText('#payments-eng, 4 replies')).toBeInTheDocument();
+  });
+
+  it('files skipped items under the Skipped tab and un-skips them', async () => {
+    const user = userEvent.setup();
+    renderApp('/catchup');
+
+    const cards = await screen.findAllByTestId('catchup-card');
+    await user.click(within(cards[0]).getByRole('button', { name: 'Skip' }));
+
+    await user.click(screen.getByText('Skipped'));
+
+    const skippedCard = await screen.findByTestId('catchup-card');
+    expect(within(skippedCard).getByText('Skipped')).toBeInTheDocument();
+    await user.click(within(skippedCard).getByRole('button', { name: 'Un-skip' }));
+
+    expect(await screen.findByText('Nothing skipped')).toBeInTheDocument();
+  });
+
+  it('shows matching progress and can stop it', async () => {
+    const user = userEvent.setup();
+    let stopped = false;
+    server.use(
+      http.get('http://localhost:8000/api/catchup/match-status', () =>
+        HttpResponse.json({ running: true, total: 10, done: 3, remaining: 7 }),
+      ),
+      http.post('http://localhost:8000/api/catchup/match-stop', () => {
+        stopped = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderApp('/catchup');
+
+    expect(await screen.findByText('7 left')).toBeInTheDocument();
+    // The Match all button gives way to the progress while a pass runs.
+    expect(screen.queryByRole('button', { name: /Match all/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Stop' }));
+    await waitFor(() => expect(stopped).toBe(true));
   });
 
   it('filters the items to triage by the header search', async () => {
@@ -28,7 +66,7 @@ describe('CatchupView', () => {
 
     await waitFor(() => expect(screen.getAllByTestId('catchup-card')).toHaveLength(1));
     expect(screen.getByText('[webapp] dev/auth-session-timeout')).toBeInTheDocument();
-    expect(screen.getByText('1 item to triage (of 2)')).toBeInTheDocument();
+    expect(screen.getByText('1 to triage (of 2)')).toBeInTheDocument();
   });
 
   it('says so when the search matches no items', async () => {
