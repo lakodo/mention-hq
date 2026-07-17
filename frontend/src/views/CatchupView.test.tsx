@@ -62,10 +62,12 @@ describe('CatchupView', () => {
 
     // Without a manual refresh, the new task is attachable to the item still in the inbox.
     const remaining = await screen.findAllByTestId('catchup-card');
-    await user.click(within(remaining[0]).getByPlaceholderText('Attach to tasks…'));
-    expect(
-      await within(remaining[0]).findByText('Fresh subject · Uncategorized'),
-    ).toBeInTheDocument();
+    // Options portal out of the card into one shared node, so scope to this input's own
+    // listbox by the id it points at.
+    const input = within(remaining[0]).getByPlaceholderText('Attach to tasks…');
+    await user.click(input);
+    const listbox = document.getElementById(input.getAttribute('aria-controls')!)!;
+    expect(await within(listbox).findByText('Fresh subject · Uncategorized')).toBeInTheDocument();
   });
 
   it('links an item out to its source', async () => {
@@ -128,10 +130,11 @@ describe('CatchupView', () => {
     const cards = await screen.findAllByTestId('catchup-card');
     const card = cards[0];
 
-    // This dropdown is inline, so its options live within the card they belong to.
-    await user.click(within(card).getByPlaceholderText('Attach to tasks…'));
-    await user.click(await within(card).findByText(/Refund flow throws on partial captures/));
-    await user.click(await within(card).findByText(/Refresh token rotation on scope change/));
+    const input = within(card).getByPlaceholderText('Attach to tasks…');
+    await user.click(input);
+    const listbox = document.getElementById(input.getAttribute('aria-controls')!)!;
+    await user.click(await within(listbox).findByText(/Refund flow throws on partial captures/));
+    await user.click(await within(listbox).findByText(/Refresh token rotation on scope change/));
     await user.click(within(card).getByRole('button', { name: 'Attach' }));
 
     await waitFor(() => {
