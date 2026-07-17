@@ -167,6 +167,42 @@ class TestLinear:
             await linear.fetch()
 
     @respx.mock
+    async def test_backlog_issues_are_requested_and_mapped(self, linear):
+        """Assigned issues sitting in the backlog must come through, not only active ones."""
+        route = respx.post("https://api.linear.app/graphql").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "issues": {
+                            "nodes": [
+                                {
+                                    "id": "uuid-2",
+                                    "identifier": "DOC-1996",
+                                    "title": "link to message in message group",
+                                    "description": "",
+                                    "url": "https://linear.app/acme/issue/DOC-1996",
+                                    "updatedAt": "2026-06-25T09:00:00Z",
+                                    "branchName": "someone/doc-1996",
+                                    "state": {"name": "Backlog", "type": "backlog"},
+                                    "labels": {"nodes": []},
+                                    "project": None,
+                                }
+                            ]
+                        }
+                    }
+                },
+            )
+        )
+
+        item = (await linear.fetch())[0]
+
+        assert item.context == "DOC-1996"
+        assert item.status == "open"
+        # The query itself must ask Linear for backlog, or the server never returns these.
+        assert "backlog" in route.calls[0].request.read().decode()
+
+    @respx.mock
     async def test_user_id_is_looked_up_when_not_configured(self):
         route = respx.post("https://api.linear.app/graphql").mock(
             side_effect=[

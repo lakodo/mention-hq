@@ -17,7 +17,7 @@ query MyIssues($userId: ID!) {
   issues(
     filter: {
       assignee: { id: { eq: $userId } }
-      state: { type: { in: ["started", "unstarted", "triage"] } }
+      state: { type: { in: ["started", "unstarted", "triage", "backlog"] } }
     }
     first: 50
     orderBy: updatedAt
@@ -40,13 +40,19 @@ query MyIssues($userId: ID!) {
 
 VIEWER_QUERY = "query { viewer { id } }"
 
-STATE_TO_STATUS = {"started": "in_progress", "unstarted": "open", "triage": "open", "completed": "done"}
+STATE_TO_STATUS = {
+    "started": "in_progress",
+    "unstarted": "open",
+    "triage": "open",
+    "backlog": "open",
+    "completed": "done",
+}
 
 
 class LinearSource(Source):
     id = "linear"
     name = "Linear"
-    description = "Issues assigned to you that are started, unstarted or in triage"
+    description = "Issues assigned to you that are in backlog, triage, unstarted or started"
     setup = (
         "Linear → Settings → Security & access → Personal API keys → New key. "
         "A read-only key is enough; HQ never writes to Linear."
@@ -71,7 +77,11 @@ class LinearSource(Source):
     ]
 
     def detail(self) -> str:
-        return "Assigned issues · started, unstarted, triage" if self.is_configured() else "Not configured"
+        return (
+            "Assigned issues · backlog, triage, unstarted, started"
+            if self.is_configured()
+            else "Not configured"
+        )
 
     def is_configured(self) -> bool:
         return bool(self.get("api_key"))
