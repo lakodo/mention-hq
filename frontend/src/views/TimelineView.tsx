@@ -31,6 +31,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SourceDot } from '../components/SourceDot';
 import { PrStatusPill } from '../components/PrStatusPill';
+import { itemLabel } from '../components/ItemLabel';
 import { sourceMeta } from '../constants';
 import { errorMessage } from '../api/client';
 import {
@@ -245,11 +246,11 @@ function TimelineRow({
         <Box style={{ flex: 1, minWidth: 0 }}>
           {item.url ? (
             <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" truncate="end">
-              {item.label}
+              {itemLabel(item.label, item.emoji)}
             </Anchor>
           ) : (
             <Text fz="sm" truncate>
-              {item.label}
+              {itemLabel(item.label, item.emoji)}
             </Text>
           )}
           {item.context && (

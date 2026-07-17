@@ -66,6 +66,17 @@ class SlackSource(Source):
             help="Leave blank to detect it from the token",
             required=False,
         ),
+        ConfigField(
+            key="emoji_urls",
+            label="Custom emoji image URLs",
+            placeholder="https://emoji.slack-edge.com/T…/party-parrot/….png https://…/marmot-wave/….gif",
+            help=(
+                "Paste the image URLs of your workspace's custom emoji (space-separated). "
+                "HQ reads the emoji name from each URL and renders those :shortcodes: as the "
+                "image. Standard emoji already render without this."
+            ),
+            required=False,
+        ),
     ]
 
     def is_configured(self) -> bool:
@@ -126,7 +137,8 @@ class SlackSource(Source):
             names = await self._resolve_users(
                 client, {uid for match in matches.values() for uid in _mention_ids(match)}
             )
-        return [_to_item(match, names) for match in matches.values()]
+        emoji = _parse_emoji_urls(self.get("emoji_urls"))
+        return [_to_item(match, names, emoji) for match in matches.values()]
 
     async def _resolve_users(self, client: httpx.AsyncClient, ids: set[str]) -> dict[str, str]:
         """Ids -> display names. The directory answers first, so an id learned on an earlier
@@ -179,7 +191,21 @@ def _external_id(match: dict) -> str:
     return f"{channel.get('id', 'unknown')}:{_thread_ts(match)}"
 
 
-def _to_item(match: dict, names: dict[str, str]) -> RawItem:
+def _parse_emoji_urls(raw: str | None) -> dict[str, str]:
+    """Map a custom emoji name to its image URL from space-separated Slack emoji URLs.
+
+    A Slack emoji URL ends `.../{name}/{hash}.{ext}`, so the name is the second-to-last path
+    segment: `…/emoji.slack-edge.com/T04/party-parrot/abc.png` -> `party-parrot`.
+    """
+    out: dict[str, str] = {}
+    for url in (raw or "").split():
+        parts = url.rstrip("/").split("/")
+        if len(parts) >= 2 and parts[-2]:
+            out[parts[-2]] = url
+    return out
+
+
+def _to_item(match: dict, names: dict[str, str], emoji: dict[str, str]) -> RawItem:
     channel = match.get("channel") or {}
     raw = _message_text(match)
     thread_ts = _thread_ts(match)
@@ -190,6 +216,9 @@ def _to_item(match: dict, names: dict[str, str]) -> RawItem:
     # "#channel - message" (or "DM with @x - message"), so an item reads as itself without a
     # second line, and a thread that pinged you five times still shows as one.
     label = f"{_channel_label(channel, names)} - {body}"
+
+    # Which configured custom emoji actually appear, so the frontend can render just those.
+    used = {name: url for name, url in emoji.items() if f":{name}:" in label}
 
     return RawItem(
         source="slack",
@@ -203,7 +232,7 @@ def _to_item(match: dict, names: dict[str, str]) -> RawItem:
         # references but no identity, and never wins the task title. Keys read the raw text
         # so a ticket ref inside a link or mention isn't lost to rendering.
         reference_keys=all_reference_keys(raw),
-        extra={"thread_ts": thread_ts},
+        extra={"thread_ts": thread_ts, "emoji": used},
     )
 
 

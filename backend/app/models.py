@@ -224,6 +224,11 @@ class Item(Base):
     def pr_review_requested(self) -> bool:
         return bool((self.extra or {}).get("pr_review_requested"))
 
+    @property
+    def emoji(self) -> dict[str, str]:
+        """Custom emoji shortcodes used in the label, mapped to their image URL."""
+        return (self.extra or {}).get("emoji") or {}
+
 
 class Bucket(Base):
     """A topic column on the board, grouping tasks.

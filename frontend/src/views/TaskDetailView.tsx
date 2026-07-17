@@ -40,6 +40,7 @@ import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useState } from
 import { useNavigate, useParams } from 'react-router-dom';
 import { ReadToggle } from '../components/ReadToggle';
 import { PrStatusPill } from '../components/PrStatusPill';
+import { itemLabel } from '../components/ItemLabel';
 import { SourceDot } from '../components/SourceDot';
 import { StatusPill } from '../components/StatusPill';
 import { SLACK_ACCENT, sourceMeta } from '../constants';
@@ -130,13 +131,13 @@ function ItemCard({ item }: ItemCardProps) {
           {item.url ? (
             <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" lh={1.4}>
               <Group gap={4} wrap="nowrap">
-                {item.label}
+                {itemLabel(item.label, item.emoji)}
                 <IconExternalLink size={12} />
               </Group>
             </Anchor>
           ) : (
             <Text fz="sm" lh={1.4}>
-              {item.label}
+              {itemLabel(item.label, item.emoji)}
             </Text>
           )}
           {item.context && (

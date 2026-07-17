@@ -128,6 +128,7 @@ describe('CatchupView', () => {
       triaged_at: null,
       pr_status: null,
       pr_review_requested: false,
+      emoji: {},
       links: [
         {
           task: {

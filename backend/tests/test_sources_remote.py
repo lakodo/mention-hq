@@ -386,6 +386,26 @@ class TestSlack:
         assert ":party-parrot:" in label, "a custom workspace emoji has no Unicode, so it stays"
 
     @respx.mock
+    async def test_configured_custom_emoji_carry_their_image_url(self):
+        source = SlackSource(
+            {
+                "user_token": "xoxp-x",
+                "user_id": "U1",
+                "emoji_urls": "https://emoji.slack-edge.com/T04/party-parrot/abc123.gif",
+            }
+        )
+        match = {**SLACK_SEARCH["messages"]["matches"][0], "text": "good :party-parrot: work"}
+        respx.get("https://slack.com/api/search.messages").mock(
+            return_value=httpx.Response(200, json={"ok": True, "messages": {"matches": [match]}})
+        )
+
+        item = (await source.fetch())[0]
+
+        assert item.extra["emoji"] == {
+            "party-parrot": "https://emoji.slack-edge.com/T04/party-parrot/abc123.gif"
+        }
+
+    @respx.mock
     async def test_markup_is_rendered_into_readable_text(self, slack):
         match = {
             **SLACK_SEARCH["messages"]["matches"][0],

@@ -74,6 +74,7 @@ export function makeTasks(): Task[] {
           triaged_at: null,
           pr_status: null,
           pr_review_requested: false,
+          emoji: {},
         },
         {
           id: 'slack:C01:p1699999999',
@@ -87,6 +88,7 @@ export function makeTasks(): Task[] {
           triaged_at: null,
           pr_status: null,
           pr_review_requested: false,
+          emoji: {},
         },
         {
           id: 'todo:todo.md:12',
@@ -100,6 +102,7 @@ export function makeTasks(): Task[] {
           triaged_at: null,
           pr_status: null,
           pr_review_requested: false,
+          emoji: {},
         },
       ],
     },
@@ -130,6 +133,7 @@ export function makeTasks(): Task[] {
           triaged_at: null,
           pr_status: null,
           pr_review_requested: false,
+          emoji: {},
         },
       ],
     },
@@ -160,6 +164,7 @@ export function makeTasks(): Task[] {
           triaged_at: null,
           pr_status: null,
           pr_review_requested: false,
+          emoji: {},
         },
         {
           id: BRANCH_ITEM_ID,
@@ -173,6 +178,7 @@ export function makeTasks(): Task[] {
           triaged_at: null,
           pr_status: null,
           pr_review_requested: false,
+          emoji: {},
         },
       ],
     },
@@ -200,6 +206,7 @@ export function makeCatchupItems(): ItemWithLinks[] {
       triaged_at: null,
       pr_status: null,
       pr_review_requested: false,
+      emoji: {},
       links: [
         {
           task: {
@@ -226,6 +233,7 @@ export function makeCatchupItems(): ItemWithLinks[] {
       triaged_at: null,
       pr_status: null,
       pr_review_requested: false,
+      emoji: {},
       links: [],
     },
   ];

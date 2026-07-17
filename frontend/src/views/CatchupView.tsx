@@ -32,6 +32,7 @@ import {
 import { useMemo, useState } from 'react';
 import { SourceDot } from '../components/SourceDot';
 import { PrStatusPill } from '../components/PrStatusPill';
+import { itemLabel } from '../components/ItemLabel';
 import { LINK_STATE_META, sourceMeta } from '../constants';
 import { errorMessage } from '../api/client';
 import {
@@ -299,13 +300,13 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
       {item.url ? (
         <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" fw={600} mb={2}>
           <Group gap={4} wrap="nowrap" component="span" style={{ display: 'inline-flex' }}>
-            {item.label}
+            {itemLabel(item.label, item.emoji)}
             <IconExternalLink size={12} />
           </Group>
         </Anchor>
       ) : (
         <Text fz="sm" fw={600} mb={2}>
-          {item.label}
+          {itemLabel(item.label, item.emoji)}
         </Text>
       )}
       {item.context && (

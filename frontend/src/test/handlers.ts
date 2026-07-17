@@ -258,6 +258,7 @@ export const handlers = [
       triaged_at: null,
       pr_status: null,
       pr_review_requested: false,
+      emoji: {},
       links: taskIds.map((taskId) => {
         const task = db.tasks.find((t) => t.id === taskId)!;
         return {

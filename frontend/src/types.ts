@@ -25,6 +25,7 @@ export interface Item {
   triaged_at: string | null;
   pr_status: string | null;
   pr_review_requested: boolean;
+  emoji: Record<string, string>;
 }
 
 /** One item's attachment to one task, and who decided it. */

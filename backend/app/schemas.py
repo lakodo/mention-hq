@@ -32,6 +32,7 @@ class ItemOut(BaseModel):
     triaged_at: datetime | None = None
     pr_status: str | None = None
     pr_review_requested: bool = False
+    emoji: dict[str, str] = {}
 
 
 class LinkOut(BaseModel):
