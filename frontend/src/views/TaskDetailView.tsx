@@ -11,6 +11,7 @@ import {
   Group,
   Loader,
   Menu,
+  SegmentedControl,
   Stack,
   Text,
   Textarea,
@@ -54,6 +55,7 @@ import {
 import { matchesSidebarQuery } from '../lib/search';
 import {
   groupByTag,
+  groupTasksByBucket,
   newestItemAt,
   primarySource,
   sortTasksByRecency,
@@ -190,7 +192,7 @@ export function TaskDetailView() {
   );
   const [resizing, setResizing] = useState(false);
   const [sidebarQuery, setSidebarQuery] = useState('');
-  const [groupTags, setGroupTags] = useState(false);
+  const [groupMode, setGroupMode] = useState<'none' | 'bucket' | 'tags'>('none');
   const [showArchived, setShowArchived] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [suggestion, setSuggestion] = useState<BucketSuggestion | null>(null);
@@ -417,7 +419,12 @@ export function TaskDetailView() {
   };
 
   const { slack, other } = selected ? splitSlackItems(selected) : { slack: [], other: [] };
-  const sidebarGroups = groupTags ? groupByTag(filtered) : [{ tag: '', tasks: filtered }];
+  const sidebarGroups: { label: string; tasks: Task[] }[] =
+    groupMode === 'tags'
+      ? groupByTag(filtered).map((g) => ({ label: g.tag, tasks: g.tasks }))
+      : groupMode === 'bucket'
+        ? groupTasksByBucket(filtered)
+        : [{ label: '', tasks: filtered }];
   const busy = updateTask.isPending || createBucket.isPending;
 
   const sidebarRow = (task: Task) => {
@@ -582,13 +589,16 @@ export function TaskDetailView() {
 
         {!collapsed && selectedIds.size === 0 && (
           <Group px={12} pt={8} gap={8}>
-            <Button
+            <SegmentedControl
               size="xs"
-              variant={groupTags ? 'filled' : 'default'}
-              onClick={() => setGroupTags((g) => !g)}
-            >
-              Group by tags
-            </Button>
+              value={groupMode}
+              onChange={(v) => setGroupMode(v as 'none' | 'bucket' | 'tags')}
+              data={[
+                { label: 'Flat', value: 'none' },
+                { label: 'Bucket', value: 'bucket' },
+                { label: 'Tags', value: 'tags' },
+              ]}
+            />
             <Button
               size="xs"
               variant={showArchived ? 'filled' : 'default'}
@@ -644,8 +654,8 @@ export function TaskDetailView() {
 
         <Box style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
           {sidebarGroups.map((group) => (
-            <Box key={group.tag || 'all'}>
-              {groupTags && !collapsed && (
+            <Box key={group.label || 'all'}>
+              {groupMode !== 'none' && !collapsed && (
                 <Text
                   fz={10}
                   fw={700}
@@ -656,7 +666,7 @@ export function TaskDetailView() {
                   pb={4}
                   style={{ letterSpacing: '0.05em' }}
                 >
-                  {group.tag}
+                  {group.label}
                 </Text>
               )}
               {group.tasks.map(sidebarRow)}

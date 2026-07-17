@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   groupByBucket,
   groupByTag,
+  groupTasksByBucket,
   itemCountLabel,
   primarySource,
   splitSlackItems,
@@ -119,5 +120,17 @@ describe('groupByTag', () => {
     const groups = groupByTag([{ ...stripe, tags: ['a', 'b'] }]);
     expect(groups.map((g) => g.tag)).toEqual(['a', 'b']);
     expect(groups.every((g) => g.tasks.length === 1)).toBe(true);
+  });
+});
+
+describe('groupTasksByBucket', () => {
+  it('groups by bucket, alphabetically, Uncategorized last', () => {
+    const orphan = { ...auth, id: 'task:orphan', bucket: 'Uncategorized' };
+    const groups = groupTasksByBucket([...tasks, orphan]);
+    expect(groups.map((g) => g.label)).toEqual(['Auth', 'Payments', 'Uncategorized']);
+    expect(groups.find((g) => g.label === 'Payments')?.tasks.map((t) => t.id)).toEqual([
+      stripe.id,
+      refund.id,
+    ]);
   });
 });

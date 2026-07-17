@@ -107,6 +107,20 @@ export function groupByTag(tasks: Task[]): TagGroup[] {
   return [...byTag.keys()].sort().map((tag) => ({ tag, tasks: byTag.get(tag) ?? [] }));
 }
 
+export function groupTasksByBucket(tasks: Task[]): { label: string; tasks: Task[] }[] {
+  const byBucket = new Map<string, Task[]>();
+  for (const task of tasks) {
+    const bucket = task.bucket || UNCATEGORIZED;
+    const list = byBucket.get(bucket) ?? [];
+    list.push(task);
+    byBucket.set(bucket, list);
+  }
+  // Alphabetical, with Uncategorized last so a fully-filed board reads cleanly.
+  return [...byBucket.keys()]
+    .sort((a, b) => (a === UNCATEGORIZED ? 1 : b === UNCATEGORIZED ? -1 : a.localeCompare(b)))
+    .map((label) => ({ label, tasks: byBucket.get(label) ?? [] }));
+}
+
 export function countItems(tasks: Task[]): number {
   return tasks.reduce((total, task) => total + task.items.length, 0);
 }
