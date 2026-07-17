@@ -134,27 +134,27 @@ class TestEndpoint:
         db.add(task)
         await db.commit()
 
-        response = await client.post("/buckets/suggest/task:1")
+        response = await client.post("/api/buckets/suggest/task:1")
 
         assert response.status_code == 503
         assert "API key" in response.json()["detail"]
 
     async def test_suggest_404s_for_an_unknown_task(self, client):
-        assert (await client.post("/buckets/suggest/nope")).status_code == 404
+        assert (await client.post("/api/buckets/suggest/nope")).status_code == 404
 
     async def test_admin_reports_ai_status(self, client, isolated_secrets):
-        body = (await client.get("/admin/ai")).json()
+        body = (await client.get("/api/admin/ai")).json()
 
         assert body["available"] is False
         assert body["model"] == "claude-opus-4-8"
 
     async def test_setting_and_clearing_the_key(self, client, isolated_secrets):
-        set_response = await client.put("/admin/ai/key", json={"api_key": "sk-ant-xxx"})
+        set_response = await client.put("/api/admin/ai/key", json={"api_key": "sk-ant-xxx"})
         assert set_response.json()["source"] == "keychain"
 
-        cleared = await client.put("/admin/ai/key", json={"api_key": ""})
+        cleared = await client.put("/api/admin/ai/key", json={"api_key": ""})
         assert cleared.json()["available"] is False
 
     async def test_the_key_is_never_echoed_back(self, client, isolated_secrets):
-        response = await client.put("/admin/ai/key", json={"api_key": "sk-ant-supersecret"})
+        response = await client.put("/api/admin/ai/key", json={"api_key": "sk-ant-supersecret"})
         assert "supersecret" not in response.text

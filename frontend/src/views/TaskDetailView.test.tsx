@@ -145,7 +145,7 @@ describe('TaskDetailView', () => {
 
   it('explains itself when no AI credentials are configured', async () => {
     server.use(
-      http.post('http://localhost:8000/buckets/suggest/:taskId', () =>
+      http.post('http://localhost:8000/api/buckets/suggest/:taskId', () =>
         HttpResponse.json({ detail: 'No credentials. Run `ant auth login`.' }, { status: 503 }),
       ),
     );

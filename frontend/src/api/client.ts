@@ -20,7 +20,10 @@ import type {
   TaskPatch,
 } from '../types';
 
-export const API_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+// Relative, so the browser resolves it against wherever the app is served — behind the
+// Caddy proxy on a bare local domain, the Vite dev proxy, or the API serving the built SPA
+// itself. All three route /api to the backend, so the app never hardcodes a host or port.
+export const API_URL: string = import.meta.env.VITE_API_URL ?? '/api';
 
 export const api = axios.create({
   baseURL: API_URL,

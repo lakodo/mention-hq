@@ -111,7 +111,7 @@ describe('CatchupView', () => {
   });
 
   it('celebrates an empty inbox', async () => {
-    server.use(http.get('http://localhost:8000/catchup', () => HttpResponse.json([])));
+    server.use(http.get('http://localhost:8000/api/catchup', () => HttpResponse.json([])));
     renderApp('/catchup');
 
     expect(await screen.findByText('Inbox zero')).toBeInTheDocument();
@@ -119,8 +119,9 @@ describe('CatchupView', () => {
 
   it('surfaces the API detail when an action fails', async () => {
     server.use(
-      http.post(`http://localhost:8000/catchup/${encodeURIComponent(SLACK_ITEM_ID)}/confirm`, () =>
-        HttpResponse.json({ detail: `Task not found: ${PAYMENTS_TASK_ID}` }, { status: 404 }),
+      http.post(
+        `http://localhost:8000/api/catchup/${encodeURIComponent(SLACK_ITEM_ID)}/confirm`,
+        () => HttpResponse.json({ detail: `Task not found: ${PAYMENTS_TASK_ID}` }, { status: 404 }),
       ),
     );
     const user = userEvent.setup();

@@ -17,7 +17,7 @@ async def _sync(source: str | None) -> int:
 
     if not result.sources_synced and not result.errors:
         print("No sources are configured, so there was nothing to sync.")
-        print("Connect one in Admin (task dev, then http://localhost:5173).")
+        print("Connect one in Admin (task dev, then http://localhost:13001).")
         return 0
 
     print(f"Synced {', '.join(result.sources_synced)} in {result.duration_seconds}s")

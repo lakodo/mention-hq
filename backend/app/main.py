@@ -48,14 +48,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(tasks.router)
-app.include_router(buckets.router)
-app.include_router(catchup.router)
-app.include_router(sync.router)
-app.include_router(admin.router)
+# Everything the browser calls lives under /api, so the SPA owns every other path and a
+# reverse proxy can split the two by prefix alone — no route-by-route collision list.
+API_PREFIX = "/api"
+
+app.include_router(tasks.router, prefix=API_PREFIX)
+app.include_router(buckets.router, prefix=API_PREFIX)
+app.include_router(catchup.router, prefix=API_PREFIX)
+app.include_router(sync.router, prefix=API_PREFIX)
+app.include_router(admin.router, prefix=API_PREFIX)
 
 
-@app.get("/health", tags=["meta"])
+@app.get("/api/health", tags=["meta"])
 async def health() -> dict[str, str]:
     return {"status": "ok"}
 

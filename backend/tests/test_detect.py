@@ -63,7 +63,7 @@ class TestDetectEndpoint:
         fake_gh(LOGGED_IN)
         source_id = await connect("github", "Work")
 
-        response = await client.post(f"/admin/sources/{source_id}/detect")
+        response = await client.post(f"/api/admin/sources/{source_id}/detect")
 
         assert response.status_code == 200
         assert "gho_realtoken1234" not in response.text, "the browser must never see the token"
@@ -74,7 +74,7 @@ class TestDetectEndpoint:
         fake_gh(LOGGED_IN)
         source_id = await connect("github", "Work")
 
-        body = (await client.post(f"/admin/sources/{source_id}/detect")).json()
+        body = (await client.post(f"/api/admin/sources/{source_id}/detect")).json()
 
         assert body["applied"]["username"] == "someone"
         assert body["choices"]["org"] == ["acme", "widgets"]
@@ -87,7 +87,7 @@ class TestDetectEndpoint:
         fake_gh(LOGGED_IN)
         source_id = await connect("github", "Work")
 
-        body = (await client.post(f"/admin/sources/{source_id}/detect")).json()
+        body = (await client.post(f"/api/admin/sources/{source_id}/detect")).json()
 
         assert body["source"]["status"] == "unconfigured"
 
@@ -95,23 +95,23 @@ class TestDetectEndpoint:
         fake_gh({})
         source_id = await connect("github", "Work")
 
-        body = (await client.post(f"/admin/sources/{source_id}/detect")).json()
+        body = (await client.post(f"/api/admin/sources/{source_id}/detect")).json()
 
         assert body["available"] is False
         assert body["applied"] == {}
         assert isolated_secrets.get(source_id, "token") is None
 
     async def test_unknown_source_404s(self, client):
-        assert (await client.post("/admin/sources/nope/detect")).status_code == 404
+        assert (await client.post("/api/admin/sources/nope/detect")).status_code == 404
 
     async def test_the_picker_says_which_kinds_can_detect(self, client):
-        kinds = {k["kind"]: k for k in (await client.get("/admin/source-kinds")).json()}
+        kinds = {k["kind"]: k for k in (await client.get("/api/admin/source-kinds")).json()}
 
         assert kinds["github"]["detectable"] is True
         assert kinds["todo"]["detectable"] is False
 
     async def test_the_picker_carries_setup_prose_and_a_link(self, client):
-        kinds = {k["kind"]: k for k in (await client.get("/admin/source-kinds")).json()}
+        kinds = {k["kind"]: k for k in (await client.get("/api/admin/source-kinds")).json()}
 
         assert kinds["slack"]["setup"], "the fiddly ones need instructions"
         assert kinds["slack"]["setup_url"].startswith("https://")

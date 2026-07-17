@@ -69,7 +69,7 @@ async def connect(client):
     """Add a source the way Admin does, and hand back its id."""
 
     async def _connect(kind: str, name: str = "") -> str:
-        response = await client.post("/admin/sources", json={"kind": kind, "name": name})
+        response = await client.post("/api/admin/sources", json={"kind": kind, "name": name})
         assert response.status_code == 201, response.text
         return response.json()["id"]
 

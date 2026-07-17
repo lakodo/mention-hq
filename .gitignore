@@ -7,6 +7,10 @@ secret.key
 # Dev server output — see CLAUDE.md
 logs/
 
+# Your own reverse-proxy config, with whatever local domain you chose. Copy
+# Caddyfile.example to create it — see `task proxy`.
+Caddyfile
+
 # Database
 *.db
 *.db-journal
@@ -30,6 +34,9 @@ node_modules/
 frontend/dist/
 .vite/
 *.tsbuildinfo
+
+# Devbox plugin scaffolding — regenerated on install; we use our own Caddyfile
+devbox.d/
 
 # Devbox / direnv
 .devbox/

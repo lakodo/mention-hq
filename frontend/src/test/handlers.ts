@@ -23,7 +23,7 @@ import type {
   TaskPatch,
 } from '../types';
 
-const BASE = 'http://localhost:8000';
+const BASE = 'http://localhost:8000/api';
 
 interface Db {
   tasks: Task[];

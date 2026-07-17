@@ -76,7 +76,7 @@ Tools come from devbox, so run `devbox shell` (or let direnv do it) first.
 
 ```bash
 task setup            # install backend + frontend, create and migrate the DB
-task dev              # API (:8000) and UI (:5173)
+task dev              # API (:13000) and UI (:13001)
 task check            # what CI runs: lint, typecheck, migration drift, tests
 
 task back:test -- -k engine

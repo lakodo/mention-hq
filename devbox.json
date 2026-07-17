@@ -9,6 +9,8 @@
     "yarn": "1.22.22",
     // Task runner — see Taskfile.yml
     "go-task": "3.45.4",
+    // Reverse proxy for serving the app under a bare local domain — see `task proxy`
+    "caddy": "2.10.0",
     // Git hooks
     "pre-commit": "4.2.0"
   },

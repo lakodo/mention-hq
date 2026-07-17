@@ -9,7 +9,7 @@ See the root `README.md` for what to run and `CLAUDE.md` for conventions.
 
 ```bash
 task back:setup    # install dependencies, create and migrate the database
-task back:dev      # http://localhost:8000  — interactive API docs at /docs
+task back:dev      # http://localhost:13000  — interactive API docs at /docs
 task back:test
 ```
 

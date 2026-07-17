@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { renderApp } from '../test/utils';
 import { server } from '../test/server';
 
-const SYNC = 'http://localhost:8000/sync';
+const SYNC = 'http://localhost:8000/api/sync';
 
 describe('AppLayout sync', () => {
   it('reports a completed sync', async () => {
@@ -48,7 +48,7 @@ describe('AppLayout sync', () => {
 
   it('titles the header from the app settings', async () => {
     server.use(
-      http.get('http://localhost:8000/admin/settings', () =>
+      http.get('http://localhost:8000/api/admin/settings', () =>
         HttpResponse.json({
           app_name: 'Mission Control',
           secret_backend: 'keyring',
@@ -63,7 +63,7 @@ describe('AppLayout sync', () => {
 
   it('titles the browser tab from the app settings too', async () => {
     server.use(
-      http.get('http://localhost:8000/admin/settings', () =>
+      http.get('http://localhost:8000/api/admin/settings', () =>
         HttpResponse.json({
           app_name: 'Mission Control',
           secret_backend: 'keyring',

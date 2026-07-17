@@ -23,13 +23,30 @@ tasks:
       - echo "Personal HQ ready ✓  ->  task dev"
 
   dev:
-    desc: Run backend (:8000) and frontend (:5173) together
+    desc: Run backend (:13000) and frontend (:13001) together
     deps:
       - back:dev
       - front:dev
 
+  proxy:
+    desc: Serve the app at your bare domain (run alongside `task dev`; needs Caddyfile + hosts entry)
+    cmds:
+      # Your Caddyfile is gitignored — it carries whatever local name you picked. Scaffold
+      # it from the template on first run and point the user at the domain to edit.
+      - |
+        test -f Caddyfile || {
+          cp Caddyfile.example Caddyfile
+          echo "Created Caddyfile from the template. Edit the domain in it, then add it to"
+          echo "your hosts file (e.g. echo '127.0.0.1 myhq' | sudo tee -a /etc/hosts) and"
+          echo "re-run: task proxy"
+          exit 1
+        }
+      # Caddy binds port 80, which is privileged — so sudo, and an absolute path because
+      # sudo drops the devbox PATH that put caddy there. `task dev` must already be running.
+      - 'sudo "$(command -v caddy)" run --config Caddyfile --adapter caddyfile'
+
   serve:
-    desc: Build the UI and serve the whole app from the API alone, on :8000
+    desc: Build the UI and serve the whole app from the API alone, on :13000
     cmds:
       - task: front:build
       - task: back:dev

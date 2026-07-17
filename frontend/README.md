@@ -3,7 +3,7 @@
 React 19 + Vite + Mantine (stock theme) + TanStack Query.
 
 A client and nothing more: no data, no logic the backend doesn't already own. It needs the
-backend running at `http://localhost:8000` — see the root `README.md`.
+backend running at `http://localhost:13000` — see the root `README.md`.
 
 ## Running
 
@@ -11,7 +11,7 @@ Node and yarn come from devbox, not your global PATH. From inside `devbox shell`
 
 ```bash
 task front:deps    # yarn install
-task front:dev     # http://localhost:5173
+task front:dev     # http://localhost:13001
 task front:test
 task front:lint && task front:typecheck
 ```

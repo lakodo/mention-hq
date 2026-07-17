@@ -40,7 +40,7 @@ describe('LogView', () => {
   });
 
   it('says so when nothing has synced yet', async () => {
-    server.use(http.get('http://localhost:8000/sync/status', () => HttpResponse.json([])));
+    server.use(http.get('http://localhost:8000/api/sync/status', () => HttpResponse.json([])));
     renderApp('/log');
 
     expect(await screen.findByText('No syncs yet.')).toBeInTheDocument();

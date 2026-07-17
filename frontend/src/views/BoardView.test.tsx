@@ -42,8 +42,8 @@ describe('BoardView', () => {
 
   it('tells the user where to go on a fresh install with no buckets', async () => {
     server.use(
-      http.get('http://localhost:8000/buckets', () => HttpResponse.json([])),
-      http.get('http://localhost:8000/tasks', () => HttpResponse.json([])),
+      http.get('http://localhost:8000/api/buckets', () => HttpResponse.json([])),
+      http.get('http://localhost:8000/api/tasks', () => HttpResponse.json([])),
     );
     renderApp('/');
 
@@ -52,7 +52,7 @@ describe('BoardView', () => {
   });
 
   it('still shows tasks under Uncategorized when no bucket claims them', async () => {
-    server.use(http.get('http://localhost:8000/buckets', () => HttpResponse.json([])));
+    server.use(http.get('http://localhost:8000/api/buckets', () => HttpResponse.json([])));
     renderApp('/');
 
     // Nothing may disappear from the board just because its bucket is gone.

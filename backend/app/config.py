@@ -31,12 +31,12 @@ class Settings(BaseSettings):
     frontend_dist: Path = BACKEND_DIR.parent / "frontend" / "dist"
 
     sync_on_startup: bool = False
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:13001"
 
     # Binding beyond loopback would expose an unauthenticated API that can read your
     # keychain-backed tokens. Changing this is a deliberate, documented risk.
     host: str = "127.0.0.1"
-    port: int = 8000
+    port: int = 13000
 
     @property
     def database_url(self) -> str:
