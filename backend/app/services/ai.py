@@ -86,12 +86,13 @@ class TaskMatches(BaseModel):
     matches: list[TaskMatch] = Field(default_factory=list)
 
 
-NEXT_ACTION_SYSTEM_PROMPT = """You are a personal productivity assistant. Given a task and \
-its recent items, predict the single most important next action the person should take.
-
-Be concrete and specific — not "review the PR" but "check the review comments on PR #42 and \
-address the change-request from the last reviewer". If the items provide no clear signal, say \
-so honestly. Keep the answer to one or two sentences."""
+NEXT_ACTION_SYSTEM_PROMPT = (
+    "You are a personal productivity assistant. Given a task and its recent items, predict the "
+    "single most important next action the person should take.\n\n"
+    'Be concrete and specific — not "review the PR" but "check the review comments on PR #42 and '
+    'address the change-request from the last reviewer". If the items provide no clear signal, say '
+    "so honestly. Keep the answer to one or two sentences."
+)
 
 
 class NextAction(BaseModel):

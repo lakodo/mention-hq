@@ -24,7 +24,7 @@ import {
   IconSortAscending,
   IconSortDescending,
 } from '@tabler/icons-react';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SourceDot } from '../components/SourceDot';
 import { PrStatusPill } from '../components/PrStatusPill';
@@ -186,13 +186,11 @@ function TimelineRow({
   const navigate = useNavigate();
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const tasks = confirmedTasks(item);
-  // Keep a stable key for the modal so it remounts when the item changes.
-  const stableKey = useRef(item.id);
 
   return (
     <>
       <AttachModal
-        key={stableKey.current}
+        key={item.id}
         item={item}
         taskOptions={taskOptions}
         bucketOptions={bucketOptions}
