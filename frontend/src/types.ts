@@ -22,6 +22,7 @@ export interface Item {
   triaged: boolean;
   triage_reason: string | null;
   triaged_at: string | null;
+  pr_status: string | null;
 }
 
 /** One item's attachment to one task, and who decided it. */

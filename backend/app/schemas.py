@@ -30,6 +30,7 @@ class ItemOut(BaseModel):
     triaged: bool
     triage_reason: str | None = None
     triaged_at: datetime | None = None
+    pr_status: str | None = None
 
 
 class LinkOut(BaseModel):

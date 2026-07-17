@@ -203,6 +203,10 @@ class Item(Base):
     def tasks(self) -> list[Task]:
         return [link.task for link in self.links if link.state != REJECTED]
 
+    @property
+    def pr_status(self) -> str | None:
+        return (self.extra or {}).get("pr_status")
+
 
 class Bucket(Base):
     """A topic column on the board, grouping tasks.

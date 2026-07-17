@@ -92,6 +92,7 @@ class GitHubSource(Source):
             (f"is:issue assignee:{username} org:{org} is:open", "issue"),
         ]
         items: list[RawItem] = []
+        pr_review_status: dict[str, str] = {}
         async with httpx.AsyncClient(timeout=20) as client:
             for query, kind in queries:
                 response = await client.get(
@@ -102,6 +103,36 @@ class GitHubSource(Source):
                 response.raise_for_status()
                 for raw in response.json().get("items", []):
                     items.append(_to_item(raw, kind))
+
+            # Determine review status for open PRs via two focused queries.
+            base_pr_q = f"is:pr author:{username} org:{org} is:open"
+            for review_state, status_label in (
+                ("changes_requested", "changes_requested"),
+                ("approved", "approved"),
+            ):
+                r = await client.get(
+                    f"{API_ROOT}/search/issues",
+                    headers=self._headers(),
+                    params={
+                        "q": f"{base_pr_q} review:{review_state}",
+                        "per_page": 50,
+                        "sort": "updated",
+                    },
+                )
+                if r.is_success:
+                    for raw in r.json().get("items", []):
+                        repo = _repo_from_url(raw.get("repository_url", "")) or "unknown/unknown"
+                        pr_review_status[f"{repo}#{raw['number']}"] = status_label
+
+        for item in items:
+            if item.source == "pr":
+                draft = item.extra.get("draft", False)
+                status = (
+                    "draft"
+                    if draft
+                    else pr_review_status.get(item.external_id, "open")
+                )
+                item.extra["pr_status"] = status
         return items
 
 
