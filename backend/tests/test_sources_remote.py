@@ -39,21 +39,29 @@ def github() -> GitHubSource:
 
 def _github_search(pr_json: dict):
     """A respx side-effect for search/issues: the base PR query returns `pr_json`; the issue
-    query and the two review-status queries the source also fires return nothing."""
+    query returns nothing."""
 
     def handler(request):
         q = request.url.params.get("q", "")
-        if q.startswith("is:pr") and "review:" not in q:
+        if q.startswith("is:pr"):
             return httpx.Response(200, json=pr_json)
         return httpx.Response(200, json={"items": []})
 
     return handler
 
 
+def _github_graphql(nodes: list | None = None):
+    """Mock the review-state GraphQL call. Empty by default (no review data)."""
+    respx.post("https://api.github.com/graphql").mock(
+        return_value=httpx.Response(200, json={"data": {"search": {"nodes": nodes or []}}})
+    )
+
+
 class TestGitHub:
     @respx.mock
     async def test_maps_a_pull_request(self, github):
         respx.get("https://api.github.com/search/issues").mock(side_effect=_github_search(PR_SEARCH))
+        _github_graphql()
 
         items = await github.fetch()
 
@@ -70,6 +78,7 @@ class TestGitHub:
     @respx.mock
     async def test_identity_is_its_own_ref_and_the_cited_ticket_is_a_reference(self, github):
         respx.get("https://api.github.com/search/issues").mock(side_effect=_github_search(PR_SEARCH))
+        _github_graphql()
 
         item = (await github.fetch())[0]
 
@@ -81,6 +90,7 @@ class TestGitHub:
     async def test_a_merged_pr_reports_merged(self, github):
         merged = {"items": [{**PR_SEARCH["items"][0], "pull_request": {"merged_at": "2026-07-16T11:00:00Z"}}]}
         respx.get("https://api.github.com/search/issues").mock(side_effect=_github_search(merged))
+        _github_graphql()
 
         assert (await github.fetch())[0].status == "merged"
 
@@ -88,8 +98,28 @@ class TestGitHub:
     async def test_a_draft_pr_is_open_not_in_progress(self, github):
         draft = {"items": [{**PR_SEARCH["items"][0], "draft": True}]}
         respx.get("https://api.github.com/search/issues").mock(side_effect=_github_search(draft))
+        _github_graphql()
 
         assert (await github.fetch())[0].status == "open"
+
+    @respx.mock
+    async def test_a_pr_reports_changes_requested_and_a_pending_review(self, github):
+        respx.get("https://api.github.com/search/issues").mock(side_effect=_github_search(PR_SEARCH))
+        _github_graphql(
+            [
+                {
+                    "number": 1201,
+                    "repository": {"nameWithOwner": "acme/widgets"},
+                    "reviewDecision": "CHANGES_REQUESTED",
+                    "reviewRequests": {"totalCount": 1},
+                }
+            ]
+        )
+
+        item = (await github.fetch())[0]
+
+        assert item.extra["pr_status"] == "changes_requested"
+        assert item.extra["pr_review_requested"] is True
 
     async def test_unconfigured_fetches_nothing_rather_than_failing(self):
         assert await GitHubSource({}).fetch() == []

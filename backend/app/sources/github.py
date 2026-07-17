@@ -92,7 +92,6 @@ class GitHubSource(Source):
             (f"is:issue assignee:{username} org:{org} is:open", "issue"),
         ]
         items: list[RawItem] = []
-        pr_review_status: dict[str, str] = {}
         async with httpx.AsyncClient(timeout=20) as client:
             for query, kind in queries:
                 response = await client.get(
@@ -104,36 +103,59 @@ class GitHubSource(Source):
                 for raw in response.json().get("items", []):
                     items.append(_to_item(raw, kind))
 
-            # Determine review status for open PRs via two focused queries.
-            base_pr_q = f"is:pr author:{username} org:{org} is:open"
-            for review_state, status_label in (
-                ("changes_requested", "changes_requested"),
-                ("approved", "approved"),
-            ):
-                r = await client.get(
-                    f"{API_ROOT}/search/issues",
-                    headers=self._headers(),
-                    params={
-                        "q": f"{base_pr_q} review:{review_state}",
-                        "per_page": 50,
-                        "sort": "updated",
-                    },
-                )
-                if r.is_success:
-                    for raw in r.json().get("items", []):
-                        repo = _repo_from_url(raw.get("repository_url", "")) or "unknown/unknown"
-                        pr_review_status[f"{repo}#{raw['number']}"] = status_label
+            review = await self._review_states(client, username, org)
 
+        # A PR carries two independent facts: the overall review decision, and whether a
+        # reviewer is still pending — a PR can be both "changes requested" and awaiting review.
         for item in items:
             if item.source == "pr":
-                draft = item.extra.get("draft", False)
-                status = (
-                    "draft"
-                    if draft
-                    else pr_review_status.get(item.external_id, "open")
-                )
-                item.extra["pr_status"] = status
+                decision, pending = review.get(item.external_id, (None, False))
+                item.extra["pr_status"] = _pr_status(item.extra.get("draft", False), decision)
+                item.extra["pr_review_requested"] = pending
         return items
+
+    async def _review_states(
+        self, client: httpx.AsyncClient, username: str, org: str
+    ) -> dict[str, tuple[str | None, bool]]:
+        """`{repo#number: (review_decision, has_pending_reviewer)}` for the open PRs.
+
+        One GraphQL call, because the REST search only exposes the single overall decision
+        and can't say a changes-requested PR also has a review still pending.
+        """
+        query = """
+        query($q: String!) {
+          search(query: $q, type: ISSUE, first: 50) {
+            nodes {
+              ... on PullRequest {
+                number
+                repository { nameWithOwner }
+                reviewDecision
+                reviewRequests { totalCount }
+              }
+            }
+          }
+        }
+        """
+        variables = {"q": f"is:pr author:{username} org:{org} is:open"}
+        try:
+            response = await client.post(
+                f"{API_ROOT}/graphql",
+                headers=self._headers(),
+                json={"query": query, "variables": variables},
+            )
+            nodes = response.json()["data"]["search"]["nodes"]
+        except (httpx.HTTPError, KeyError, TypeError):
+            # Review state is a nicety; a PR without it still shows as an open PR.
+            return {}
+
+        states: dict[str, tuple[str | None, bool]] = {}
+        for node in nodes:
+            if not node:
+                continue
+            repo = (node.get("repository") or {}).get("nameWithOwner", "unknown/unknown")
+            pending = (node.get("reviewRequests") or {}).get("totalCount", 0) > 0
+            states[f"{repo}#{node['number']}"] = (node.get("reviewDecision"), pending)
+        return states
 
 
 def _to_item(raw: dict, kind: str) -> RawItem:
@@ -160,6 +182,19 @@ def _to_item(raw: dict, kind: str) -> RawItem:
         reference_keys=references,
         extra={"repo": repo, "labels": labels, "draft": raw.get("draft", False)},
     )
+
+
+_REVIEW_DECISION = {
+    "CHANGES_REQUESTED": "changes_requested",
+    "APPROVED": "approved",
+    "REVIEW_REQUIRED": "review_required",
+}
+
+
+def _pr_status(draft: bool, decision: str | None) -> str:
+    if draft:
+        return "draft"
+    return _REVIEW_DECISION.get(decision or "", "open")
 
 
 def _status(raw: dict, kind: str) -> str:

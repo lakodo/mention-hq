@@ -31,6 +31,7 @@ class ItemOut(BaseModel):
     triage_reason: str | None = None
     triaged_at: datetime | None = None
     pr_status: str | None = None
+    pr_review_requested: bool = False
 
 
 class LinkOut(BaseModel):

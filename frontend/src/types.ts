@@ -23,6 +23,7 @@ export interface Item {
   triage_reason: string | null;
   triaged_at: string | null;
   pr_status: string | null;
+  pr_review_requested: boolean;
 }
 
 /** One item's attachment to one task, and who decided it. */

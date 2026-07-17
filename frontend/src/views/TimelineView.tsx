@@ -221,7 +221,13 @@ function TimelineRow({
               {item.context}
             </Text>
           )}
-          {item.pr_status && <PrStatusPill status={item.pr_status} size="xs" />}
+          {item.pr_status && (
+            <PrStatusPill
+              status={item.pr_status}
+              reviewRequested={item.pr_review_requested}
+              size="xs"
+            />
+          )}
         </Box>
 
         {tasks.length > 0 ? (

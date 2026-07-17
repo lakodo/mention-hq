@@ -311,7 +311,13 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
           {item.context}
         </Text>
       )}
-      {item.pr_status && <PrStatusPill status={item.pr_status} size="xs" />}
+      {item.pr_status && (
+        <PrStatusPill
+          status={item.pr_status}
+          reviewRequested={item.pr_review_requested}
+          size="xs"
+        />
+      )}
 
       {shownLinks.length > 0 && (
         <Stack gap={6} mb="sm">

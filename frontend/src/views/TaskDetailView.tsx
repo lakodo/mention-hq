@@ -144,7 +144,13 @@ function ItemCard({ item }: ItemCardProps) {
               {item.context}
             </Text>
           )}
-          {item.pr_status && <PrStatusPill status={item.pr_status} size="xs" />}
+          {item.pr_status && (
+            <PrStatusPill
+              status={item.pr_status}
+              reviewRequested={item.pr_review_requested}
+              size="xs"
+            />
+          )}
         </Box>
         <Text fz="xs" c="dimmed" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
           {formatAgo(item.occurred_at)}

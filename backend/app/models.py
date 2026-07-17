@@ -217,6 +217,10 @@ class Item(Base):
     def pr_status(self) -> str | None:
         return (self.extra or {}).get("pr_status")
 
+    @property
+    def pr_review_requested(self) -> bool:
+        return bool((self.extra or {}).get("pr_review_requested"))
+
 
 class Bucket(Base):
     """A topic column on the board, grouping tasks.
