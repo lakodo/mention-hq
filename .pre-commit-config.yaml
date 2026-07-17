@@ -21,6 +21,14 @@ repos:
         entry: python bin/check-comments.py
         types: [python]
 
+      - id: no-assistant-attribution
+        name: "global:   no Co-Authored-By / 'Generated with Claude' in commit message"
+        language: system
+        entry: python bin/check-commit-message.py
+        stages: [commit-msg]
+        always_run: true
+        pass_filenames: true
+
       - id: check-private-key
         name: "security: block committed private keys"
         language: system
