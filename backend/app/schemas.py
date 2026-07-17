@@ -84,6 +84,7 @@ class TaskOut(BaseModel):
 
     id: str
     title: str
+    description: str | None = None
     bucket: str
     status: Status
     tags: list[str]
@@ -99,12 +100,14 @@ class TaskPatch(BaseModel):
     unread: bool | None = None
     status: Status | None = None
     title: str | None = None
+    description: str | None = None
     tags: list[str] | None = None
     archived: bool | None = None
 
 
 class TaskCreate(BaseModel):
     title: str
+    description: str | None = None
     bucket: str | None = None
     tags: list[str] = []
 

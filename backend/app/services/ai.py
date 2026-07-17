@@ -191,14 +191,17 @@ async def suggest_tasks(db: AsyncSession, item: Item) -> list[TaskMatch]:
 
 def _build_match_prompt(item: Item, tasks: list[Task]) -> str:
     keys = (item.extra.get("reference_keys") or []) + (item.extra.get("identity_keys") or [])
-    lines = "\n".join(f"- {t.id} | {t.title} | bucket: {t.bucket}" for t in tasks[:40])
+    lines = "\n".join(
+        f"- {t.id} | {t.title}{f' — {t.description}' if t.description else ''} | bucket: {t.bucket}"
+        for t in tasks[:40]
+    )
     return f"""Item:
   source: {item.source}
   label: {item.label}
   context: {item.context or "none"}
   keys: {", ".join(keys) or "none"}
 
-Existing tasks (id | title | bucket):
+Existing tasks (id | title[description] | bucket):
 {lines}
 
 Which of these tasks does the item belong to? Return only genuine matches, none if unsure."""

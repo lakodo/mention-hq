@@ -64,6 +64,7 @@ export interface TriageRuleCreate {
 export interface Task {
   id: string;
   title: string;
+  description: string | null;
   bucket: string;
   status: Status;
   tags: string[];
@@ -259,12 +260,14 @@ export interface TaskPatch {
   unread?: boolean;
   status?: Status;
   title?: string;
+  description?: string | null;
   tags?: string[];
   archived?: boolean;
 }
 
 export interface TaskCreate {
   title: string;
+  description?: string | null;
   bucket?: string;
   tags?: string[];
 }
