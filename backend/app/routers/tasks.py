@@ -64,6 +64,7 @@ async def create_task(payload: TaskCreate, db: AsyncSession = Depends(get_db)) -
     task = Task(
         id=f"task:{uuid.uuid4().hex[:12]}",
         title=title,
+        description=payload.description,
         bucket=payload.bucket or matcher.assign(title, payload.tags),
         bucket_override=payload.bucket is not None,
         status="open",
@@ -102,6 +103,8 @@ async def patch_task(task_id: str, patch: TaskPatch, db: AsyncSession = Depends(
     if patch.title is not None and patch.title.strip():
         task.title = patch.title.strip()
         task.title_override = True
+    if patch.description is not None:
+        task.description = patch.description or None
     if patch.tags is not None:
         task.tags = patch.tags
     if patch.unread is not None:

@@ -13,6 +13,7 @@ import {
   Menu,
   Stack,
   Text,
+  Textarea,
   TextInput,
   Tooltip,
 } from '@mantine/core';
@@ -186,6 +187,7 @@ export function TaskDetailView() {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [suggestion, setSuggestion] = useState<BucketSuggestion | null>(null);
+  const [descDraft, setDescDraft] = useState<string | null>(null);
 
   const { data: tasks, isLoading } = useTasks(showArchived ? { archived: true } : {});
 
@@ -204,6 +206,7 @@ export function TaskDetailView() {
   // Opening a task reads it — that's what un-bolds it on the board and in the list.
   useEffect(() => {
     if (selected?.unread) updateTask.mutate({ id: selected.id, patch: { unread: false } });
+    setDescDraft(null);
     // Only when the opened task changes, not on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
@@ -648,6 +651,37 @@ export function TaskDetailView() {
             <Text fz={28} fw={700} lh={1.3} my={14}>
               {selected.title}
             </Text>
+
+            {descDraft !== null ? (
+              <Textarea
+                autoFocus
+                autosize
+                minRows={2}
+                maxRows={8}
+                size="sm"
+                mb="md"
+                value={descDraft}
+                onChange={(e) => setDescDraft(e.currentTarget.value)}
+                onBlur={() => {
+                  const trimmed = descDraft.trim() || null;
+                  updateTask.mutate({ id: selected.id, patch: { description: trimmed } });
+                  setDescDraft(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setDescDraft(null);
+                }}
+              />
+            ) : (
+              <Text
+                fz="sm"
+                c={selected.description ? undefined : 'dimmed'}
+                mb="md"
+                style={{ cursor: 'text', whiteSpace: 'pre-wrap' }}
+                onClick={() => setDescDraft(selected.description ?? '')}
+              >
+                {selected.description ?? 'Add a description…'}
+              </Text>
+            )}
 
             <Group gap={8} mb="lg">
               <StatusPill status={selected.status} />

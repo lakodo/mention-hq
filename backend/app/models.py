@@ -108,6 +108,7 @@ class Task(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
     bucket: Mapped[str] = mapped_column(String, nullable=False, default="Uncategorized")
     # Set when the user picks a bucket by hand; sync must not clobber it.
     bucket_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
