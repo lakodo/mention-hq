@@ -35,6 +35,7 @@ import {
 import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ReadToggle } from '../components/ReadToggle';
+import { PrStatusPill } from '../components/PrStatusPill';
 import { SourceDot } from '../components/SourceDot';
 import { StatusPill } from '../components/StatusPill';
 import { SLACK_ACCENT, sourceMeta } from '../constants';
@@ -106,6 +107,7 @@ function ItemCard({ item }: ItemCardProps) {
               {item.context}
             </Text>
           )}
+          {item.pr_status && <PrStatusPill status={item.pr_status} size="xs" />}
         </Box>
         <Text fz="xs" c="dimmed" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
           {formatAgo(item.occurred_at)}

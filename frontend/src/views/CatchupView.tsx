@@ -26,6 +26,7 @@ import {
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { SourceDot } from '../components/SourceDot';
+import { PrStatusPill } from '../components/PrStatusPill';
 import { LINK_STATE_META, sourceMeta } from '../constants';
 import { errorMessage } from '../api/client';
 import {
@@ -215,6 +216,7 @@ function CatchupCard({ item, taskOptions, bucketOptions }: CatchupCardProps) {
           {item.context}
         </Text>
       )}
+      {item.pr_status && <PrStatusPill status={item.pr_status} size="xs" />}
 
       {item.links.length > 0 && (
         <Stack gap={6} mb="sm">

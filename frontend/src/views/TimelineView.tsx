@@ -18,6 +18,7 @@ import { IconSortAscending, IconSortDescending } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SourceDot } from '../components/SourceDot';
+import { PrStatusPill } from '../components/PrStatusPill';
 import { sourceMeta } from '../constants';
 import { useItems } from '../api/hooks';
 import { filterItems } from '../lib/search';
@@ -208,6 +209,7 @@ export function TimelineView() {
                     {item.context}
                   </Text>
                 )}
+                {item.pr_status && <PrStatusPill status={item.pr_status} size="xs" />}
               </Box>
 
               {tasks.length > 0 ? (
