@@ -954,16 +954,9 @@ export function TaskDetailView() {
               />
             )}
 
-            {nextActionResult && (
-              <Alert
-                mb="md"
-                color="indigo"
-                variant="light"
-                title="Next action"
-                withCloseButton
-                onClose={() => setNextActionResult(null)}
-              >
-                <Text fz="sm">{nextActionResult.action}</Text>
+            {(nextActionResult?.action ?? selected.next_action) && (
+              <Alert mb="md" color="indigo" variant="light" title="Next action">
+                <Text fz="sm">{nextActionResult?.action ?? selected.next_action}</Text>
               </Alert>
             )}
 

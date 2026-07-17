@@ -27,6 +27,7 @@ import {
   IconChevronUp,
   IconPencil,
   IconPlus,
+  IconSparkles,
   IconTrash,
 } from '@tabler/icons-react';
 import { useState } from 'react';
@@ -40,6 +41,7 @@ import {
   useCreateBucket,
   useDeleteBucket,
   useDetectSource,
+  useEnrichTasks,
   useReassignBuckets,
   useRemoveSource,
   useRenameSource,
@@ -835,6 +837,7 @@ function SourcesSection() {
 function AISection() {
   const { data: ai } = useAIStatus();
   const update = useUpdateAIKey();
+  const enrich = useEnrichTasks();
   const [key, setKey] = useState('');
 
   return (
@@ -895,6 +898,31 @@ function AISection() {
           Clear
         </Button>
       </Group>
+
+      <Text fz="xs" c="dimmed" mt="md" mb={6}>
+        Precompute the next action for every task that doesn't have one yet — the tasks that predate
+        this feature. New attachments recompute theirs automatically.
+      </Text>
+      <Button
+        size="xs"
+        variant="light"
+        color="indigo"
+        leftSection={<IconSparkles size={14} />}
+        loading={enrich.isPending}
+        disabled={!ai?.available}
+        onClick={() =>
+          enrich.mutate(undefined, {
+            onSuccess: (r) =>
+              ok(
+                'Working on it',
+                `Computing next actions for ${r.scheduled} tasks in the background.`,
+              ),
+            onError: fail,
+          })
+        }
+      >
+        Compute next actions
+      </Button>
     </Card>
   );
 }

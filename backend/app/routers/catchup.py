@@ -15,7 +15,7 @@ from app.schemas import (
     TaskOut,
     TriageRequest,
 )
-from app.services import ai, catchup
+from app.services import ai, catchup, enrich
 from app.services.sync import match_status, schedule_auto_match, stop_matching
 
 router = APIRouter(prefix="/catchup", tags=["catchup"])
@@ -69,9 +69,13 @@ async def list_untriaged(db: AsyncSession = Depends(get_db), limit: int = 100):
 @router.post("/{item_id}/confirm", response_model=ItemWithLinks)
 async def confirm(item_id: str, request: ConfirmRequest, db: AsyncSession = Depends(get_db)):
     try:
-        return await catchup.confirm(db, item_id, request.task_ids)
+        result = await catchup.confirm(db, item_id, request.task_ids)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    # The task's items changed, so its next action and recommended bucket may have too.
+    for task_id in request.task_ids:
+        enrich.schedule_enrich(task_id)
+    return result
 
 
 @router.post("/{item_id}/reject/{task_id}", response_model=ItemWithLinks)
@@ -89,11 +93,13 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await catchup.create_task_from_item(
+        task = await catchup.create_task_from_item(
             db, item_id, request.title, request.bucket, request.priority
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    enrich.schedule_enrich(task.id)
+    return task
 
 
 @router.post("/{item_id}/triage", response_model=ItemWithLinks)

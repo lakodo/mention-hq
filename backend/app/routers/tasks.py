@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, Task
 from app.schemas import NextActionOut, TaskCreate, TaskOut, TaskPatch
-from app.services import ai
+from app.services import ai, enrich
 from app.services.buckets import UNCATEGORIZED, load_matcher
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -79,9 +79,19 @@ async def create_task(payload: TaskCreate, db: AsyncSession = Depends(get_db)) -
     )
     db.add(task)
     await db.commit()
+    # Fill a recommended bucket (when none was given) and a first next action in the
+    # background, so the brain never holds up the create response.
+    enrich.schedule_enrich(task.id)
     # A relationship on a just-added instance is unloaded rather than empty, so
     # serialising it would trigger a lazy load, which raises under async.
     return await _load(db, task.id)
+
+
+@router.post("/enrich", status_code=202)
+async def enrich_tasks(db: AsyncSession = Depends(get_db)) -> dict[str, int]:
+    """Backfill: compute the next action for every active task that lacks one, in the
+    background. Returns how many were scheduled."""
+    return {"scheduled": await enrich.backfill(db)}
 
 
 @router.get("/{task_id}", response_model=TaskOut)
@@ -161,6 +171,9 @@ async def next_action(task_id: str, db: AsyncSession = Depends(get_db)) -> NextA
         result = await ai.next_action(task)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    # Persist it too, so the next open shows it without another call.
+    task.next_action = result.action
+    await db.commit()
     return NextActionOut(action=result.action, confidence=result.confidence)
 
 

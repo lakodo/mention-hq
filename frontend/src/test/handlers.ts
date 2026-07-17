@@ -127,6 +127,7 @@ export const handlers = [
       unread: false,
       origin: 'manual',
       archived: false,
+      next_action: null,
       updated_at: new Date().toISOString(),
       items: [],
       candidates: [],
@@ -235,6 +236,13 @@ export const handlers = [
     HttpResponse.json(db.catchup.filter((item) => item.triaged && item.triage_reason)),
   ),
 
+  http.post(`${BASE}/tasks/enrich`, () =>
+    HttpResponse.json(
+      { scheduled: db.tasks.filter((t) => !t.next_action).length },
+      { status: 202 },
+    ),
+  ),
+
   http.post(`${BASE}/items`, async ({ request }) => {
     const body = (await request.json()) as { text: string; task_ids?: string[] };
     const taskIds = body.task_ids ?? [];
@@ -319,6 +327,7 @@ export const handlers = [
       unread: false,
       origin: 'manual',
       archived: false,
+      next_action: null,
       updated_at: item.occurred_at,
       items: [item],
       candidates: [],

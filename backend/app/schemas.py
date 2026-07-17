@@ -105,6 +105,7 @@ class TaskOut(BaseModel):
     unread: bool
     origin: str
     archived: bool
+    next_action: str | None = None
     updated_at: datetime
     items: list[ItemOut]
     candidates: list[TaskCandidateOut] = []

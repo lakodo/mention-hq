@@ -82,6 +82,7 @@ export interface Task {
   unread: boolean;
   origin: Origin;
   archived: boolean;
+  next_action: string | null;
   updated_at: string;
   items: Item[];
   candidates: TaskCandidate[];

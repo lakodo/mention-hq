@@ -125,6 +125,9 @@ class Task(Base):
     # Set to hide a task from the board and lists while keeping it and its items intact —
     # the alternative to deleting, which releases the items back to catch-up.
     archived_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    # The brain's predicted next action, precomputed so the task screen shows it on open.
+    # Recomputed when the task's items change; None until first computed.
+    next_action: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     synced_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
 

@@ -58,6 +58,7 @@ export function makeTasks(): Task[] {
       unread: true,
       origin: 'auto',
       archived: false,
+      next_action: null,
       updated_at: minutesAgo(95),
       candidates: [],
       items: [
@@ -113,6 +114,7 @@ export function makeTasks(): Task[] {
       unread: false,
       origin: 'auto',
       archived: false,
+      next_action: null,
       updated_at: minutesAgo(180),
       candidates: [],
       items: [
@@ -142,6 +144,7 @@ export function makeTasks(): Task[] {
       unread: false,
       origin: 'manual',
       archived: false,
+      next_action: null,
       updated_at: minutesAgo(1440),
       candidates: [],
       items: [

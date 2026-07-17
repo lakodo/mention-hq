@@ -19,6 +19,7 @@ import {
   createTaskFromItem,
   deleteBucket,
   deleteItem,
+  enrichTasks,
   deletePerson,
   deleteTask,
   detectSource,
@@ -463,6 +464,10 @@ export function useUpdateSettings(): UseMutationResult<AppSettings, Error, AppSe
 
 export function useBackupDatabase(): UseMutationResult<Backup, Error, void> {
   return useMutation({ mutationFn: backupDatabase });
+}
+
+export function useEnrichTasks(): UseMutationResult<{ scheduled: number }, Error, void> {
+  return useMutation({ mutationFn: enrichTasks });
 }
 
 function useInvalidateSources() {

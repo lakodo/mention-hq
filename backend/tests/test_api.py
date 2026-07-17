@@ -486,6 +486,17 @@ async def test_brain_dump_with_a_task_files_it_straight_away(client, db):
     assert (await client.get("/api/catchup")).json() == []
 
 
+async def test_enrich_schedules_tasks_that_lack_a_next_action(client, db):
+    await _make_task(db, "task:1")
+    await _make_task(db, "task:2")
+    await db.commit()
+
+    response = await client.post("/api/tasks/enrich")
+
+    assert response.status_code == 202
+    assert response.json() == {"scheduled": 2}
+
+
 async def test_priority_defaults_to_50_and_can_be_set(client):
     created = (await client.post("/api/tasks", json={"title": "Rank me"})).json()
     assert created["priority"] == 50

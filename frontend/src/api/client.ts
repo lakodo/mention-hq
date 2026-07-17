@@ -122,6 +122,11 @@ export async function fetchCatchup(limit?: number): Promise<ItemWithLinks[]> {
   return data;
 }
 
+export async function enrichTasks(): Promise<{ scheduled: number }> {
+  const { data } = await api.post<{ scheduled: number }>('/tasks/enrich');
+  return data;
+}
+
 export async function createNote(text: string, taskIds: string[]): Promise<ItemWithLinks> {
   const { data } = await api.post<ItemWithLinks>('/items', { text, task_ids: taskIds });
   return data;
