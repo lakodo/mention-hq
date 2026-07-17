@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { renderApp } from '../test/utils';
 import { server } from '../test/server';
 import { db } from '../test/handlers';
@@ -181,13 +181,17 @@ describe('TaskDetailView', () => {
     );
   });
 
-  it('deletes a task after confirmation', async () => {
+  it('deletes a task only after confirming in the dialog', async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderApp(detailRoute(AUTH_TASK_ID));
 
     const detail = await panel();
     await user.click(within(detail).getByRole('button', { name: /Delete/ }));
+
+    // A confirm dialog stands between the click and the deletion.
+    const dialog = await screen.findByRole('dialog');
+    expect(db.tasks.some((t) => t.id === AUTH_TASK_ID)).toBe(true);
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(db.tasks.some((t) => t.id === AUTH_TASK_ID)).toBe(false));
   });

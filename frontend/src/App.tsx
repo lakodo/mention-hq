@@ -1,4 +1,5 @@
 import { MantineProvider } from '@mantine/core';
+import { ModalsProvider } from '@mantine/modals';
 import { Notifications } from '@mantine/notifications';
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { Route, Routes } from 'react-router-dom';
@@ -37,8 +38,10 @@ export function App({ queryClient }: AppProps) {
   return (
     <QueryClientProvider client={client}>
       <MantineProvider defaultColorScheme="light">
-        <Notifications position="top-right" />
-        <AppRoutes />
+        <ModalsProvider>
+          <Notifications position="top-right" />
+          <AppRoutes />
+        </ModalsProvider>
       </MantineProvider>
     </QueryClientProvider>
   );

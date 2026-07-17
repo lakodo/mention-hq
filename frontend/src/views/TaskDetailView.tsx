@@ -16,6 +16,7 @@ import {
   TextInput,
   Tooltip,
 } from '@mantine/core';
+import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
   IconArchive,
@@ -55,8 +56,18 @@ import { formatAgo } from '../lib/time';
 import type { BucketSuggestion, Item, Task } from '../types';
 
 const DELETE_WARNING =
-  'Their items are kept but return to Catch-up to be triaged again. ' +
-  'To keep them filed, archive instead.';
+  'The items are kept but return to Catch-up to be triaged again. Archive instead to keep them filed.';
+
+/** A red confirm dialog for the irreversible deletes, so the warning is unmissable. */
+function confirmDelete(question: string, onConfirm: () => void) {
+  modals.openConfirmModal({
+    title: question,
+    children: <Text size="sm">{DELETE_WARNING}</Text>,
+    labels: { confirm: 'Delete', cancel: 'Cancel' },
+    confirmProps: { color: 'red' },
+    onConfirm,
+  });
+}
 
 interface ItemCardProps {
   item: Item;
@@ -259,14 +270,15 @@ export function TaskDetailView() {
 
   const removeTask = () => {
     if (!selected) return;
-    if (!window.confirm(`Delete this task? ${DELETE_WARNING}`)) return;
-    deleteTask.mutate(selected.id, {
-      onSuccess: () => {
-        notifications.show({ title: 'Task deleted', message: selected.title, color: 'teal' });
-        navigate('/task');
-      },
-      onError: fail,
-    });
+    confirmDelete(`Delete “${selected.title}”?`, () =>
+      deleteTask.mutate(selected.id, {
+        onSuccess: () => {
+          notifications.show({ title: 'Task deleted', message: selected.title, color: 'teal' });
+          navigate('/task');
+        },
+        onError: fail,
+      }),
+    );
   };
 
   const setArchived = (task: Task, archiving: boolean) =>
@@ -283,16 +295,16 @@ export function TaskDetailView() {
       },
     );
 
-  const deleteOne = (task: Task) => {
-    if (!window.confirm(`Delete this task? ${DELETE_WARNING}`)) return;
-    deleteTask.mutate(task.id, {
-      onSuccess: () => {
-        notifications.show({ title: 'Task deleted', message: task.title, color: 'teal' });
-        if (selected?.id === task.id) navigate('/task');
-      },
-      onError: fail,
-    });
-  };
+  const deleteOne = (task: Task) =>
+    confirmDelete(`Delete “${task.title}”?`, () =>
+      deleteTask.mutate(task.id, {
+        onSuccess: () => {
+          notifications.show({ title: 'Task deleted', message: task.title, color: 'teal' });
+          if (selected?.id === task.id) navigate('/task');
+        },
+        onError: fail,
+      }),
+    );
 
   const toggleSelect = (id: string) =>
     setSelectedIds((prev) => {
@@ -324,21 +336,22 @@ export function TaskDetailView() {
     clearSelection();
   };
 
-  const bulkDelete = async () => {
+  const bulkDelete = () => {
     const ids = [...selectedIds];
-    if (!window.confirm(`Delete ${plural(ids.length)}? ${DELETE_WARNING}`)) return;
-    try {
-      await Promise.all(ids.map((id) => deleteTask.mutateAsync(id)));
-      notifications.show({
-        title: 'Tasks deleted',
-        message: `${plural(ids.length)}.`,
-        color: 'teal',
-      });
-      if (selected && ids.includes(selected.id)) navigate('/task');
-    } catch (error) {
-      fail(error);
-    }
-    clearSelection();
+    confirmDelete(`Delete ${plural(ids.length)}?`, async () => {
+      try {
+        await Promise.all(ids.map((id) => deleteTask.mutateAsync(id)));
+        notifications.show({
+          title: 'Tasks deleted',
+          message: `${plural(ids.length)}.`,
+          color: 'teal',
+        });
+        if (selected && ids.includes(selected.id)) navigate('/task');
+      } catch (error) {
+        fail(error);
+      }
+      clearSelection();
+    });
   };
 
   const { slack, other } = selected ? splitSlackItems(selected) : { slack: [], other: [] };

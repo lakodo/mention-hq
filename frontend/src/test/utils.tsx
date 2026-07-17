@@ -1,4 +1,5 @@
 import { MantineProvider } from '@mantine/core';
+import { ModalsProvider } from '@mantine/modals';
 import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, type RenderResult } from '@testing-library/react';
@@ -26,8 +27,10 @@ export function Providers({ children, route = '/', queryClient }: ProvidersProps
   return (
     <QueryClientProvider client={client}>
       <MantineProvider>
-        <Notifications />
-        <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+        <ModalsProvider>
+          <Notifications />
+          <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+        </ModalsProvider>
       </MantineProvider>
     </QueryClientProvider>
   );
@@ -39,10 +42,12 @@ export function renderApp(route = '/', queryClient?: QueryClient): RenderResult 
   return render(
     <QueryClientProvider client={client}>
       <MantineProvider>
-        <Notifications />
-        <MemoryRouter initialEntries={[route]}>
-          <AppRoutes />
-        </MemoryRouter>
+        <ModalsProvider>
+          <Notifications />
+          <MemoryRouter initialEntries={[route]}>
+            <AppRoutes />
+          </MemoryRouter>
+        </ModalsProvider>
       </MantineProvider>
     </QueryClientProvider>,
   );
