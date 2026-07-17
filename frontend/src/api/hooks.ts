@@ -48,6 +48,7 @@ import {
 import type {
   AIStatus,
   AppSettings,
+  AppSettingsPatch,
   Bucket,
   BucketCreate,
   BucketPatch,
@@ -310,7 +311,7 @@ export function useSuggestBucket(): UseMutationResult<BucketSuggestion, Error, s
   return useMutation({ mutationFn: suggestBucket });
 }
 
-export function useUpdateSettings(): UseMutationResult<AppSettings, Error, string> {
+export function useUpdateSettings(): UseMutationResult<AppSettings, Error, AppSettingsPatch> {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: patchSettings,

@@ -401,8 +401,8 @@ export const handlers = [
   http.get(`${BASE}/admin/settings`, () => HttpResponse.json(db.settings)),
 
   http.patch(`${BASE}/admin/settings`, async ({ request }) => {
-    const body = (await request.json()) as { app_name: string };
-    db.settings = { ...db.settings, app_name: body.app_name };
+    const body = (await request.json()) as Partial<AppSettings>;
+    db.settings = { ...db.settings, ...body };
     return HttpResponse.json(db.settings);
   }),
 

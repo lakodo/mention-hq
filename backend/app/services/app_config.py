@@ -51,3 +51,12 @@ async def get_app_name(db: AsyncSession) -> str:
 
 async def set_app_name(db: AsyncSession, name: str) -> None:
     await set_value(db, APP_NAMESPACE, "name", name.strip() or None)
+
+
+async def get_auto_sync(db: AsyncSession) -> bool:
+    return (await get_value(db, APP_NAMESPACE, "auto_sync")) == "1"
+
+
+async def set_auto_sync(db: AsyncSession, enabled: bool) -> None:
+    # "0" is stored, not cleared, so an explicit off survives the DB->env->default fallback.
+    await set_value(db, APP_NAMESPACE, "auto_sync", "1" if enabled else "0")

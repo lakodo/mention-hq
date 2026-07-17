@@ -2,6 +2,7 @@ import axios from 'axios';
 import type {
   AIStatus,
   AppSettings,
+  AppSettingsPatch,
   Bucket,
   BucketCreate,
   BucketPatch,
@@ -184,8 +185,8 @@ export async function fetchSettings(): Promise<AppSettings> {
   return data;
 }
 
-export async function patchSettings(appName: string): Promise<AppSettings> {
-  const { data } = await api.patch<AppSettings>('/admin/settings', { app_name: appName });
+export async function patchSettings(patch: AppSettingsPatch): Promise<AppSettings> {
+  const { data } = await api.patch<AppSettings>('/admin/settings', patch);
   return data;
 }
 

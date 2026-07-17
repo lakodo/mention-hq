@@ -251,12 +251,14 @@ class PersonMerge(BaseModel):
 
 class AppSettingsOut(BaseModel):
     app_name: str
+    auto_sync: bool
     secret_backend: str
     secret_backend_is_keychain: bool
 
 
 class AppSettingsPatch(BaseModel):
     app_name: str | None = None
+    auto_sync: bool | None = None
 
 
 class SyncSourceResult(BaseModel):

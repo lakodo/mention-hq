@@ -5,7 +5,7 @@ import { Outlet } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { AUTO_SYNC_INTERVAL_MS, CLOCK_TICK_MS, DEFAULT_APP_NAME } from '../constants';
 import { errorMessage, isSyncAlreadyRunning } from '../api/client';
-import { useSettings, useSync, useTasks } from '../api/hooks';
+import { useSettings, useSync, useTasks, useUpdateSettings } from '../api/hooks';
 import { filterTasks } from '../lib/search';
 import { countItems } from '../lib/tasks';
 import { HqContext, type HqContextValue } from './HqContext';
@@ -20,12 +20,15 @@ function syncMessage(result: SyncResult): string {
 
 export function AppLayout() {
   const [query, setQuery] = useState('');
-  const [autoSync, setAutoSync] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
 
   const { data: tasks } = useTasks();
   const { data: settings } = useSettings();
+  const updateSettings = useUpdateSettings();
   const sync = useSync();
+
+  // Persisted like the app's name, so the timer's on/off survives a reload.
+  const autoSync = settings?.auto_sync ?? false;
 
   // Held in a ref so the auto-sync interval survives the mutation object changing identity.
   const syncRef = useRef(sync);
@@ -87,14 +90,14 @@ export function AppLayout() {
       query,
       setQuery,
       autoSync,
-      toggleAutoSync: () => setAutoSync((v) => !v),
+      toggleAutoSync: () => updateSettings.mutate({ auto_sync: !autoSync }),
       lastSync,
       syncing: sync.isPending,
       runSync: () => runSync(false),
       taskCount: visible.length,
       itemCount: countItems(visible),
     }),
-    [appName, query, autoSync, lastSync, sync.isPending, runSync, visible],
+    [appName, query, autoSync, updateSettings, lastSync, sync.isPending, runSync, visible],
   );
 
   return (

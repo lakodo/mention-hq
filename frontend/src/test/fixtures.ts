@@ -378,7 +378,12 @@ export function makeSyncLog(): SyncLogEntry[] {
 }
 
 export function makeSettings(): AppSettings {
-  return { app_name: 'Personal HQ', secret_backend: 'keyring', secret_backend_is_keychain: true };
+  return {
+    app_name: 'Personal HQ',
+    auto_sync: false,
+    secret_backend: 'keyring',
+    secret_backend_is_keychain: true,
+  };
 }
 
 export function makeAIStatus(): AIStatus {

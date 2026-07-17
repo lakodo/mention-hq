@@ -356,6 +356,19 @@ async def test_app_name_is_configurable(client):
     assert (await client.get("/api/admin/settings")).json()["app_name"] == "My HQ"
 
 
+async def test_auto_sync_is_a_saved_setting(client):
+    assert (await client.get("/api/admin/settings")).json()["auto_sync"] is False
+
+    patched = await client.patch("/api/admin/settings", json={"auto_sync": True})
+    assert patched.json()["auto_sync"] is True
+    # Persisted, not just echoed back.
+    assert (await client.get("/api/admin/settings")).json()["auto_sync"] is True
+
+    # A name change on its own leaves auto-sync alone.
+    await client.patch("/api/admin/settings", json={"app_name": "My HQ"})
+    assert (await client.get("/api/admin/settings")).json()["auto_sync"] is True
+
+
 async def test_sync_rejects_an_unknown_source(client):
     assert (await client.post("/api/sync", json={"source": "nope"})).status_code == 400
 

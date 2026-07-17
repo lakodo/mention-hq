@@ -192,8 +192,14 @@ export interface SyncResult {
 
 export interface AppSettings {
   app_name: string;
+  auto_sync: boolean;
   secret_backend: string;
   secret_backend_is_keychain: boolean;
+}
+
+export interface AppSettingsPatch {
+  app_name?: string;
+  auto_sync?: boolean;
 }
 
 export type AICredentialSource = 'keychain' | 'environment' | 'cli-login' | 'none';

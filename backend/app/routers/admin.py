@@ -24,7 +24,13 @@ from app.schemas import (
 )
 from app.security import get_secret_store
 from app.services import ai
-from app.services.app_config import get_app_name, set_app_name, set_value
+from app.services.app_config import (
+    get_app_name,
+    get_auto_sync,
+    set_app_name,
+    set_auto_sync,
+    set_value,
+)
 from app.services.sources_factory import (
     BY_KIND,
     SOURCE_CLASSES,
@@ -43,6 +49,7 @@ async def get_settings_(db: AsyncSession = Depends(get_db)) -> AppSettingsOut:
     store = get_secret_store()
     return AppSettingsOut(
         app_name=await get_app_name(db),
+        auto_sync=await get_auto_sync(db),
         secret_backend=store.backend_name,
         secret_backend_is_keychain=store.is_keychain,
     )
@@ -50,8 +57,14 @@ async def get_settings_(db: AsyncSession = Depends(get_db)) -> AppSettingsOut:
 
 @router.patch("/settings", response_model=AppSettingsOut)
 async def patch_settings(patch: AppSettingsPatch, db: AsyncSession = Depends(get_db)) -> AppSettingsOut:
+    changed = False
     if patch.app_name is not None:
         await set_app_name(db, patch.app_name)
+        changed = True
+    if patch.auto_sync is not None:
+        await set_auto_sync(db, patch.auto_sync)
+        changed = True
+    if changed:
         await db.commit()
     return await get_settings_(db)
 

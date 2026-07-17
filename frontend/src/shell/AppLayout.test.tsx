@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { renderApp } from '../test/utils';
 import { server } from '../test/server';
+import { db } from '../test/handlers';
 
 const SYNC = 'http://localhost:8000/api/sync';
 
@@ -16,6 +17,15 @@ describe('AppLayout sync', () => {
 
     expect(await screen.findByText('Sync complete')).toBeInTheDocument();
     expect(await screen.findByText(/Synced just now/)).toBeInTheDocument();
+  });
+
+  it('persists the auto-sync toggle to settings', async () => {
+    const user = userEvent.setup();
+    renderApp('/');
+
+    await user.click(await screen.findByLabelText('Auto-sync'));
+
+    await waitFor(() => expect(db.settings.auto_sync).toBe(true));
   });
 
   it('treats a 409 as "already running" rather than a failure', async () => {

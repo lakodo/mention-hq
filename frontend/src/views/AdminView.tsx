@@ -87,13 +87,16 @@ function AppNameSection() {
           loading={update.isPending}
           disabled={!value.trim() || value === settings?.app_name}
           onClick={() =>
-            update.mutate(value.trim(), {
-              onSuccess: (s) => {
-                setName(null);
-                ok('Saved', `App name is now ${s.app_name}.`);
+            update.mutate(
+              { app_name: value.trim() },
+              {
+                onSuccess: (s) => {
+                  setName(null);
+                  ok('Saved', `App name is now ${s.app_name}.`);
+                },
+                onError: fail,
               },
-              onError: fail,
-            })
+            )
           }
         >
           Save
