@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar
 
+import emoji as emoji_lib
 import httpx
 
 from app.sources.base import ConfigField, RawItem, Source
@@ -18,7 +19,9 @@ from app.sources.keys import all_reference_keys
 
 API_ROOT = "https://slack.com/api"
 SEARCH_WINDOW_DAYS = 14
-MAX_LABEL_CHARS = 100
+# The message part of a label — kept short so catch-up stays scannable; the full thread is
+# a click away on its permalink.
+MAX_BODY_CHARS = 50
 
 # A Slack member id: U (user) or W (Enterprise Grid) then its base-32-ish tail.
 _USER_ID = re.compile(r"[UW][A-Z0-9]{7,}")
@@ -112,8 +115,13 @@ class SlackSource(Source):
                     {"query": f"{query} after:{_after_date()}", "count": 50, "sort": "timestamp"},
                 )
                 for match in payload.get("messages", {}).get("matches", []):
-                    # The same thread surfaces once per matching message; keep one per thread.
-                    matches.setdefault(_external_id(match), match)
+                    # One item per thread: a name pinged on the root and again in replies must
+                    # not turn into a pile of items. Group on the thread's root, and keep the
+                    # earliest match — the root itself when it surfaced, else the first reply.
+                    key = _external_id(match)
+                    current = matches.get(key)
+                    if current is None or _ts(match) < _ts(current):
+                        matches[key] = match
 
             names = await self._resolve_users(
                 client, {uid for match in matches.values() for uid in _mention_ids(match)}
@@ -146,30 +154,50 @@ def _after_date() -> str:
     return (datetime.now(UTC) - timedelta(days=SEARCH_WINDOW_DAYS)).strftime("%Y-%m-%d")
 
 
+def _ts(match: dict) -> float:
+    try:
+        return float(match.get("ts", "0"))
+    except ValueError:
+        return 0.0
+
+
+def _thread_ts(match: dict) -> str:
+    """The thread's root timestamp, which every message in it shares.
+
+    Search results drop `thread_ts` on replies as often as not, so fall back to the one
+    Slack always puts in a reply's permalink (`…?thread_ts=…`). A message in no thread is
+    its own root.
+    """
+    if match.get("thread_ts"):
+        return match["thread_ts"]
+    found = re.search(r"[?&]thread_ts=([0-9.]+)", match.get("permalink") or "")
+    return found.group(1) if found else match.get("ts", "0")
+
+
 def _external_id(match: dict) -> str:
     channel = match.get("channel") or {}
-    ts = match.get("ts", "0")
-    return f"{channel.get('id', 'unknown')}:{match.get('thread_ts') or ts}"
+    return f"{channel.get('id', 'unknown')}:{_thread_ts(match)}"
 
 
 def _to_item(match: dict, names: dict[str, str]) -> RawItem:
     channel = match.get("channel") or {}
     raw = _message_text(match)
-    ts = match.get("ts", "0")
-    thread_ts = match.get("thread_ts") or ts
+    thread_ts = _thread_ts(match)
 
-    rendered = _render(raw, names)
-    label = rendered or _fallback_label(match)
-    if len(label) > MAX_LABEL_CHARS:
-        label = label[:MAX_LABEL_CHARS].rstrip() + "…"
+    body = _render(raw, names) or _fallback_label(match)
+    if len(body) > MAX_BODY_CHARS:
+        body = body[:MAX_BODY_CHARS].rstrip() + "…"
+    # "#channel - message" (or "DM with @x - message"), so an item reads as itself without a
+    # second line, and a thread that pinged you five times still shows as one.
+    label = f"{_channel_label(channel, names)} - {body}"
 
     return RawItem(
         source="slack",
         external_id=f"{channel.get('id', 'unknown')}:{thread_ts}",
         label=label,
-        occurred_at=datetime.fromtimestamp(float(ts), tz=UTC),
+        occurred_at=datetime.fromtimestamp(_ts(match), tz=UTC),
         url=match.get("permalink"),
-        context=_channel_label(channel, names),
+        context=None,
         status=None,
         # Slack never names a subject; it only ever points at one. So it contributes
         # references but no identity, and never wins the task title. Keys read the raw text
@@ -325,4 +353,6 @@ def _render(text: str, names: dict[str, str]) -> str:
     text = re.sub(r"<(?:mailto:)?((?:https?://)?[^>|]+)>", lambda m: m.group(1), text)
 
     text = html.unescape(text)
+    # :fire: -> 🔥. Custom workspace emoji (:marmot-wave:) have no Unicode, so stay as-is.
+    text = emoji_lib.emojize(text, language="alias")
     return " ".join(text.split()).strip()
