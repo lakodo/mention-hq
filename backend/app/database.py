@@ -19,16 +19,20 @@ SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=
 
 
 def enable_sqlite_foreign_keys(engine_) -> None:
-    """SQLite ignores foreign keys unless asked, per connection.
+    """Per-connection pragmas.
 
-    Without this every ON DELETE CASCADE in models.py is decorative, and deleting an item
-    leaves links pointing at a row that no longer exists.
+    foreign_keys: off by default, so without it every ON DELETE CASCADE in models.py is
+    decorative. WAL + busy_timeout let the background matcher and a sync touch the DB at
+    once: WAL keeps a reader from blocking the writer, and busy_timeout makes a brief
+    writer overlap wait rather than raise "database is locked".
     """
 
     @event.listens_for(engine_.sync_engine, "connect")
     def _set_pragma(dbapi_connection, _record):  # pragma: no cover - driver callback
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()
 
 

@@ -88,8 +88,6 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
     _write_log(db, outcomes, result, started_at, duration)
     await db.commit()
 
-    # The brain is slow (a subprocess per item), so it must never hold up the sync response
-    # or the periodic auto-sync. Kick it off detached, against its own session.
     schedule_auto_match()
 
     return SyncResult(
@@ -112,23 +110,18 @@ async def _skip_by_rules(db: AsyncSession) -> None:
     await triage.apply_rules(db, items)
 
 
-# How many unmatched inbox items to attempt per pass. Keeps a pass bounded when many items
-# arrive at once; remaining items are matched on the next pass or by "Match all".
+# How many unmatched inbox items to attempt per pass, so a burst of arrivals doesn't turn
+# into one unbounded run of brain calls. The rest wait for the next pass or "Match all".
 _AUTO_MATCH_BATCH = 10
 
-# One matching pass at a time. A pass outlives the sync that started it, and auto-sync fires
-# again on a timer, so without this the passes would stack and hammer the brain in parallel.
+# One pass at a time: a pass outlives the sync that scheduled it and auto-sync fires again
+# on a timer, so without this the passes would stack and call the brain in parallel.
 _matching = asyncio.Lock()
 _background: set[asyncio.Task] = set()
 
 
 def schedule_auto_match() -> None:
-    """Run a brain-matching pass in the background, detached from any request.
-
-    Returns at once so a sync (or the periodic auto-sync) never waits on the brain. If a
-    pass is already running, the new one finds the lock held and exits without touching the
-    brain. asyncio keeps only a weak reference to tasks, so we hold one until it finishes.
-    """
+    """Run a brain-matching pass detached from the request, so no sync waits on the brain."""
     if not ai.status().available:
         return
     task = asyncio.create_task(_auto_match_pass())
@@ -139,66 +132,81 @@ def schedule_auto_match() -> None:
 async def _auto_match_pass() -> None:
     if _matching.locked():
         return
-    async with _matching, SessionLocal() as db:
+    async with _matching:
         try:
-            await _auto_match(db)
-            await db.commit()
+            candidates = await _match_candidates()
+            for item_id, already_proposed in candidates:
+                await _match_one(item_id, already_proposed)
         except Exception as exc:
             log.warning("auto_match_pass_failed", error=str(exc))
 
 
-async def _auto_match(db: AsyncSession) -> None:
-    """Propose task links for inbox items that the brain has never seen.
+async def _match_candidates() -> list[tuple[str, bool]]:
+    """Inbox items the brain has never seen, tagged with whether an engine already proposed."""
+    async with SessionLocal() as db:
+        proposed = set((await db.execute(select(Link.item_id).where(Link.state == PROPOSED))).scalars().all())
+        ids = (
+            await db.execute(
+                select(Item.id)
+                .where(Item.triaged.is_(False), Item.matched_at.is_(None))
+                .order_by(Item.first_seen_at)
+                .limit(_AUTO_MATCH_BATCH)
+            )
+        ).scalars()
+        return [(item_id, item_id in proposed) for item_id in ids]
 
-    Rules run first, so noise is already skipped before we reach this. Only items without
-    a prior brain attempt (matched_at is None) and without any existing proposal are sent
-    to the brain — a proposal means the engine already has a guess, and no proposal is the
-    normal outcome (most items belong to no existing task). Nothing is written to catch-up
-    here: proposals land there automatically through the engine's Link rows.
+
+async def _match_one(item_id: str, already_proposed: bool) -> None:
+    """Ask the brain about one item and record the result.
+
+    Each phase takes a fresh session and commits before the next, so no transaction is held
+    open across the brain subprocess call — that is what let a concurrent sync deadlock on
+    the SQLite write lock. An engine proposal already answers the question, so those items
+    only get their flag set; no match is the normal outcome for the rest.
     """
-    if not ai.status().available:
+    now = datetime.now(UTC)
+    if already_proposed:
+        await _mark_matched(item_id, now)
         return
 
-    # Items still in the inbox, never matched, with no existing proposal.
-    proposed_item_ids = set(
-        (await db.execute(select(Link.item_id).where(Link.state == PROPOSED))).scalars().all()
-    )
-    stmt = (
-        select(Item)
-        .where(Item.triaged.is_(False), Item.matched_at.is_(None))
-        .order_by(Item.first_seen_at)
-        .limit(_AUTO_MATCH_BATCH)
-    )
-    candidates = list((await db.execute(stmt)).scalars().all())
-
-    now = datetime.now(UTC)
-    for item in candidates:
-        if item.id in proposed_item_ids:
-            item.matched_at = now
-            continue
+    async with SessionLocal() as db:
+        item = await db.get(Item, item_id)
+        if item is None or item.triaged or item.matched_at is not None:
+            return
         try:
             matches = await ai.suggest_tasks(db, item)
         except Exception:
-            log.warning("auto_match_failed", item=item.id)
-            continue
+            log.warning("auto_match_failed", item=item_id)
+            return
+
+    async with SessionLocal() as db:
+        item = await db.get(Item, item_id)
+        if item is None or item.matched_at is not None:
+            return
         item.matched_at = now
         for match in matches:
-            task = await db.get(Task, match.task_id)
-            if task is None:
+            if await db.get(Task, match.task_id) is None:
                 continue
-            existing = await db.get(Link, {"task_id": match.task_id, "item_id": item.id})
-            if existing is None:
+            if await db.get(Link, {"task_id": match.task_id, "item_id": item_id}) is None:
                 db.add(
                     Link(
                         task_id=match.task_id,
-                        item_id=item.id,
+                        item_id=item_id,
                         state=PROPOSED,
                         engine="brain",
                         confidence=match.confidence,
                         reason=match.reason,
                     )
                 )
-    await db.flush()
+        await db.commit()
+
+
+async def _mark_matched(item_id: str, when: datetime) -> None:
+    async with SessionLocal() as db:
+        item = await db.get(Item, item_id)
+        if item is not None and item.matched_at is None:
+            item.matched_at = when
+            await db.commit()
 
 
 async def _fetch(connected: Connected, directory: DbDirectory) -> _FetchOutcome:
