@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  countItems,
-  flattenItems,
   groupByBucket,
   groupByTag,
   itemCountLabel,
@@ -82,22 +80,6 @@ describe('itemCountLabel', () => {
   it('singularises one item', () => {
     expect(itemCountLabel(refund)).toBe('1 item');
     expect(itemCountLabel(stripe)).toBe('3 items');
-  });
-});
-
-describe('flattenItems', () => {
-  it('yields one row per item across every task, newest first', () => {
-    const rows = flattenItems(tasks);
-    expect(rows).toHaveLength(countItems(tasks));
-    expect(rows).toHaveLength(6);
-
-    const ages = rows.map((r) => new Date(r.item.occurred_at).getTime());
-    expect([...ages].sort((a, b) => b - a)).toEqual(ages);
-  });
-
-  it('carries the owning task on every row', () => {
-    const rows = flattenItems([stripe]);
-    expect(rows.every((r) => r.task.id === stripe.id)).toBe(true);
   });
 });
 

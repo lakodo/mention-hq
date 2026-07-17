@@ -22,6 +22,12 @@ async def untriaged(db: AsyncSession, limit: int = 100) -> list[Item]:
     return list((await db.execute(stmt)).scalars().all())
 
 
+async def all_items(db: AsyncSession, limit: int = 200) -> list[Item]:
+    """Every item, newest first — the timeline feed, independent of any task."""
+    stmt = select(Item).order_by(Item.occurred_at.desc()).limit(limit)
+    return list((await db.execute(stmt)).scalars().all())
+
+
 async def confirm(db: AsyncSession, item_id: str, task_ids: list[str]) -> Item:
     """Attach an item to one or more tasks, for good."""
     item = await _require_item(db, item_id)

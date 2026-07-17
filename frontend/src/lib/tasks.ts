@@ -1,6 +1,6 @@
 import { UNCATEGORIZED } from '../constants';
 import { ageMs } from './time';
-import type { Bucket, Item, ItemRow, Source, Task } from '../types';
+import type { Bucket, Item, Source, Task } from '../types';
 
 export interface BucketColumn {
   name: string;
@@ -71,17 +71,6 @@ export function uniqueSources(task: Task): Source[] {
 export function itemCountLabel(task: Task): string {
   const n = task.items.length;
   return `${n} item${n === 1 ? '' : 's'}`;
-}
-
-/**
- * Flatten every item of every task into one chronological feed, most recent
- * first. A task with 3 items yields 3 rows.
- */
-export function flattenItems(tasks: Task[], now: number = Date.now()): ItemRow[] {
-  const rows: ItemRow[] = tasks.flatMap((task) =>
-    task.items.map((item) => ({ key: `${task.id}:${item.id}`, task, item })),
-  );
-  return rows.sort((a, b) => ageMs(a.item.occurred_at, now) - ageMs(b.item.occurred_at, now));
 }
 
 /** Slack items get their own section and lead the detail view. */

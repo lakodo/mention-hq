@@ -213,10 +213,3 @@ export interface BucketPatch {
   keywords?: string[];
   position?: number;
 }
-
-/** A single item lifted out of its task, for the flat Timeline feed. */
-export interface ItemRow {
-  key: string;
-  task: Task;
-  item: Item;
-}

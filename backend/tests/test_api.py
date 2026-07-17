@@ -220,6 +220,31 @@ async def test_catchup_lists_only_untriaged(client, db):
     assert (await client.get("/api/catchup")).json() == []
 
 
+async def test_items_lists_everything_regardless_of_triage_or_task(client, db):
+    await _make_task(db)
+    item = await _make_item(db)  # untriaged, on no task
+    db.add(Link(task_id="task:1", item_id=item.id, state=CONFIRMED))
+    triaged = Item(
+        id="pr:acme~api~9",
+        source="pr",
+        label="A merged PR",
+        url=None,
+        context=None,
+        occurred_at=datetime.now(UTC),
+        triaged=True,
+        extra={},
+    )
+    db.add(triaged)
+    await db.commit()
+
+    body = (await client.get("/api/items")).json()
+    ids = {i["id"] for i in body}
+    assert ids == {item.id, "pr:acme~api~9"}, "the timeline shows items with and without a task"
+
+    linked = next(i for i in body if i["id"] == item.id)
+    assert [link["task"]["id"] for link in linked["links"]] == ["task:1"]
+
+
 async def test_new_task_from_an_item(client, db):
     item = await _make_item(db)
     await db.commit()

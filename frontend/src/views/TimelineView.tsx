@@ -1,24 +1,25 @@
-import { Badge, Box, Center, Group, Loader, Stack, Text } from '@mantine/core';
+import { Anchor, Badge, Box, Center, Group, Loader, Stack, Text } from '@mantine/core';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ReadToggle } from '../components/ReadToggle';
 import { SourceDot } from '../components/SourceDot';
-import { StatusPill } from '../components/StatusPill';
 import { sourceMeta } from '../constants';
-import { useTasks, useUpdateTask } from '../api/hooks';
-import { filterTasks } from '../lib/search';
-import { flattenItems } from '../lib/tasks';
+import { useItems } from '../api/hooks';
+import { filterItems } from '../lib/search';
 import { formatAgo } from '../lib/time';
 import { useHq } from '../shell/HqContext';
-import type { Task } from '../types';
+import type { ItemWithLinks } from '../types';
+
+/** The tasks an item is actually filed under — a proposal is not an attachment. */
+function confirmedTasks(item: ItemWithLinks) {
+  return item.links.filter((link) => link.state === 'confirmed').map((link) => link.task);
+}
 
 export function TimelineView() {
   const navigate = useNavigate();
   const { query } = useHq();
-  const { data: tasks, isLoading } = useTasks();
-  const updateTask = useUpdateTask();
+  const { data: items, isLoading } = useItems();
 
-  const rows = useMemo(() => flattenItems(filterTasks(tasks ?? [], query)), [tasks, query]);
+  const rows = useMemo(() => filterItems(items ?? [], query), [items, query]);
 
   if (isLoading) {
     return (
@@ -28,16 +29,15 @@ export function TimelineView() {
     );
   }
 
-  const toggleRead = (task: Task) =>
-    updateTask.mutate({ id: task.id, patch: { unread: !task.unread } });
-
   if (rows.length === 0) {
     return (
       <Center style={{ flex: 1 }}>
         <Stack align="center" gap="xs">
           <Text fw={600}>Nothing on the timeline</Text>
           <Text c="dimmed" fz="sm">
-            Sync a source to pull in items.
+            {items && items.length > 0
+              ? `No items match “${query}”.`
+              : 'Sync a source to pull in items.'}
           </Text>
         </Stack>
       </Center>
@@ -50,51 +50,73 @@ export function TimelineView() {
         {rows.length} {rows.length === 1 ? 'item' : 'items'}, most recent first
       </Text>
 
-      {rows.map(({ key, task, item }) => (
-        <Group
-          key={key}
-          data-testid="timeline-row"
-          gap={12}
-          wrap="nowrap"
-          px={16}
-          py={12}
-          onClick={() => navigate(`/task/${encodeURIComponent(task.id)}`)}
-          style={{
-            borderBottom: '1px solid var(--mantine-color-gray-3)',
-            cursor: 'pointer',
-            background: task.unread ? 'var(--mantine-color-body)' : 'transparent',
-          }}
-        >
-          <SourceDot source={item.source} />
-          <Text
-            fz={11}
-            c="dimmed"
-            fw={600}
-            tt="uppercase"
-            style={{ width: 64, flexShrink: 0, letterSpacing: '0.04em' }}
+      {rows.map((item) => {
+        const tasks = confirmedTasks(item);
+        return (
+          <Group
+            key={item.id}
+            data-testid="timeline-row"
+            gap={12}
+            wrap="nowrap"
+            px={16}
+            py={12}
+            style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}
           >
-            {sourceMeta(item.source).label}
-          </Text>
-          <Badge variant="default" radius="xl" style={{ flexShrink: 0 }}>
-            {task.bucket}
-          </Badge>
-
-          <Box style={{ flex: 1, minWidth: 0 }}>
-            <Text fz="sm" fw={task.unread ? 700 : 400} truncate>
-              {task.title}
+            <SourceDot source={item.source} />
+            <Text
+              fz={11}
+              c="dimmed"
+              fw={600}
+              tt="uppercase"
+              style={{ width: 64, flexShrink: 0, letterSpacing: '0.04em' }}
+            >
+              {sourceMeta(item.source).label}
             </Text>
-            <Text fz="xs" c="dimmed" truncate>
-              {item.label}
-            </Text>
-          </Box>
 
-          <StatusPill status={task.status} size="xs" />
-          <Text fz="xs" c="dimmed" style={{ width: 56, flexShrink: 0, textAlign: 'right' }}>
-            {formatAgo(item.occurred_at)}
-          </Text>
-          <ReadToggle unread={task.unread} onToggle={() => toggleRead(task)} />
-        </Group>
-      ))}
+            <Box style={{ flex: 1, minWidth: 0 }}>
+              {item.url ? (
+                <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" truncate="end">
+                  {item.label}
+                </Anchor>
+              ) : (
+                <Text fz="sm" truncate>
+                  {item.label}
+                </Text>
+              )}
+              {item.context && (
+                <Text fz="xs" c="dimmed" truncate>
+                  {item.context}
+                </Text>
+              )}
+            </Box>
+
+            {tasks.length > 0 ? (
+              <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
+                {tasks.map((task) => (
+                  <Badge
+                    key={task.id}
+                    variant="light"
+                    radius="xl"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/task/${encodeURIComponent(task.id)}`)}
+                    title={`${task.title} · ${task.bucket}`}
+                  >
+                    {task.title}
+                  </Badge>
+                ))}
+              </Group>
+            ) : (
+              <Badge variant="default" color="gray" radius="xl" style={{ flexShrink: 0 }}>
+                {item.triaged ? 'No task' : 'To triage'}
+              </Badge>
+            )}
+
+            <Text fz="xs" c="dimmed" style={{ width: 56, flexShrink: 0, textAlign: 'right' }}>
+              {formatAgo(item.occurred_at)}
+            </Text>
+          </Group>
+        );
+      })}
     </Box>
   );
 }

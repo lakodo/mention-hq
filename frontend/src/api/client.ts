@@ -100,6 +100,11 @@ export async function fetchCatchup(limit?: number): Promise<ItemWithLinks[]> {
   return data;
 }
 
+export async function fetchItems(limit?: number): Promise<ItemWithLinks[]> {
+  const { data } = await api.get<ItemWithLinks[]>('/items', { params: { limit } });
+  return data;
+}
+
 export async function confirmLinks(itemId: string, taskIds: string[]): Promise<ItemWithLinks> {
   const { data } = await api.post<ItemWithLinks>(`/catchup/${seg(itemId)}/confirm`, {
     task_ids: taskIds,

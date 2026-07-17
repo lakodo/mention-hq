@@ -16,6 +16,7 @@ import type {
   Bucket,
   Detection,
   ItemWithLinks,
+  Link,
   SourceKind,
   SourceStatus,
   SyncLogEntry,
@@ -191,6 +192,31 @@ export const handlers = [
   }),
 
   http.get(`${BASE}/catchup`, () => HttpResponse.json(db.catchup.filter((item) => !item.triaged))),
+
+  // Every item, with its links — items filed on a task carry a confirmed link to it, plus
+  // the untriaged ones still in the catch-up inbox. The real backend reads one items table.
+  http.get(`${BASE}/items`, () => {
+    const byId = new Map<string, ItemWithLinks>();
+    for (const task of db.tasks) {
+      for (const it of task.items) {
+        const existing = byId.get(it.id);
+        const link: Link = {
+          task: { id: task.id, title: task.title, bucket: task.bucket },
+          state: 'confirmed',
+          engine: null,
+          confidence: 1,
+          reason: null,
+        };
+        if (existing) existing.links.push(link);
+        else byId.set(it.id, { ...it, links: [link] });
+      }
+    }
+    for (const it of db.catchup) {
+      if (!byId.has(it.id)) byId.set(it.id, { ...it, links: it.links });
+    }
+    const all = [...byId.values()].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1));
+    return HttpResponse.json(all);
+  }),
 
   http.post(`${BASE}/catchup/:itemId/confirm`, async ({ params, request }) => {
     const item = db.catchup.find((i) => i.id === params.itemId);

@@ -17,6 +17,7 @@ import {
   fetchAIStatus,
   fetchBuckets,
   fetchCatchup,
+  fetchItems,
   fetchSettings,
   fetchSourceKinds,
   fetchSources,
@@ -63,6 +64,7 @@ export const queryKeys = {
   task: (id: string) => ['task', id] as const,
   buckets: () => ['buckets'] as const,
   catchup: () => ['catchup'] as const,
+  items: () => ['items'] as const,
   syncStatus: () => ['sync', 'status'] as const,
   sources: () => ['admin', 'sources'] as const,
   sourceKinds: () => ['admin', 'source-kinds'] as const,
@@ -88,6 +90,10 @@ export function useBuckets(): UseQueryResult<Bucket[]> {
 
 export function useCatchup(limit?: number): UseQueryResult<ItemWithLinks[]> {
   return useQuery({ queryKey: queryKeys.catchup(), queryFn: () => fetchCatchup(limit) });
+}
+
+export function useItems(limit?: number): UseQueryResult<ItemWithLinks[]> {
+  return useQuery({ queryKey: queryKeys.items(), queryFn: () => fetchItems(limit) });
 }
 
 export function useSyncStatus(limit?: number): UseQueryResult<SyncLogEntry[]> {
@@ -179,6 +185,7 @@ export function useSync(): UseMutationResult<SyncResult, Error, string | undefin
       void qc.invalidateQueries({ queryKey: ['task'] });
       void qc.invalidateQueries({ queryKey: queryKeys.buckets() });
       void qc.invalidateQueries({ queryKey: queryKeys.catchup() });
+      void qc.invalidateQueries({ queryKey: queryKeys.items() });
       void qc.invalidateQueries({ queryKey: queryKeys.syncStatus() });
     },
   });
@@ -188,6 +195,7 @@ function useCatchupInvalidation() {
   const qc = useQueryClient();
   return () => {
     void qc.invalidateQueries({ queryKey: queryKeys.catchup() });
+    void qc.invalidateQueries({ queryKey: queryKeys.items() });
     void qc.invalidateQueries({ queryKey: ['tasks'] });
     void qc.invalidateQueries({ queryKey: ['task'] });
     void qc.invalidateQueries({ queryKey: queryKeys.buckets() });
