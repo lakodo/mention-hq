@@ -28,6 +28,7 @@ from sqlalchemy import (
     String,
     Text,
     TypeDecorator,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -245,3 +246,54 @@ class SyncLog(Base):
     error: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (Index("ix_sync_log_started_at", "started_at"),)
+
+
+class Person(Base):
+    """A human, and the handles they go by across sources.
+
+    One colleague may be a Slack id, a GitHub login and an email at once. HQ keeps them as
+    one Person so a name learned from one source answers for all, and no source is treated
+    as the owner — they only contribute identities. Merging folds duplicates together.
+    """
+
+    __tablename__ = "people"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    display_name: Mapped[str] = mapped_column(String, nullable=False)
+    email: Mapped[str | None] = mapped_column(String)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
+
+    identities: Mapped[list[PersonIdentity]] = relationship(
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        back_populates="person",
+        order_by="PersonIdentity.kind",
+    )
+
+
+class PersonIdentity(Base):
+    """One handle a person has on one source: a Slack user id, a GitHub login, an email.
+
+    (kind, value) is unique — a given Slack id names exactly one person — which is also what
+    lets a source ask "who is this id?" and get a stable answer without asking the source
+    again.
+    """
+
+    __tablename__ = "person_identities"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    person_id: Mapped[str] = mapped_column(
+        ForeignKey("people.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # "slack" | "github" | "linear" | "email" | ... — the source kind, or a plain contact kind.
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    # The id/handle/address on that source.
+    value: Mapped[str] = mapped_column(String, nullable=False)
+    # What the source called them when captured, kept for display even before a name is set.
+    label: Mapped[str | None] = mapped_column(String)
+
+    person: Mapped[Person] = relationship(back_populates="identities")
+
+    __table_args__ = (UniqueConstraint("kind", "value", name="uq_person_identity_kind_value"),)

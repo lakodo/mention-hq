@@ -15,7 +15,7 @@ import abc
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, Protocol
 
 TITLE_PRIORITY = ["linear", "issue", "pr", "markdown", "todo", "branch", "dust", "slack"]
 
@@ -91,6 +91,23 @@ def url_safe(value: str) -> str:
     return _URL_UNSAFE.sub("~", value)
 
 
+class PeopleDirectory(Protocol):
+    """A persistent id -> name lookup a source can consult while rendering.
+
+    It spares a source re-asking who an id belongs to on every sync: names learned once are
+    remembered. The directory spans every source, so a name a source contributes can answer
+    for another — no source owns a person.
+    """
+
+    async def known(self, kind: str, values: set[str]) -> dict[str, str]:
+        """Names already on file for these (kind, value) handles. Misses are simply absent."""
+        ...
+
+    async def remember(self, kind: str, names: dict[str, str]) -> None:
+        """Record newly discovered handle -> name pairs for next time."""
+        ...
+
+
 class Source(abc.ABC):
     id: ClassVar[str]
     name: ClassVar[str]
@@ -105,6 +122,9 @@ class Source(abc.ABC):
 
     def __init__(self, config: dict[str, str] | None = None) -> None:
         self._config = config or {}
+        # Set by sync so a source can resolve and cache the people it mentions. None off the
+        # sync path (CLI, tests), where a source resolves names itself without persisting.
+        self.directory: PeopleDirectory | None = None
 
     @classmethod
     async def detect(cls) -> Detection:
