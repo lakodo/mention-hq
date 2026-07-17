@@ -256,8 +256,8 @@ async def test_new_task_from_an_item(client, db):
     assert body["origin"] == "manual"
     assert [i["id"] for i in body["items"]] == [item.id]
 
-    # The item stays in catch-up so it can still be attached elsewhere before you're done.
-    assert [i["id"] for i in (await client.get("/api/catchup")).json()] == [item.id]
+    # Turning it into a task files it: it leaves the inbox rather than lingering as confirmed.
+    assert (await client.get("/api/catchup")).json() == []
 
 
 async def test_filter_tasks_by_source(client, db):

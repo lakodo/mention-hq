@@ -286,7 +286,8 @@ export const handlers = [
       candidates: [],
     };
     db.tasks.push(task);
-    // The item stays in the inbox on purpose — a new task doesn't triage it away.
+    // Turning an item into a task files it away, so it leaves the inbox.
+    item.triaged = true;
     return HttpResponse.json(task);
   }),
 

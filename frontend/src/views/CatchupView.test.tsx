@@ -98,7 +98,8 @@ describe('CatchupView', () => {
     await user.type(title, 'Fresh subject');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    // Without a manual refresh, the new task is attachable to the item still in the inbox.
+    // The source item is filed away by New task; the new task is immediately attachable to
+    // the items still in the inbox, without a manual refresh.
     const remaining = await screen.findAllByTestId('catchup-card');
     // Options portal out of the card into one shared node, so scope to this input's own
     // listbox by the id it points at.
