@@ -272,7 +272,13 @@ export function CatchupView() {
     [tasks],
   );
   const bucketOptions = useMemo(() => (buckets ?? []).map((b) => b.name), [buckets]);
-  const visible = useMemo(() => filterItems(items ?? [], query), [items, query]);
+  // Items the engine already has a guess for come first — they're a one-click confirm — with
+  // recency order preserved within each group by the stable sort.
+  const visible = useMemo(() => {
+    const hasProposal = (item: ItemWithLinks) =>
+      item.links.some((link) => link.state === 'proposed') ? 0 : 1;
+    return [...filterItems(items ?? [], query)].sort((a, b) => hasProposal(a) - hasProposal(b));
+  }, [items, query]);
 
   if (isLoading) {
     return (
