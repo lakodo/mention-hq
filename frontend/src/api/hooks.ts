@@ -23,6 +23,7 @@ import {
   fetchItems,
   fetchPeople,
   fetchSettings,
+  fetchSkippedItems,
   fetchSourceKinds,
   fetchSources,
   fetchSyncStatus,
@@ -84,6 +85,7 @@ export const queryKeys = {
   buckets: () => ['buckets'] as const,
   catchup: () => ['catchup'] as const,
   items: () => ['items'] as const,
+  skipped: (since?: string) => ['items', 'skipped', since] as const,
   people: () => ['people'] as const,
   syncStatus: () => ['sync', 'status'] as const,
   sources: () => ['admin', 'sources'] as const,
@@ -115,6 +117,13 @@ export function useCatchup(limit?: number): UseQueryResult<ItemWithLinks[]> {
 
 export function useItems(limit?: number): UseQueryResult<ItemWithLinks[]> {
   return useQuery({ queryKey: queryKeys.items(), queryFn: () => fetchItems(limit) });
+}
+
+export function useSkippedItems(since?: string): UseQueryResult<ItemWithLinks[]> {
+  return useQuery({
+    queryKey: queryKeys.skipped(since),
+    queryFn: () => fetchSkippedItems(since),
+  });
 }
 
 export function useSyncStatus(limit?: number): UseQueryResult<SyncLogEntry[]> {
@@ -277,6 +286,17 @@ export function useTriageItem(): UseMutationResult<
   return useMutation({
     mutationFn: ({ itemId, triaged }) => triageItem(itemId, triaged),
     onSuccess: invalidate,
+  });
+}
+
+export function useUnSkipItem(): UseMutationResult<ItemWithLinks, Error, string> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId) => triageItem(itemId, false),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['items', 'skipped'] });
+      void qc.invalidateQueries({ queryKey: queryKeys.catchup() });
+    },
   });
 }
 

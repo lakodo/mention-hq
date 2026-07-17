@@ -28,6 +28,8 @@ class ItemOut(BaseModel):
     context: str | None
     occurred_at: datetime
     triaged: bool
+    triage_reason: str | None = None
+    triaged_at: datetime | None = None
 
 
 class LinkOut(BaseModel):

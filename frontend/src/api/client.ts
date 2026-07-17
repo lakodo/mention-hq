@@ -113,6 +113,11 @@ export async function fetchItems(limit?: number): Promise<ItemWithLinks[]> {
   return data;
 }
 
+export async function fetchSkippedItems(since?: string): Promise<ItemWithLinks[]> {
+  const { data } = await api.get<ItemWithLinks[]>('/items/skipped', { params: { since } });
+  return data;
+}
+
 export async function fetchPeople(): Promise<Person[]> {
   const { data } = await api.get<Person[]>('/people');
   return data;

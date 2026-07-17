@@ -20,6 +20,8 @@ export interface Item {
   context: string | null;
   occurred_at: string;
   triaged: boolean;
+  triage_reason: string | null;
+  triaged_at: string | null;
 }
 
 /** One item's attachment to one task, and who decided it. */
