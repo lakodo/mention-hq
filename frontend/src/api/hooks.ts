@@ -11,6 +11,7 @@ import {
   addSource,
   archiveBucket,
   confirmLinks,
+  confirmTaskCandidate,
   createBucket,
   createPerson,
   createTask,
@@ -23,6 +24,7 @@ import {
   fetchBuckets,
   fetchCatchup,
   fetchItems,
+  fetchNextAction,
   fetchPeople,
   fetchSettings,
   fetchSkippedItems,
@@ -44,6 +46,7 @@ import {
   putSourceConfig,
   reassignBuckets,
   rejectLink,
+  rejectTaskCandidate,
   removeIdentity,
   removeSource,
   restoreBucket,
@@ -69,6 +72,7 @@ import type {
   Detection,
   ItemWithLinks,
   MatchStatus,
+  NextAction,
   Person,
   PersonCreate,
   PersonPatch,
@@ -580,5 +584,42 @@ export function useMergePeople(): UseMutationResult<
   return useMutation({
     mutationFn: ({ sourceId, into }) => mergePeople(sourceId, into),
     onSuccess: invalidate,
+  });
+}
+
+export function useConfirmTaskCandidate(): UseMutationResult<
+  Task,
+  Error,
+  { taskId: string; itemId: string }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, itemId }) => confirmTaskCandidate(taskId, itemId),
+    onSuccess: (updated) => {
+      qc.setQueryData<Task>(queryKeys.task(updated.id), updated);
+      void qc.invalidateQueries({ queryKey: ['tasks'] });
+      void qc.invalidateQueries({ queryKey: queryKeys.catchup() });
+    },
+  });
+}
+
+export function useRejectTaskCandidate(): UseMutationResult<
+  Task,
+  Error,
+  { taskId: string; itemId: string }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, itemId }) => rejectTaskCandidate(taskId, itemId),
+    onSuccess: (updated) => {
+      qc.setQueryData<Task>(queryKeys.task(updated.id), updated);
+      void qc.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+}
+
+export function useNextAction(taskId: string): UseMutationResult<NextAction, Error, void> {
+  return useMutation({
+    mutationFn: () => fetchNextAction(taskId),
   });
 }

@@ -50,14 +50,15 @@ export function makeTasks(): Task[] {
     {
       id: PAYMENTS_TASK_ID,
       title: 'Stripe webhook handling for invoice payments',
+      description: null,
       bucket: 'Payments',
       status: 'open',
       tags: ['backend'],
       unread: true,
       origin: 'auto',
       archived: false,
-      description: null,
       updated_at: minutesAgo(95),
+      candidates: [],
       items: [
         {
           id: 'pr:acme/webapp:1201',
@@ -100,14 +101,15 @@ export function makeTasks(): Task[] {
     {
       id: REFUND_TASK_ID,
       title: 'Refund flow throws on partial captures',
+      description: null,
       bucket: 'Payments',
       status: 'in_progress',
       tags: ['bug'],
       unread: false,
       origin: 'auto',
       archived: false,
-      description: null,
       updated_at: minutesAgo(180),
+      candidates: [],
       items: [
         {
           id: 'linear:PAY-88',
@@ -126,14 +128,15 @@ export function makeTasks(): Task[] {
     {
       id: AUTH_TASK_ID,
       title: 'Refresh token rotation on scope change',
+      description: null,
       bucket: 'Auth',
       status: 'merged',
       tags: ['security'],
       unread: false,
       origin: 'manual',
       archived: false,
-      description: null,
       updated_at: minutesAgo(1440),
+      candidates: [],
       items: [
         {
           id: 'pr:acme/webapp:1188',

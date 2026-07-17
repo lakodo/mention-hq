@@ -128,6 +128,7 @@ export const handlers = [
       archived: false,
       updated_at: new Date().toISOString(),
       items: [],
+      candidates: [],
     };
     db.tasks.push(task);
     return HttpResponse.json(task, { status: 201 });
@@ -282,6 +283,7 @@ export const handlers = [
       archived: false,
       updated_at: item.occurred_at,
       items: [item],
+      candidates: [],
     };
     db.tasks.push(task);
     // The item stays in the inbox on purpose — a new task doesn't triage it away.

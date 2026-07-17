@@ -13,6 +13,7 @@ import type {
   IdentityInput,
   ItemWithLinks,
   MatchStatus,
+  NextAction,
   Person,
   PersonCreate,
   PersonPatch,
@@ -299,6 +300,21 @@ export async function fetchAIStatus(): Promise<AIStatus> {
 /** Send "" to clear the key and fall back to the CLI login or the environment. */
 export async function putAIKey(apiKey: string): Promise<AIStatus> {
   const { data } = await api.put<AIStatus>('/admin/ai/key', { api_key: apiKey });
+  return data;
+}
+
+export async function confirmTaskCandidate(taskId: string, itemId: string): Promise<Task> {
+  const { data } = await api.post<Task>(`/tasks/${seg(taskId)}/candidates/${seg(itemId)}/confirm`);
+  return data;
+}
+
+export async function rejectTaskCandidate(taskId: string, itemId: string): Promise<Task> {
+  const { data } = await api.post<Task>(`/tasks/${seg(taskId)}/candidates/${seg(itemId)}/reject`);
+  return data;
+}
+
+export async function fetchNextAction(taskId: string): Promise<NextAction> {
+  const { data } = await api.post<NextAction>(`/tasks/${seg(taskId)}/next-action`);
   return data;
 }
 

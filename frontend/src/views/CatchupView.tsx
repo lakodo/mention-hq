@@ -11,6 +11,7 @@ import {
   Loader,
   Modal,
   MultiSelect,
+  Popover,
   Progress,
   SegmentedControl,
   Select,
@@ -22,6 +23,7 @@ import { notifications } from '@mantine/notifications';
 import {
   IconExternalLink,
   IconFilterPlus,
+  IconInfoCircle,
   IconPlus,
   IconSparkles,
   IconTrash,
@@ -44,6 +46,7 @@ import {
   useSkippedItems,
   useStopMatching,
   useSuggestItemTasks,
+  useTask,
   useTasks,
   useTriageItem,
   useTriageRules,
@@ -64,6 +67,67 @@ interface LinkRowProps {
   busy: boolean;
   onConfirm: () => void;
   onReject: () => void;
+}
+
+function TaskPreviewPopover({ taskId }: { taskId: string }) {
+  const [opened, setOpened] = useState(false);
+  const { data: task, isLoading } = useTask(opened ? taskId : undefined);
+
+  return (
+    <Popover
+      opened={opened}
+      onChange={setOpened}
+      position="right"
+      withArrow
+      shadow="md"
+      withinPortal
+    >
+      <Popover.Target>
+        <ActionIcon
+          size="xs"
+          variant="subtle"
+          color="gray"
+          aria-label="Preview task"
+          onClick={() => setOpened((o) => !o)}
+        >
+          <IconInfoCircle size={14} />
+        </ActionIcon>
+      </Popover.Target>
+      <Popover.Dropdown style={{ maxWidth: 280 }}>
+        {isLoading ? (
+          <Text fz="xs" c="dimmed">
+            Loading…
+          </Text>
+        ) : task ? (
+          <Stack gap={4}>
+            <Text fz="sm" fw={600}>
+              {task.title}
+            </Text>
+            {task.description && (
+              <Text fz="xs" c="dimmed">
+                {task.description}
+              </Text>
+            )}
+            <Group gap={6} mt={2}>
+              <Badge size="xs" variant="default" radius="xl">
+                {task.bucket}
+              </Badge>
+              <Badge size="xs" variant="light" radius="xl">
+                {task.status}
+              </Badge>
+              <Text fz="xs" c="dimmed">
+                {task.items.length} {task.items.length === 1 ? 'item' : 'items'}
+              </Text>
+            </Group>
+          </Stack>
+        ) : (
+          <Text fz="xs" c="dimmed">
+            Task not found.
+          </Text>
+        )}
+      </Popover.Dropdown>
+    </Popover>
+  );
 }
 
 /**
@@ -88,6 +152,7 @@ function LinkRow({ link, busy, onConfirm, onReject }: LinkRowProps) {
             <Badge size="sm" variant="default" radius="xl">
               {link.task.bucket}
             </Badge>
+            {isProposed && <TaskPreviewPopover taskId={link.task.id} />}
           </Group>
 
           {isProposed && (

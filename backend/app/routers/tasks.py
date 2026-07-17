@@ -8,8 +8,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import CONFIRMED, REJECTED, Item, Link, Task
-from app.schemas import TaskCreate, TaskOut, TaskPatch
+from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, Task
+from app.schemas import NextActionOut, TaskCreate, TaskOut, TaskPatch
+from app.services import ai
 from app.services.buckets import UNCATEGORIZED, load_matcher
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -145,3 +146,54 @@ async def delete_task(task_id: str, db: AsyncSession = Depends(get_db)) -> None:
                 item.triaged = False
 
     await db.commit()
+
+
+@router.post("/{task_id}/next-action", response_model=NextActionOut)
+async def next_action(task_id: str, db: AsyncSession = Depends(get_db)) -> NextActionOut:
+    """Ask the brain for the most important next step on a task."""
+    task = await db.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    try:
+        result = await ai.next_action(task)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return NextActionOut(action=result.action, confidence=result.confidence)
+
+
+@router.post("/{task_id}/candidates/{item_id}/confirm", response_model=TaskOut)
+async def confirm_candidate(task_id: str, item_id: str, db: AsyncSession = Depends(get_db)) -> Task:
+    """Confirm a proposed item link, attaching the item to this task."""
+    task = await db.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    item = await db.get(Item, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    link = await db.get(Link, {"task_id": task_id, "item_id": item_id})
+    if link is None or link.state != PROPOSED:
+        raise HTTPException(status_code=404, detail="No proposed link found")
+
+    link.state = CONFIRMED
+    link.decided_at = datetime.now(UTC)
+    item.triaged = True
+    await db.commit()
+    return await _load(db, task_id)
+
+
+@router.post("/{task_id}/candidates/{item_id}/reject", response_model=TaskOut)
+async def reject_candidate(task_id: str, item_id: str, db: AsyncSession = Depends(get_db)) -> Task:
+    """Reject a proposed item link so the engine cannot re-propose it."""
+    task = await db.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    link = await db.get(Link, {"task_id": task_id, "item_id": item_id})
+    if link is None or link.state != PROPOSED:
+        raise HTTPException(status_code=404, detail="No proposed link found")
+
+    link.state = REJECTED
+    link.decided_at = datetime.now(UTC)
+    await db.commit()
+    return await _load(db, task_id)

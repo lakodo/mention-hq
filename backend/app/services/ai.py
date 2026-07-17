@@ -86,6 +86,20 @@ class TaskMatches(BaseModel):
     matches: list[TaskMatch] = Field(default_factory=list)
 
 
+NEXT_ACTION_SYSTEM_PROMPT = (
+    "You are a personal productivity assistant. Given a task and its recent items, predict the "
+    "single most important next action the person should take.\n\n"
+    'Be concrete and specific — not "review the PR" but "check the review comments on PR #42 and '
+    'address the change-request from the last reviewer". If the items provide no clear signal, say '
+    "so honestly. Keep the answer to one or two sentences."
+)
+
+
+class NextAction(BaseModel):
+    action: str = Field(description="The next action to take, in one or two sentences")
+    confidence: float = Field(ge=0, le=1, description="Confidence that this is the right next step")
+
+
 @dataclass
 class AIStatus:
     available: bool
@@ -213,8 +227,9 @@ Which of these tasks does the item belong to? Return only genuine matches, none 
 
 
 def _build_prompt(task: Task, existing: list[str]) -> str:
-    sources = sorted({item.source for item in task.items})
-    mention_lines = "\n".join(f"- [{m.source}] {m.label}" for m in task.items[:8])
+    all_items = [link.item for link in task.links if link.state != "rejected"]
+    sources = sorted({item.source for item in all_items})
+    mention_lines = "\n".join(f"- [{m.source}] {m.label}" for m in all_items[:8])
     return f"""Existing buckets: {", ".join(existing) if existing else "none yet"}
 
 Task: {task.title}
@@ -223,6 +238,31 @@ Appears in: {", ".join(sources)}
 
 Where it was mentioned:
 {mention_lines}"""
+
+
+async def next_action(task: Task) -> NextAction:
+    """Ask the brain for the most important next step on a task, using its confirmed items."""
+    current = status()
+    if not current.available:
+        raise RuntimeError(current.detail)
+    return await _structured(NEXT_ACTION_SYSTEM_PROMPT, _build_next_action_prompt(task), NextAction)
+
+
+def _build_next_action_prompt(task: Task) -> str:
+    all_items = [link.item for link in task.links if link.state != "rejected"]
+    item_lines = "\n".join(
+        f"- [{item.source}] {item.label}{f' — {item.context}' if item.context else ''}"
+        for item in all_items[:12]
+    )
+    desc_line = f"\nDescription: {task.description}" if task.description else ""
+    return f"""Task: {task.title}{desc_line}
+Bucket: {task.bucket}
+Status: {task.status}
+
+Items (most recent first):
+{item_lines or "(no items yet)"}
+
+What is the single most important next action?"""
 
 
 async def _structured(system: str, prompt: str, model_cls: type[_Structured]) -> _Structured:
