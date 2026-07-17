@@ -32,6 +32,7 @@ import {
 import { useMemo, useState } from 'react';
 import { SourceDot } from '../components/SourceDot';
 import { PrStatusPill } from '../components/PrStatusPill';
+import { PeopleStrip } from '../components/PeopleStrip';
 import { itemLabel } from '../components/ItemLabel';
 import { LINK_STATE_META, sourceMeta } from '../constants';
 import { errorMessage } from '../api/client';
@@ -322,6 +323,11 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
           reviewRequested={item.pr_review_requested}
           size="xs"
         />
+      )}
+      {item.people.length > 0 && (
+        <Box mt={6}>
+          <PeopleStrip people={item.people} />
+        </Box>
       )}
 
       {shownLinks.length > 0 && (

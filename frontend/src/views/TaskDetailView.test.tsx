@@ -95,6 +95,15 @@ describe('TaskDetailView', () => {
     expect(await screen.findByLabelText('Resize task list')).toBeInTheDocument();
   });
 
+  it('shows the people an item concerns, merged onto the task', async () => {
+    renderApp(detailRoute(PAYMENTS_TASK_ID));
+
+    const detail = await panel();
+    // The task's merged People strip and the per-item avatar both name the author.
+    expect(within(detail).getByText('People')).toBeInTheDocument();
+    expect(within(detail).getAllByText('AD').length).toBeGreaterThan(0);
+  });
+
   it('select-all ticks only the shown rows and keeps them when the filter clears', async () => {
     const user = userEvent.setup();
     renderApp('/task');

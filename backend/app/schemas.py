@@ -18,6 +18,13 @@ class TaskRef(BaseModel):
     bucket: str
 
 
+class ItemPersonOut(BaseModel):
+    kind: str
+    value: str
+    name: str
+    role: str
+
+
 class ItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -33,6 +40,7 @@ class ItemOut(BaseModel):
     pr_status: str | None = None
     pr_review_requested: bool = False
     emoji: dict[str, str] = {}
+    people: list[ItemPersonOut] = []
 
 
 class LinkOut(BaseModel):

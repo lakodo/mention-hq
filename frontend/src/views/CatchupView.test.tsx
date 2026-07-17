@@ -129,6 +129,7 @@ describe('CatchupView', () => {
       pr_status: null,
       pr_review_requested: false,
       emoji: {},
+      people: [],
       links: [
         {
           task: {

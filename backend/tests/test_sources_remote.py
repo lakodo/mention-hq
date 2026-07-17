@@ -121,6 +121,37 @@ class TestGitHub:
         assert item.extra["pr_status"] == "changes_requested"
         assert item.extra["pr_review_requested"] is True
 
+    @respx.mock
+    async def test_a_pr_carries_its_author_assignees_and_reviewers(self, github):
+        pr = {
+            **PR_SEARCH["items"][0],
+            "user": {"login": "someone"},
+            "assignees": [{"login": "grace"}],
+        }
+        respx.get("https://api.github.com/search/issues").mock(side_effect=_github_search({"items": [pr]}))
+        _github_graphql(
+            [
+                {
+                    "number": 1201,
+                    "repository": {"nameWithOwner": "acme/widgets"},
+                    "reviewDecision": "CHANGES_REQUESTED",
+                    "reviewRequests": {
+                        "totalCount": 1,
+                        "nodes": [{"requestedReviewer": {"login": "ada"}}],
+                    },
+                    "reviews": {"nodes": [{"author": {"login": "linus"}}]},
+                }
+            ]
+        )
+
+        people = (await github.fetch())[0].people
+        by_login = {p["value"]: p["role"] for p in people}
+
+        assert by_login["someone"] == "author"
+        assert by_login["grace"] == "assignee"
+        assert by_login["ada"] == "reviewer"
+        assert by_login["linus"] == "reviewer"
+
     async def test_unconfigured_fetches_nothing_rather_than_failing(self):
         assert await GitHubSource({}).fetch() == []
 
@@ -186,6 +217,23 @@ class TestLinear:
         assert "SOMEONE/ENG-42-SEARCH-TIMEOUT" in item.identity_keys, (
             "the branch name is how a local branch finds its issue"
         )
+
+    @respx.mock
+    async def test_an_issue_carries_its_assignee_and_creator(self, linear):
+        issue = {
+            **LINEAR_ISSUES["data"]["issues"]["nodes"][0],
+            "assignee": {"displayName": "Ada Lovelace", "email": "ada@acme.dev"},
+            "creator": {"displayName": "Grace Hopper", "email": "grace@acme.dev"},
+        }
+        respx.post("https://api.linear.app/graphql").mock(
+            return_value=httpx.Response(200, json={"data": {"issues": {"nodes": [issue]}}})
+        )
+
+        people = (await linear.fetch())[0].people
+        by_name = {p["name"]: p["role"] for p in people}
+
+        assert by_name["Ada Lovelace"] == "assignee"
+        assert by_name["Grace Hopper"] == "creator"
 
     @respx.mock
     async def test_graphql_errors_arrive_with_status_200(self, linear):

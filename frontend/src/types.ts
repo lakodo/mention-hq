@@ -13,6 +13,13 @@ export interface TaskRef {
   bucket: string;
 }
 
+export interface ItemPerson {
+  kind: string;
+  value: string;
+  name: string;
+  role: string;
+}
+
 export interface Item {
   id: string;
   source: Source;
@@ -26,6 +33,7 @@ export interface Item {
   pr_status: string | null;
   pr_review_requested: boolean;
   emoji: Record<string, string>;
+  people: ItemPerson[];
 }
 
 /** One item's attachment to one task, and who decided it. */

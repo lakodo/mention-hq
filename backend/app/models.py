@@ -229,6 +229,11 @@ class Item(Base):
         """Custom emoji shortcodes used in the label, mapped to their image URL."""
         return (self.extra or {}).get("emoji") or {}
 
+    @property
+    def people(self) -> list[dict]:
+        """People the item concerns — each `{kind, value, name, role}`, source-specific."""
+        return (self.extra or {}).get("people") or []
+
 
 class Bucket(Base):
     """A topic column on the board, grouping tasks.

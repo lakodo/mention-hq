@@ -33,6 +33,8 @@ query MyIssues($userId: ID!) {
       state { name type }
       labels { nodes { name } }
       project { name }
+      assignee { displayName email }
+      creator { displayName email }
     }
   }
 }
@@ -133,6 +135,19 @@ def _to_item(node: dict) -> RawItem:
     if node.get("branchName"):
         identity.add(node["branchName"].upper())
 
+    people: list[dict] = []
+    for role in ("assignee", "creator"):
+        person = node.get(role)
+        if person and person.get("displayName"):
+            people.append(
+                {
+                    "kind": "linear",
+                    "value": person.get("email") or person["displayName"],
+                    "name": person["displayName"],
+                    "role": role,
+                }
+            )
+
     return RawItem(
         source="linear",
         external_id=node["id"],
@@ -145,6 +160,7 @@ def _to_item(node: dict) -> RawItem:
         tags=labels,
         identity_keys=identity,
         reference_keys=all_reference_keys(node.get("description")) - identity,
+        people=people,
         extra={
             "state_name": state.get("name"),
             "labels": labels,

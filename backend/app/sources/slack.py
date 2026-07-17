@@ -223,10 +223,16 @@ def _to_item(match: dict, names: dict[str, str], emoji: dict[str, str]) -> RawIt
     # Which configured custom emoji actually appear, so the frontend can render just those.
     used = {name: url for name, url in emoji.items() if f":{name}:" in label}
 
+    people = [
+        {"kind": "slack", "value": uid, "name": names.get(uid, uid), "role": "mentioned"}
+        for uid in sorted(_mention_ids(match))
+    ]
+
     return RawItem(
         source="slack",
         external_id=f"{channel.get('id', 'unknown')}:{thread_ts}",
         label=label,
+        people=people,
         occurred_at=datetime.fromtimestamp(_ts(match), tz=UTC),
         url=match.get("permalink"),
         context=None,

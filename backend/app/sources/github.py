@@ -109,18 +109,18 @@ class GitHubSource(Source):
         # reviewer is still pending — a PR can be both "changes requested" and awaiting review.
         for item in items:
             if item.source == "pr":
-                decision, pending = review.get(item.external_id, (None, False))
-                item.extra["pr_status"] = _pr_status(item.extra.get("draft", False), decision)
-                item.extra["pr_review_requested"] = pending
+                state = review.get(item.external_id, {})
+                item.extra["pr_status"] = _pr_status(item.extra.get("draft", False), state.get("decision"))
+                item.extra["pr_review_requested"] = state.get("pending", False)
+                for login in state.get("reviewers", []):
+                    _add_person(item.people, login, "reviewer")
         return items
 
-    async def _review_states(
-        self, client: httpx.AsyncClient, username: str, org: str
-    ) -> dict[str, tuple[str | None, bool]]:
-        """`{repo#number: (review_decision, has_pending_reviewer)}` for the open PRs.
+    async def _review_states(self, client: httpx.AsyncClient, username: str, org: str) -> dict[str, dict]:
+        """`{repo#number: {decision, pending, reviewers}}` for the open PRs.
 
-        One GraphQL call, because the REST search only exposes the single overall decision
-        and can't say a changes-requested PR also has a review still pending.
+        One GraphQL call, because the REST search exposes only the single overall decision —
+        not that a changes-requested PR still has a review pending, nor who the reviewers are.
         """
         query = """
         query($q: String!) {
@@ -130,7 +130,8 @@ class GitHubSource(Source):
                 number
                 repository { nameWithOwner }
                 reviewDecision
-                reviewRequests { totalCount }
+                reviewRequests(first: 20) { totalCount nodes { requestedReviewer { ... on User { login } } } }
+                reviews(first: 50) { nodes { author { login } } }
               }
             }
           }
@@ -148,14 +149,28 @@ class GitHubSource(Source):
             # Review state is a nicety; a PR without it still shows as an open PR.
             return {}
 
-        states: dict[str, tuple[str | None, bool]] = {}
+        states: dict[str, dict] = {}
         for node in nodes:
             if not node:
                 continue
             repo = (node.get("repository") or {}).get("nameWithOwner", "unknown/unknown")
-            pending = (node.get("reviewRequests") or {}).get("totalCount", 0) > 0
-            states[f"{repo}#{node['number']}"] = (node.get("reviewDecision"), pending)
+            requests = node.get("reviewRequests") or {}
+            reviewers = {(r.get("requestedReviewer") or {}).get("login") for r in requests.get("nodes") or []}
+            reviewers |= {
+                (r.get("author") or {}).get("login") for r in (node.get("reviews") or {}).get("nodes") or []
+            }
+            states[f"{repo}#{node['number']}"] = {
+                "decision": node.get("reviewDecision"),
+                "pending": requests.get("totalCount", 0) > 0,
+                "reviewers": sorted(login for login in reviewers if login),
+            }
         return states
+
+
+def _add_person(people: list[dict], login: str | None, role: str) -> None:
+    """Add a GitHub login once — a person keeps the first role they turn up in."""
+    if login and not any(p["value"] == login for p in people):
+        people.append({"kind": "github", "value": login, "name": login, "role": role})
 
 
 def _to_item(raw: dict, kind: str) -> RawItem:
@@ -167,6 +182,11 @@ def _to_item(raw: dict, kind: str) -> RawItem:
     identity = github_key(repo, number)
     # A ticket or issue reference in the body is the strongest cross-source link available.
     references = all_reference_keys(raw["title"], body, default_repo=repo) - {identity}
+
+    people: list[dict] = []
+    _add_person(people, (raw.get("user") or {}).get("login"), "author")
+    for assignee in raw.get("assignees") or []:
+        _add_person(people, assignee.get("login"), "assignee")
 
     return RawItem(
         source=kind,
@@ -180,6 +200,7 @@ def _to_item(raw: dict, kind: str) -> RawItem:
         tags=labels,
         identity_keys={identity},
         reference_keys=references,
+        people=people,
         extra={"repo": repo, "labels": labels, "draft": raw.get("draft", False)},
     )
 

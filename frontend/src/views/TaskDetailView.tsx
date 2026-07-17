@@ -40,6 +40,7 @@ import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useState } from
 import { useNavigate, useParams } from 'react-router-dom';
 import { ReadToggle } from '../components/ReadToggle';
 import { PrStatusPill } from '../components/PrStatusPill';
+import { PeopleStrip, mergePeople } from '../components/PeopleStrip';
 import { itemLabel } from '../components/ItemLabel';
 import { SourceDot } from '../components/SourceDot';
 import { StatusPill } from '../components/StatusPill';
@@ -155,6 +156,11 @@ function ItemCard({ item }: ItemCardProps) {
               reviewRequested={item.pr_review_requested}
               size="xs"
             />
+          )}
+          {item.people.length > 0 && (
+            <Box mt={6}>
+              <PeopleStrip people={item.people} />
+            </Box>
           )}
         </Box>
         <Text fz="xs" c="dimmed" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
@@ -892,6 +898,21 @@ export function TaskDetailView() {
                 </Badge>
               ))}
             </Group>
+
+            {mergePeople(selected.items).length > 0 && (
+              <Group gap={8} mb="lg" align="center">
+                <Text
+                  fz="xs"
+                  c="dimmed"
+                  fw={600}
+                  tt="uppercase"
+                  style={{ letterSpacing: '0.04em' }}
+                >
+                  People
+                </Text>
+                <PeopleStrip people={mergePeople(selected.items)} size={24} />
+              </Group>
+            )}
 
             <Group gap="md" mb="lg">
               <ReadToggle

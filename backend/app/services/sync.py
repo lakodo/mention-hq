@@ -318,6 +318,7 @@ def _row_to_raw(row: Item) -> RawItem:
         tags=row.extra.get("tags", []),
         identity_keys=set(row.extra.get("identity_keys", [])),
         reference_keys=set(row.extra.get("reference_keys", [])),
+        people=row.extra.get("people", []),
         extra=row.extra,
     )
 
