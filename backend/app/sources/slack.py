@@ -237,6 +237,11 @@ def _message_text(match: dict) -> str:
     up as "(no text)".
     """
     text = (match.get("text") or "").strip()
+    # Sharing a Slack message posts its permalink as the text and unfurls the quoted message
+    # into an attachment. The bare link reads as nothing, so prefer the quoted content.
+    shared = _shared_message_text(match)
+    if shared and (not text or _is_only_slack_link(text)):
+        return shared
     if text:
         return text
     blocks = _blocks_text(match.get("blocks"))
@@ -253,6 +258,32 @@ def _message_text(match: dict) -> str:
         if found:
             return str(found).strip()
     return ""
+
+
+_SLACK_LINK_ONLY = re.compile(r"^<?https?://[\w.-]+\.slack\.com/archives/\S+?>?$")
+
+
+def _is_only_slack_link(text: str) -> bool:
+    return bool(_SLACK_LINK_ONLY.match(text.strip()))
+
+
+def _shared_message_text(match: dict) -> str | None:
+    """The quoted message from a shared/unfurled Slack link, as `author in #channel: body`."""
+    for att in match.get("attachments") or []:
+        is_share = att.get("is_msg_unfurl") or att.get("is_share")
+        if not is_share and "/archives/" not in (att.get("from_url") or ""):
+            continue
+        body = (att.get("text") or att.get("fallback") or "").strip()
+        author = att.get("author_name") or att.get("author_subname")
+        channel_name = att.get("channel_name")
+        # Show it as Slack does — "#mo". `footer` is the fallback and is usually pre-formatted.
+        channel = f"#{channel_name}" if channel_name else att.get("footer")
+        where = f" in {channel}" if channel else ""
+        prefix = f"{author}{where}" if author else (channel or "")
+        if prefix and body:
+            return f"{prefix}: {body}"
+        return body or prefix or None
+    return None
 
 
 def _blocks_text(blocks: list | None) -> str:

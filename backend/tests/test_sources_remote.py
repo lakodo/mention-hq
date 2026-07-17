@@ -372,6 +372,30 @@ class TestSlack:
         assert item.label.startswith("#eng - hey @ada.lovelace can you review PR #1?")
 
     @respx.mock
+    async def test_a_shared_message_shows_the_quote_not_the_permalink(self, slack):
+        match = {
+            **SLACK_SEARCH["messages"]["matches"][0],
+            "text": "<https://acme.slack.com/archives/C05/p1784100000000100>",
+            "attachments": [
+                {
+                    "is_msg_unfurl": True,
+                    "author_name": "Grace Hopper",
+                    "channel_name": "mo",
+                    "text": "follow-up investigation is done",
+                    "from_url": "https://acme.slack.com/archives/C05/p1784100000000100",
+                }
+            ],
+        }
+        respx.get("https://slack.com/api/search.messages").mock(
+            return_value=httpx.Response(200, json={"ok": True, "messages": {"matches": [match]}})
+        )
+
+        item = (await slack.fetch())[0]
+
+        assert "slack.com/archives" not in item.label, "the raw permalink is gone"
+        assert item.label.startswith("#eng - Grace Hopper in #mo: follow-up")
+
+    @respx.mock
     async def test_a_bare_mention_and_dm_channel_resolve_to_names(self, slack):
         match = {
             "ts": "1752660000.000100",
