@@ -243,6 +243,13 @@ export const handlers = [
     ),
   ),
 
+  http.post(`${BASE}/tasks/:id/next-action`, ({ params }) => {
+    const action = 'Review the latest PR comments and address the change request.';
+    const task = db.tasks.find((t) => t.id === params.id);
+    if (task) task.next_action = action;
+    return HttpResponse.json({ action, confidence: 0.8 });
+  }),
+
   http.post(`${BASE}/items`, async ({ request }) => {
     const body = (await request.json()) as {
       text: string;

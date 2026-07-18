@@ -31,6 +31,7 @@ import {
   IconDots,
   IconExternalLink,
   IconPlus,
+  IconRefresh,
   IconSearch,
   IconSparkles,
   IconTrash,
@@ -379,6 +380,14 @@ export function TaskDetailView() {
   const askForSuggestion = () => {
     if (!selected) return;
     suggest.mutate(selected.id, { onSuccess: setSuggestion, onError: fail });
+  };
+
+  const runNextAction = () => {
+    setNextActionResult(null);
+    nextActionMutation.mutate(undefined, {
+      onSuccess: (result) => setNextActionResult(result),
+      onError: fail,
+    });
   };
 
   const toggleArchive = () => {
@@ -938,36 +947,6 @@ export function TaskDetailView() {
                   updateTask.mutate({ id: selected.id, patch: { unread: !selected.unread } })
                 }
               />
-              {/* When uncategorized, Suggest bucket sits next to the badge instead. Here it's
-                  the re-bucket affordance for a task that already has one. */}
-              {selected.bucket !== UNCATEGORIZED && (
-                <Button
-                  size="xs"
-                  variant="light"
-                  color="violet"
-                  leftSection={<IconSparkles size={14} />}
-                  loading={suggest.isPending}
-                  onClick={askForSuggestion}
-                >
-                  Suggest bucket
-                </Button>
-              )}
-              <Button
-                size="xs"
-                variant="light"
-                color="indigo"
-                leftSection={<IconSparkles size={14} />}
-                loading={nextActionMutation.isPending}
-                onClick={() => {
-                  setNextActionResult(null);
-                  nextActionMutation.mutate(undefined, {
-                    onSuccess: (result) => setNextActionResult(result),
-                    onError: (error) => fail(error),
-                  });
-                }}
-              >
-                Next action
-              </Button>
               <Button
                 size="xs"
                 variant="subtle"
@@ -1002,10 +981,43 @@ export function TaskDetailView() {
               />
             )}
 
-            {(nextActionResult?.action ?? selected.next_action) && (
-              <Alert mb="md" color="indigo" variant="light" title="Next action">
+            {(nextActionResult?.action ?? selected.next_action) ? (
+              <Alert
+                mb="md"
+                color="indigo"
+                variant="light"
+                title={
+                  <Group justify="space-between" wrap="nowrap" w="100%">
+                    <span>Next action</span>
+                    <Tooltip label="Refresh" withArrow>
+                      <ActionIcon
+                        size="sm"
+                        variant="subtle"
+                        color="indigo"
+                        aria-label="Refresh next action"
+                        loading={nextActionMutation.isPending}
+                        onClick={runNextAction}
+                      >
+                        <IconRefresh size={14} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </Group>
+                }
+              >
                 <Text fz="sm">{nextActionResult?.action ?? selected.next_action}</Text>
               </Alert>
+            ) : (
+              <Button
+                mb="md"
+                size="xs"
+                variant="light"
+                color="indigo"
+                leftSection={<IconSparkles size={14} />}
+                loading={nextActionMutation.isPending}
+                onClick={runNextAction}
+              >
+                Next action
+              </Button>
             )}
 
             {selected.candidates.length > 0 && (

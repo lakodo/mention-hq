@@ -267,8 +267,14 @@ describe('TaskDetailView', () => {
     await waitFor(() => expect(db.tasks.some((t) => t.id === AUTH_TASK_ID)).toBe(false));
   });
 
+  // Suggest bucket only appears next to the badge on an uncategorized task, so these open
+  // the Payments task after clearing its bucket.
+  const makeUncategorized = () =>
+    (db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)!.bucket = 'Uncategorized');
+
   it('argues an AI suggestion and never applies it on its own', async () => {
     const user = userEvent.setup();
+    makeUncategorized();
     renderApp(detailRoute(PAYMENTS_TASK_ID));
 
     const detail = await panel();
@@ -280,22 +286,12 @@ describe('TaskDetailView', () => {
     expect(screen.getByText('new bucket')).toBeInTheDocument();
 
     // Shown, but nothing moved until the user says so.
-    expect(db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)?.bucket).toBe('Payments');
-  });
-
-  it('offers Suggest bucket next to the badge when the task is uncategorized', async () => {
-    const user = userEvent.setup();
-    db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)!.bucket = 'Uncategorized';
-    renderApp(detailRoute(PAYMENTS_TASK_ID));
-
-    const detail = await panel();
-    // The inline (near-badge) button — the action-row one is hidden while uncategorized.
-    await user.click(within(detail).getByRole('button', { name: /Suggest bucket/ }));
-    expect(await screen.findByText('Suggested bucket')).toBeInTheDocument();
+    expect(db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)?.bucket).toBe('Uncategorized');
   });
 
   it('creates the bucket and moves the task when a new-bucket suggestion is accepted', async () => {
     const user = userEvent.setup();
+    makeUncategorized();
     renderApp(detailRoute(PAYMENTS_TASK_ID));
 
     const detail = await panel();
@@ -310,6 +306,7 @@ describe('TaskDetailView', () => {
 
   it('dismisses a suggestion without touching the task', async () => {
     const user = userEvent.setup();
+    makeUncategorized();
     renderApp(detailRoute(PAYMENTS_TASK_ID));
 
     const detail = await panel();
@@ -317,7 +314,7 @@ describe('TaskDetailView', () => {
     await user.click(await screen.findByRole('button', { name: 'Dismiss' }));
 
     await waitFor(() => expect(screen.queryByText('Suggested bucket')).not.toBeInTheDocument());
-    expect(db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)?.bucket).toBe('Payments');
+    expect(db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)?.bucket).toBe('Uncategorized');
   });
 
   it('explains itself when no AI credentials are configured', async () => {
@@ -327,11 +324,26 @@ describe('TaskDetailView', () => {
       ),
     );
     const user = userEvent.setup();
+    makeUncategorized();
     renderApp(detailRoute(PAYMENTS_TASK_ID));
 
     const detail = await panel();
     await user.click(within(detail).getByRole('button', { name: /Suggest bucket/ }));
 
     expect(await screen.findByText('No credentials. Run `ant auth login`.')).toBeInTheDocument();
+  });
+
+  it('shows a Next action button, then the card with a refresh once produced', async () => {
+    const user = userEvent.setup();
+    renderApp(detailRoute(PAYMENTS_TASK_ID));
+
+    const detail = await panel();
+    // No next action yet → a button stands in for the card.
+    await user.click(within(detail).getByRole('button', { name: 'Next action' }));
+
+    // Once produced, the card shows with a refresh control and the standalone button is gone.
+    expect(await within(detail).findByText(/Review the latest PR comments/)).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'Refresh next action' })).toBeInTheDocument();
+    expect(within(detail).queryByRole('button', { name: 'Next action' })).not.toBeInTheDocument();
   });
 });
