@@ -1,5 +1,15 @@
 export type Source =
-  'pr' | 'issue' | 'linear' | 'slack' | 'branch' | 'todo' | 'markdown' | 'dust' | 'notion' | 'note';
+  | 'pr'
+  | 'issue'
+  | 'linear'
+  | 'slack'
+  | 'branch'
+  | 'todo'
+  | 'markdown'
+  | 'dust'
+  | 'notion'
+  | 'notion_mcp'
+  | 'note';
 
 export type Status = 'open' | 'in_progress' | 'merged' | 'done';
 

@@ -343,6 +343,21 @@ export function makeSourceFields(kind: string): ConfigField[] {
       },
     ];
   }
+  if (kind === 'notion_mcp') {
+    return [
+      {
+        key: 'query',
+        label: 'Search terms',
+        kind: 'text',
+        required: false,
+        placeholder: 'Leave blank for your most recent pages',
+        help: '',
+        help_url: '',
+        value: null,
+        is_set: false,
+      },
+    ];
+  }
   if (kind === 'notion') {
     return [
       {

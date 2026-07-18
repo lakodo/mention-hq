@@ -15,6 +15,10 @@ All notable changes to Personal HQ are recorded here. The format follows
   button runs the consent handshake, the redirect URI is detected from your own host (so it
   works behind a proxy or custom domain, not just localhost), and the access token refreshes
   itself. Pasting a personal token still works where that's allowed.
+- Notion MCP: a second Notion source that reads over the hosted MCP server
+  (mcp.notion.com). It registers HQ as an OAuth client on the fly (dynamic client
+  registration + PKCE), so it needs no admin-provisioned token or app at all — the path that
+  works when a workspace has locked down API tokens and OAuth apps. Just Connect and log in.
 - Brain dump: a distraction-free page (and an always-present button in the header) to type
   a thought straight into an item, optionally filed onto tasks as you submit it; notes stay
   editable in place from the task or catch-up.

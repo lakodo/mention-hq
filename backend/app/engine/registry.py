@@ -25,6 +25,7 @@ ENGINES_BY_SOURCE: dict[str, list[Engine]] = {
     "branch": [_KEYS, _TITLE],
     "markdown": [_KEYS, _TITLE],
     "notion": [_KEYS, _TITLE],
+    "notion_mcp": [_KEYS, _TITLE],
     "todo": [_TITLE],
     "slack": [_KEYS],
     "dust": [_KEYS],

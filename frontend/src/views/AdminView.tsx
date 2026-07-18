@@ -33,7 +33,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { CONNECTION_META, UNCATEGORIZED } from '../constants';
-import { errorMessage, startNotionAuthorize } from '../api/client';
+import { errorMessage, startOauthAuthorize } from '../api/client';
 import {
   useAIStatus,
   useAddSource,
@@ -43,7 +43,7 @@ import {
   useDeleteBucket,
   useDetectSource,
   useEnrichTasks,
-  useNotionOauth,
+  useOauthInfo,
   queryKeys,
   useReassignBuckets,
   useRemoveSource,
@@ -507,13 +507,17 @@ interface SourceCardProps {
  * The form is built from `fields`, so a source the backend grows tomorrow gets a
  * working setup form here without a line of code.
  */
+// Which sources authenticate over an OAuth popup, and the callback path segment each uses.
+const OAUTH_PROVIDERS: Record<string, string> = { notion: 'notion', notion_mcp: 'notion-mcp' };
+
 /**
- * Notion can't use a pasted token when an admin blocks static tokens, so it authenticates
- * over OAuth. The redirect URI is detected from the browser's own origin — every user is on
- * a different host (localhost, a Caddy domain) — and shown here to register in Notion.
+ * Sources an admin can lock out of static tokens authenticate over OAuth instead. The
+ * redirect URI is detected from the browser's own origin — every user is on a different host
+ * (localhost, a Caddy domain) — and shown here to register with the provider. The Notion MCP
+ * variant needs nothing pasted: it registers HQ itself and is always ready to connect.
  */
-function NotionConnect({ source }: { source: SourceStatus }) {
-  const info = useNotionOauth(source.id, source.kind === 'notion');
+function OauthConnect({ source, provider }: { source: SourceStatus; provider: string }) {
+  const info = useOauthInfo(source.id, provider, true);
   const qc = useQueryClient();
   const [connecting, setConnecting] = useState(false);
 
@@ -523,8 +527,8 @@ function NotionConnect({ source }: { source: SourceStatus }) {
   const connect = async () => {
     setConnecting(true);
     try {
-      const url = await startNotionAuthorize(source.id);
-      const popup = window.open(url, 'notion-oauth', 'width=720,height=820');
+      const url = await startOauthAuthorize(source.id, provider);
+      const popup = window.open(url, 'oauth', 'width=720,height=820');
       // The consent happens in the popup, so the outcome only shows here once it closes:
       // re-read the status and say, either way, whether the token actually landed.
       const timer = window.setInterval(async () => {
@@ -534,10 +538,10 @@ function NotionConnect({ source }: { source: SourceStatus }) {
         const { data } = await info.refetch();
         void qc.invalidateQueries({ queryKey: queryKeys.sources() });
         if (data?.connected) {
-          ok('Connected to Notion', 'HQ can now read your pages.');
+          ok(`Connected to ${source.name}`, 'HQ can now read your pages.');
         } else {
           notifications.show({
-            title: 'Notion not connected',
+            title: `${source.name} not connected`,
             message: 'The login was cancelled or refused. Try Connect again.',
             color: 'orange',
           });
@@ -556,7 +560,7 @@ function NotionConnect({ source }: { source: SourceStatus }) {
           Redirect URI
         </Text>
         <Text fz="xs" c="dimmed">
-          Register this exact URL in your Notion connection.
+          Register this exact URL with the provider.
         </Text>
         <Group gap={6} mt={4} wrap="nowrap">
           <Code style={{ flex: 1, overflowX: 'auto', whiteSpace: 'nowrap' }}>{redirect_uri}</Code>
@@ -571,7 +575,7 @@ function NotionConnect({ source }: { source: SourceStatus }) {
       </Box>
       <Group gap={8}>
         <Button size="xs" onClick={connect} loading={connecting} disabled={!oauth_ready}>
-          {connected ? 'Reconnect to Notion' : 'Connect to Notion'}
+          {connected ? `Reconnect to ${source.name}` : `Connect to ${source.name}`}
         </Button>
         {!oauth_ready && (
           <Text fz="xs" c="dimmed">
@@ -761,7 +765,9 @@ function SourceCard({ source }: SourceCardProps) {
         </Box>
       )}
 
-      {source.kind === 'notion' && <NotionConnect source={source} />}
+      {OAUTH_PROVIDERS[source.kind] && (
+        <OauthConnect source={source} provider={OAUTH_PROVIDERS[source.kind]} />
+      )}
 
       <Group gap={8} mt="md" justify="space-between">
         <Text fz={10} c="dimmed">

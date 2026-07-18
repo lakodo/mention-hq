@@ -30,7 +30,7 @@ import {
   fetchCatchup,
   fetchItems,
   fetchNextAction,
-  fetchNotionOauth,
+  fetchOauthInfo,
   fetchPeople,
   fetchSettings,
   fetchSkippedItems,
@@ -109,7 +109,7 @@ export const queryKeys = {
   people: () => ['people'] as const,
   syncStatus: () => ['sync', 'status'] as const,
   sources: () => ['admin', 'sources'] as const,
-  notionOauth: (id: string) => ['admin', 'sources', id, 'notion'] as const,
+  oauthInfo: (id: string, provider: string) => ['admin', 'sources', id, provider] as const,
   sourceKinds: () => ['admin', 'source-kinds'] as const,
   settings: () => ['admin', 'settings'] as const,
   ai: () => ['admin', 'ai'] as const,
@@ -155,10 +155,14 @@ export function useSources(): UseQueryResult<SourceStatus[]> {
   return useQuery({ queryKey: queryKeys.sources(), queryFn: fetchSources });
 }
 
-export function useNotionOauth(id: string, enabled: boolean): UseQueryResult<NotionOAuthInfo> {
+export function useOauthInfo(
+  id: string,
+  provider: string,
+  enabled: boolean,
+): UseQueryResult<NotionOAuthInfo> {
   return useQuery({
-    queryKey: queryKeys.notionOauth(id),
-    queryFn: () => fetchNotionOauth(id),
+    queryKey: queryKeys.oauthInfo(id, provider),
+    queryFn: () => fetchOauthInfo(id, provider),
     enabled,
   });
 }

@@ -5,7 +5,9 @@ from __future__ import annotations
 import sqlite3
 from urllib.parse import parse_qs, urlparse
 
+import httpx
 import pytest
+import respx
 
 from app.config import Settings
 from app.models import SourceInstance
@@ -135,3 +137,64 @@ class TestNotionOAuth:
         await client.get(f"/api/admin/oauth/notion/callback?code=abc&state={state}")
 
         assert calls["n"] == 1, "the nonce is burned on first use"
+
+
+class TestNotionMcpOAuth:
+    async def test_info_is_always_ready_and_detects_the_redirect_uri(self, client, db):
+        db.add(SourceInstance(id="notion_mcp-x", kind="notion_mcp", name="Notion MCP"))
+        await db.commit()
+
+        response = await client.get(
+            "/api/admin/sources/notion_mcp-x/notion-mcp", headers={"Origin": "http://jojohq"}
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["redirect_uri"] == "http://jojohq/api/admin/oauth/notion-mcp/callback"
+        # Nothing to paste — Connect registers HQ itself — so it is ready with no config.
+        assert body["oauth_ready"] is True
+        assert body["connected"] is False
+
+    @respx.mock
+    async def test_authorize_registers_a_client_and_builds_a_pkce_url(self, client, db):
+        db.add(SourceInstance(id="notion_mcp-x", kind="notion_mcp", name="Notion MCP"))
+        await db.commit()
+        respx.post("https://mcp.notion.com/register").mock(
+            return_value=httpx.Response(200, json={"client_id": "cid-mcp"})
+        )
+
+        response = await client.post(
+            "/api/admin/sources/notion_mcp-x/notion-mcp/authorize", headers={"Origin": "http://jojohq"}
+        )
+
+        assert response.status_code == 200, response.text
+        url = response.json()["authorize_url"]
+        assert url.startswith("https://mcp.notion.com/authorize")
+        query = parse_qs(urlparse(url).query)
+        assert query["client_id"] == ["cid-mcp"]
+        assert query["code_challenge_method"] == ["S256"]
+        assert query["code_challenge"], "a PKCE challenge protects the code in transit"
+        assert query["state"]
+
+    @respx.mock
+    async def test_callback_exchanges_the_code_and_stores_the_token(self, client, db, isolated_secrets):
+        db.add(SourceInstance(id="notion_mcp-x", kind="notion_mcp", name="Notion MCP"))
+        await db.commit()
+        respx.post("https://mcp.notion.com/register").mock(
+            return_value=httpx.Response(200, json={"client_id": "cid-mcp"})
+        )
+        respx.post("https://mcp.notion.com/token").mock(
+            return_value=httpx.Response(
+                200, json={"access_token": "mcp-tok", "refresh_token": "r2", "expires_in": 3600}
+            )
+        )
+        authorize = await client.post(
+            "/api/admin/sources/notion_mcp-x/notion-mcp/authorize", headers={"Origin": "http://jojohq"}
+        )
+        state = parse_qs(urlparse(authorize.json()["authorize_url"]).query)["state"][0]
+
+        callback = await client.get(f"/api/admin/oauth/notion-mcp/callback?code=abc&state={state}")
+
+        assert callback.status_code == 200
+        assert isolated_secrets.get("notion_mcp-x", "token") == "mcp-tok"
+        assert isolated_secrets.get("notion_mcp-x", "refresh_token") == "r2"

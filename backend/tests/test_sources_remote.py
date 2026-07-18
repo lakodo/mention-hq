@@ -6,6 +6,7 @@ each API has that a status code alone won't reveal.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -15,6 +16,7 @@ import respx
 from app.sources.github import GitHubSource
 from app.sources.linear import LinearSource
 from app.sources.notion import NotionSource
+from app.sources.notion_mcp import NotionMcpSource, _items_from_search
 from app.sources.slack import SlackSource
 
 PR_SEARCH = {
@@ -857,3 +859,121 @@ class TestNotion:
             {"client_id": "c", "client_secret": "s", "refresh_token": "r1", "token_expiry": future}
         )
         assert await source.prepare() is None
+
+
+def _mcp_search_result(entry: dict) -> dict:
+    return {"jsonrpc": "2.0", "id": 2, "result": {"structuredContent": {"results": [entry]}}}
+
+
+def _mcp_handler(search_response: httpx.Response):
+    """Dispatch the three MCP posts by JSON-RPC method: handshake, ack, then the search."""
+
+    def handler(request):
+        method = json.loads(request.content).get("method")
+        if method == "initialize":
+            return httpx.Response(
+                200,
+                headers={"mcp-session-id": "sess-1"},
+                json={"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-06-18"}},
+            )
+        if method == "notifications/initialized":
+            return httpx.Response(202)
+        return search_response
+
+    return handler
+
+
+@pytest.fixture
+def notion_mcp() -> NotionMcpSource:
+    return NotionMcpSource({"token": "mcp-token"})
+
+
+class TestNotionMcp:
+    @respx.mock
+    async def test_fetch_searches_over_mcp_and_maps_the_results(self, notion_mcp):
+        entry = {
+            "id": "page-1",
+            "title": "Roadmap",
+            "url": "https://notion.so/page-1",
+            "last_edited_time": "2026-07-16T09:00:00Z",
+        }
+        respx.post("https://mcp.notion.com/mcp").mock(
+            side_effect=_mcp_handler(httpx.Response(200, json=_mcp_search_result(entry)))
+        )
+
+        items = await notion_mcp.fetch()
+
+        assert len(items) == 1
+        assert items[0].source == "notion_mcp"
+        assert items[0].id == "notion_mcp:page-1"
+        assert items[0].label == "Roadmap"
+        assert items[0].url == "https://notion.so/page-1"
+
+    @respx.mock
+    async def test_fetch_parses_an_sse_encoded_response(self, notion_mcp):
+        data = json.dumps(_mcp_search_result({"id": "p9", "title": "X", "url": "u"}))
+        sse = httpx.Response(
+            200, headers={"content-type": "text/event-stream"}, text=f"event: message\ndata: {data}\n\n"
+        )
+        respx.post("https://mcp.notion.com/mcp").mock(side_effect=_mcp_handler(sse))
+
+        items = await notion_mcp.fetch()
+
+        assert [i.external_id for i in items] == ["p9"]
+
+    @respx.mock
+    async def test_register_client_returns_a_public_client_id(self, notion_mcp):
+        route = respx.post("https://mcp.notion.com/register").mock(
+            return_value=httpx.Response(200, json={"client_id": "cid-1"})
+        )
+
+        client_id = await notion_mcp.register_client("http://jojohq/api/admin/oauth/notion-mcp/callback")
+
+        assert client_id == "cid-1"
+        # No secret is requested — it registers as a public client that uses PKCE.
+        assert json.loads(route.calls[0].request.content)["token_endpoint_auth_method"] == "none"
+
+    @respx.mock
+    async def test_exchange_code_returns_tokens_and_client(self, notion_mcp):
+        respx.post("https://mcp.notion.com/token").mock(
+            return_value=httpx.Response(
+                200, json={"access_token": "tok", "refresh_token": "ref", "expires_in": 3600}
+            )
+        )
+
+        updates = await notion_mcp.exchange_code("code", "http://jojohq/cb", "verifier", "cid-1")
+
+        assert updates["token"] == "tok"
+        assert updates["refresh_token"] == "ref"
+        assert updates["client_id"] == "cid-1"
+
+    @respx.mock
+    async def test_prepare_refreshes_an_expired_token(self):
+        past = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
+        source = NotionMcpSource(
+            {"token": "old", "refresh_token": "r", "client_id": "cid", "token_expiry": past}
+        )
+        route = respx.post("https://mcp.notion.com/token").mock(
+            return_value=httpx.Response(200, json={"access_token": "fresh", "expires_in": 3600})
+        )
+
+        updates = await source.prepare()
+
+        assert route.called
+        assert updates["token"] == "fresh"
+
+    async def test_prepare_is_a_noop_without_a_refresh_token(self):
+        assert await NotionMcpSource({"token": "x"}).prepare() is None
+
+    def test_items_from_search_reads_a_json_text_block(self):
+        result = {
+            "content": [{"type": "text", "text": json.dumps({"results": [{"id": "p2", "title": "Notes"}]})}]
+        }
+
+        items = _items_from_search(result)
+
+        assert [i.external_id for i in items] == ["p2"]
+        assert items[0].label == "Notes"
+
+    async def test_unconfigured_mcp_fetches_nothing(self):
+        assert await NotionMcpSource({}).fetch() == []

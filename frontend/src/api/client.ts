@@ -327,14 +327,15 @@ export interface NotionOAuthInfo {
   oauth_ready: boolean;
 }
 
-export async function fetchNotionOauth(id: string): Promise<NotionOAuthInfo> {
-  const { data } = await api.get<NotionOAuthInfo>(`/admin/sources/${seg(id)}/notion`);
+/** `provider` is the callback path segment: 'notion' (REST OAuth) or 'notion-mcp' (MCP). */
+export async function fetchOauthInfo(id: string, provider: string): Promise<NotionOAuthInfo> {
+  const { data } = await api.get<NotionOAuthInfo>(`/admin/sources/${seg(id)}/${provider}`);
   return data;
 }
 
-export async function startNotionAuthorize(id: string): Promise<string> {
+export async function startOauthAuthorize(id: string, provider: string): Promise<string> {
   const { data } = await api.post<{ authorize_url: string }>(
-    `/admin/sources/${seg(id)}/notion/authorize`,
+    `/admin/sources/${seg(id)}/${provider}/authorize`,
   );
   return data.authorize_url;
 }

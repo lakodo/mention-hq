@@ -24,6 +24,7 @@ export const SOURCE_META: Record<Source, SourceMeta> = {
   markdown: { label: 'Doc', dot: '#1c7ed6' },
   dust: { label: 'Dust', dot: '#f08c00' },
   notion: { label: 'Notion', dot: '#212529' },
+  notion_mcp: { label: 'Notion MCP', dot: '#495057' },
   note: { label: 'Note', dot: '#5c7cfa' },
 };
 

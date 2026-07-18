@@ -397,4 +397,42 @@ describe('AdminView', () => {
     expect(await screen.findByText('Notion not connected')).toBeInTheDocument();
     openSpy.mockRestore();
   });
+
+  it('offers Connect for a Notion MCP source with no credentials to enter', async () => {
+    const notionMcp: SourceStatus = {
+      id: 'notion_mcp-mcp',
+      kind: 'notion_mcp',
+      name: 'Notion MCP',
+      position: 1,
+      description: 'Notion pages, over the hosted MCP server',
+      status: 'unconfigured',
+      detail: 'Not connected',
+      last_checked_at: null,
+      error: null,
+      fields: makeSourceFields('notion_mcp'),
+      setup: '',
+      setup_url: '',
+      manifest: '',
+      manifest_hint: '',
+      detectable: false,
+    };
+    db.sources = [notionMcp];
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    const user = userEvent.setup();
+    renderApp('/admin');
+
+    const card = await screen.findByTestId('source-card-notion_mcp-mcp');
+    expect(
+      await within(card).findByText('http://jojohq/api/admin/oauth/notion-mcp/callback'),
+    ).toBeInTheDocument();
+
+    // No client ID/secret needed — the MCP flow registers HQ itself, so Connect is live.
+    const connect = within(card).getByRole('button', { name: 'Connect to Notion MCP' });
+    expect(connect).toBeEnabled();
+    await user.click(connect);
+
+    await waitFor(() => expect(openSpy).toHaveBeenCalled());
+    expect(openSpy.mock.calls[0][0]).toContain('mcp.notion.com/authorize');
+    openSpy.mockRestore();
+  });
 });

@@ -52,6 +52,7 @@ from app.services.sources_factory import (
 )
 from app.sources.base import Source
 from app.sources.notion import NotionSource
+from app.sources.notion_mcp import NotionMcpSource, pkce_pair
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -278,7 +279,7 @@ async def update_source_config(
 _OAUTH_STATE_NS = "notion_oauth_state"
 
 
-def _notion_redirect_uri(request: Request) -> str:
+def _oauth_redirect_uri(request: Request, provider: str) -> str:
     """The callback URL, from the origin the browser is actually on — so a user behind a
     proxy (a Caddy host, a domain) registers and receives the redirect on that same host,
     not a hardcoded localhost the redirect would never reach."""
@@ -289,7 +290,7 @@ def _notion_redirect_uri(request: Request) -> str:
         proto = request.headers.get("x-forwarded-proto") or request.url.scheme
         host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
         base = f"{proto}://{host}"
-    return f"{base}/api/admin/oauth/notion/callback"
+    return f"{base}/api/admin/oauth/{provider}/callback"
 
 
 async def _notion_source(db: AsyncSession, instance_id: str) -> NotionSource:
@@ -305,7 +306,7 @@ async def notion_oauth_info(
 ) -> NotionOAuthOut:
     source = await _notion_source(db, instance_id)
     return NotionOAuthOut(
-        redirect_uri=_notion_redirect_uri(request),
+        redirect_uri=_oauth_redirect_uri(request, "notion"),
         connected=source.is_configured(),
         oauth_ready=source.oauth_configured(),
     )
@@ -318,7 +319,7 @@ async def notion_oauth_authorize(
     source = await _notion_source(db, instance_id)
     if not source.oauth_configured():
         raise HTTPException(status_code=400, detail="Save the client ID and secret first")
-    redirect_uri = _notion_redirect_uri(request)
+    redirect_uri = _oauth_redirect_uri(request, "notion")
     # A single-use nonce the callback trades back for the source and redirect URI, so a stray
     # callback can't attach a token to a source it was never authorised for.
     nonce = token_urlsafe(24)
@@ -355,6 +356,82 @@ async def notion_oauth_callback(request: Request, db: AsyncSession = Depends(get
 
     await persist_config(db, instance, updates)
     return _oauth_page("Connected to Notion — you can close this tab.", ok=True)
+
+
+async def _notion_mcp_source(db: AsyncSession, instance_id: str) -> NotionMcpSource:
+    instance = await _require(db, instance_id)
+    if instance.kind != "notion_mcp":
+        raise HTTPException(status_code=400, detail="Not a Notion MCP source")
+    return BY_KIND["notion_mcp"](await resolve_config(db, instance))
+
+
+@router.get("/sources/{instance_id}/notion-mcp", response_model=NotionOAuthOut)
+async def notion_mcp_info(
+    instance_id: str, request: Request, db: AsyncSession = Depends(get_db)
+) -> NotionOAuthOut:
+    source = await _notion_mcp_source(db, instance_id)
+    # No credentials to enter — the flow registers HQ itself — so it's always ready to start.
+    return NotionOAuthOut(
+        redirect_uri=_oauth_redirect_uri(request, "notion-mcp"),
+        connected=source.is_configured(),
+        oauth_ready=True,
+    )
+
+
+@router.post("/sources/{instance_id}/notion-mcp/authorize", response_model=NotionAuthorizeOut)
+async def notion_mcp_authorize(
+    instance_id: str, request: Request, db: AsyncSession = Depends(get_db)
+) -> NotionAuthorizeOut:
+    source = await _notion_mcp_source(db, instance_id)
+    redirect_uri = _oauth_redirect_uri(request, "notion-mcp")
+    try:
+        client_id = await source.register_client(redirect_uri)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"MCP client registration failed: {exc}") from exc
+    verifier, challenge = pkce_pair()
+    nonce = token_urlsafe(24)
+    # The verifier stays server-side until the callback: it, not the code, is what proves the
+    # token request comes from whoever started the login.
+    await set_value(
+        db,
+        _OAUTH_STATE_NS,
+        nonce,
+        json.dumps(
+            {"sid": instance_id, "redirect_uri": redirect_uri, "verifier": verifier, "client_id": client_id}
+        ),
+    )
+    await db.commit()
+    return NotionAuthorizeOut(authorize_url=source.authorize_url(redirect_uri, nonce, challenge, client_id))
+
+
+@router.get("/oauth/notion-mcp/callback")
+async def notion_mcp_callback(request: Request, db: AsyncSession = Depends(get_db)) -> HTMLResponse:
+    params = request.query_params
+    if params.get("error"):
+        return _oauth_page(f"Notion returned an error: {params['error']}", ok=False)
+
+    raw_state = await get_value(db, _OAUTH_STATE_NS, params.get("state", ""))
+    code = params.get("code")
+    if not raw_state or not code:
+        return _oauth_page("This login could not be verified. Start again from Connect.", ok=False)
+    await set_value(db, _OAUTH_STATE_NS, params["state"], None)
+    await db.commit()
+
+    claims = json.loads(raw_state)
+    instance = await db.get(SourceInstance, claims["sid"])
+    if instance is None or instance.kind != "notion_mcp":
+        return _oauth_page("That Notion MCP source no longer exists.", ok=False)
+
+    source = BY_KIND["notion_mcp"](await resolve_config(db, instance))
+    try:
+        updates = await source.exchange_code(
+            code, claims["redirect_uri"], claims["verifier"], claims["client_id"]
+        )
+    except httpx.HTTPError as exc:
+        return _oauth_page(f"Notion refused the token exchange: {exc}", ok=False)
+
+    await persist_config(db, instance, updates)
+    return _oauth_page("Connected to Notion MCP — you can close this tab.", ok=True)
 
 
 def _oauth_page(message: str, ok: bool) -> HTMLResponse:
