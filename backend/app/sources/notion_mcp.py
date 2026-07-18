@@ -59,12 +59,21 @@ class NotionMcpSource(Source):
     setup_url = "https://mcp.notion.com"
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
+            key="identity",
+            label="Your name / email",
+            required=False,
+            placeholder="Ada Lovelace, ada@acme.dev",
+            help="Names and emails that mean you — one per line or comma. Each is searched, and "
+            "the pages that come back are flagged as mentioning you. Full-text search finds your "
+            "name even written plainly in a table, with no @-handle.",
+        ),
+        ConfigField(
             key="query",
-            label="Search terms",
+            label="Other search terms",
             required=False,
             placeholder="e.g. a project or team name — one per line",
-            help="Notion MCP search is query-based (there's no list-everything). Give a term "
-            "per line or comma; each is searched and the results merged.",
+            help="Extra subjects to pull, beyond your mentions. Notion MCP search is query-based "
+            "(there's no list-everything); each term is searched and the results merged.",
         ),
         ConfigField(key="token", label="Access token", kind="secret", required=False, hidden=True),
         ConfigField(key="refresh_token", label="Refresh token", kind="secret", required=False, hidden=True),
@@ -164,30 +173,43 @@ class NotionMcpSource(Source):
 
     # -- MCP transport (Streamable HTTP) ------------------------------------------------
 
-    def _queries(self) -> list[str]:
-        return [part.strip() for part in re.split(r"[\n,]", self.get("query")) if part.strip()]
+    def _terms(self, key: str) -> list[str]:
+        return [part.strip() for part in re.split(r"[\n,]", self.get(key)) if part.strip()]
 
     async def fetch(self) -> list[RawItem]:
-        # notion-search needs a non-empty query — there's no list-everything mode — so with no
-        # search terms configured there's nothing to fetch.
-        queries = self._queries()
-        if not self.is_configured() or not queries:
+        # notion-search needs a non-empty query — there's no list-everything mode — so with
+        # neither an identity nor a topic to search, there's nothing to fetch.
+        identity = self._terms("identity")
+        topics = self._terms("query")
+        if not self.is_configured() or not (identity or topics):
             return []
         by_id: dict[str, RawItem] = {}
         async with httpx.AsyncClient(timeout=30) as client:
             session_id, protocol = await self._open_session(client)
-            for offset, query in enumerate(queries):
-                result = await self._rpc(
-                    client,
-                    "tools/call",
-                    {"name": "notion-search", "arguments": {"query": query}},
-                    session_id=session_id,
-                    protocol=protocol,
-                    req_id=2 + offset,
-                )
-                for item in _items_from_search(result):
+            rid = 2
+            # Identity first: where a page turns up under both, "mentions you" is the stronger
+            # framing and should win the dedupe.
+            for term in identity:
+                result = await self._search(client, session_id, protocol, term, rid)
+                for item in _items_from_search(result, mention=True):
                     by_id.setdefault(item.external_id, item)
+                rid += 1
+            for term in topics:
+                result = await self._search(client, session_id, protocol, term, rid)
+                for item in _items_from_search(result, mention=False):
+                    by_id.setdefault(item.external_id, item)
+                rid += 1
         return list(by_id.values())
+
+    async def _search(self, client, session_id, protocol, query: str, req_id: int) -> dict:
+        return await self._rpc(
+            client,
+            "tools/call",
+            {"name": "notion-search", "arguments": {"query": query, "query_type": "internal"}},
+            session_id=session_id,
+            protocol=protocol,
+            req_id=req_id,
+        )
 
     async def _open_session(self, client: httpx.AsyncClient) -> tuple[str | None, str]:
         response = await self._post(
@@ -274,10 +296,10 @@ def _decode(response: httpx.Response) -> dict:
     return json.loads(body) if body else {}
 
 
-def _items_from_search(result: dict) -> list[RawItem]:
-    """Map an MCP `search` result into items. The server returns tool output either as
-    `structuredContent` or as JSON inside a text content block; accept both, and read each
-    entry defensively — the exact field names are confirmed against a live workspace."""
+def _items_from_search(result: dict, mention: bool = False) -> list[RawItem]:
+    """Map a notion-search result into items. The server returns tool output as JSON inside a
+    text content block (or `structuredContent`); accept both. `mention` marks pages that came
+    back from an identity search — the ones that name you."""
     entries = _search_entries(result)
     items = []
     for entry in entries:
@@ -296,7 +318,7 @@ def _items_from_search(result: dict) -> list[RawItem]:
                 context=highlight if isinstance(highlight, str) else None,
                 title=title,
                 reference_keys=all_reference_keys(title),
-                extra={"notion_type": entry.get("type")},
+                extra={"notion_type": entry.get("type"), "mention": mention},
             )
         )
     return items

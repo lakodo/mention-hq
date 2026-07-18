@@ -914,6 +914,20 @@ class TestNotionMcp:
         assert items[0].context == "the Q3 roadmap"
         assert items[0].occurred_at.year == 2026
         assert items[0].url == "https://notion.so/page-1"
+        assert items[0].extra["mention"] is False, "a topic-search hit is not a mention"
+
+    @respx.mock
+    async def test_identity_search_flags_a_page_as_mentioning_you(self):
+        source = NotionMcpSource({"token": "mcp-token", "identity": "Ada Lovelace"})
+        entry = {"id": "page-1", "title": "Roadmap", "url": "u", "type": "page"}
+        respx.post("https://mcp.notion.com/mcp").mock(
+            side_effect=_mcp_handler(httpx.Response(200, json=_mcp_search_result(entry)))
+        )
+
+        items = await source.fetch()
+
+        assert len(items) == 1
+        assert items[0].extra["mention"] is True
 
     @respx.mock
     async def test_fetch_parses_an_sse_encoded_response(self, notion_mcp):

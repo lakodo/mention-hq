@@ -19,6 +19,9 @@ All notable changes to Personal HQ are recorded here. The format follows
   (mcp.notion.com). It registers HQ as an OAuth client on the fly (dynamic client
   registration + PKCE), so it needs no admin-provisioned token or app at all — the path that
   works when a workspace has locked down API tokens and OAuth apps. Just Connect and log in.
+  It finds pages that **mention you** — put your name and email in the source, and full-text
+  search catches your name even written plainly in a table with no @-handle — and can also
+  pull pages matching topic search terms.
 - Brain dump: a distraction-free page (and an always-present button in the header) to type
   a thought straight into an item, optionally filed onto tasks as you submit it; notes stay
   editable in place from the task or catch-up.
