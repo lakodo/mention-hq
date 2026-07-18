@@ -54,7 +54,10 @@ function PersonCard({ person, others }: PersonCardProps) {
   const removeIdentity = useRemoveIdentity();
   const deletePerson = useDeletePerson();
   const update = useUpdatePerson();
-  const [pasteUrl, setPasteUrl] = useState('');
+  // Show the current avatar URL so you can see and edit what's set, not a field that blanks
+  // out the moment you save. Kept in sync with the person as the list refreshes.
+  const [pasteUrl, setPasteUrl] = useState(person.avatar_url ?? '');
+  useEffect(() => setPasteUrl(person.avatar_url ?? ''), [person.avatar_url]);
 
   const resolvedAvatar =
     person.avatar_url ?? person.identities.find((i) => i.avatar_url)?.avatar_url ?? undefined;
@@ -198,14 +201,17 @@ function PersonCard({ person, others }: PersonCardProps) {
           aria-label={`Avatar URL for ${person.display_name}`}
           value={pasteUrl}
           onChange={(e) => setPasteUrl(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && pasteUrl.trim()) {
-              chooseAvatar(pasteUrl.trim());
-              setPasteUrl('');
-            }
-          }}
+          onKeyDown={(e) => e.key === 'Enter' && pasteUrl.trim() && chooseAvatar(pasteUrl.trim())}
           style={{ flex: 1, minWidth: 140 }}
         />
+        <Button
+          size="xs"
+          variant="light"
+          disabled={!pasteUrl.trim() || pasteUrl.trim() === person.avatar_url}
+          onClick={() => chooseAvatar(pasteUrl.trim())}
+        >
+          Set
+        </Button>
         {person.avatar_url && (
           <Button size="xs" variant="subtle" color="gray" onClick={() => chooseAvatar(null)}>
             Clear

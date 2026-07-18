@@ -112,6 +112,14 @@ describe('PeopleView', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows the current avatar URL in the field so you can see what is set', async () => {
+    db.people.find((p) => p.id === ADA_ID)!.avatar_url = 'https://img/ada.png';
+    renderApp('/people');
+
+    const ada = await cardFor('Ada Lovelace');
+    expect(await within(ada).findByDisplayValue('https://img/ada.png')).toBeInTheDocument();
+  });
+
   it('adds an avatar URL to a person with no platform avatars', async () => {
     const user = userEvent.setup();
     renderApp('/people');
