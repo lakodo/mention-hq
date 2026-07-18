@@ -474,6 +474,19 @@ async def test_brain_dump_creates_an_item_in_catchup(client):
     assert [i["id"] for i in (await client.get("/api/catchup")).json()] == [body["id"]]
 
 
+async def test_a_note_can_be_edited_but_a_source_item_cannot(client, db):
+    created = (await client.post("/api/items", json={"text": "draft"})).json()
+
+    edited = await client.patch(f"/api/items/{created['id']}", json={"text": "the real note"})
+    assert edited.status_code == 200
+    assert edited.json()["label"] == "the real note"
+
+    # A source-derived item is owned by its source, so editing it is refused.
+    item = await _make_item(db)
+    await db.commit()
+    assert (await client.patch(f"/api/items/{item.id}", json={"text": "nope"})).status_code == 400
+
+
 async def test_brain_dump_with_a_task_files_it_straight_away(client, db):
     await _make_task(db)
     await db.commit()

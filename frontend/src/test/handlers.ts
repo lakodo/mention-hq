@@ -275,6 +275,14 @@ export const handlers = [
     return HttpResponse.json(item, { status: 201 });
   }),
 
+  http.patch(`${BASE}/items/:itemId`, async ({ params, request }) => {
+    const { text } = (await request.json()) as { text: string };
+    const item = db.catchup.find((i) => i.id === params.itemId);
+    if (!item) return notFound(`Item not found: ${String(params.itemId)}`);
+    item.label = text;
+    return HttpResponse.json(item);
+  }),
+
   http.delete(`${BASE}/items/:itemId`, ({ params }) => {
     db.catchup = db.catchup.filter((i) => i.id !== params.itemId);
     for (const task of db.tasks) task.items = task.items.filter((i) => i.id !== params.itemId);

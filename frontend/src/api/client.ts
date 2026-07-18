@@ -141,6 +141,11 @@ export async function deleteItem(itemId: string): Promise<void> {
   await api.delete(`/items/${seg(itemId)}`);
 }
 
+export async function updateNote(itemId: string, text: string): Promise<ItemWithLinks> {
+  const { data } = await api.patch<ItemWithLinks>(`/items/${seg(itemId)}`, { text });
+  return data;
+}
+
 export async function fetchItems(limit?: number): Promise<ItemWithLinks[]> {
   const { data } = await api.get<ItemWithLinks[]>('/items', { params: { limit } });
   return data;

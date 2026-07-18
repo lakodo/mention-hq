@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.schemas import BrainDumpRequest, ItemWithLinks
+from app.schemas import BrainDumpRequest, ItemWithLinks, NoteUpdate
 from app.services import catchup
 
 router = APIRouter(prefix="/items", tags=["items"])
@@ -27,6 +27,17 @@ async def create_note(request: BrainDumpRequest, db: AsyncSession = Depends(get_
         return await catchup.create_note(db, request.text, request.task_ids)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.patch("/{item_id}", response_model=ItemWithLinks)
+async def update_note(item_id: str, request: NoteUpdate, db: AsyncSession = Depends(get_db)):
+    """Edit a brain-dump note's text."""
+    try:
+        return await catchup.update_note(db, item_id, request.text)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.delete("/{item_id}", status_code=204)

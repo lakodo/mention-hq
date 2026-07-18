@@ -154,6 +154,10 @@ class BrainDumpRequest(BaseModel):
     task_ids: list[str] = []
 
 
+class NoteUpdate(BaseModel):
+    text: str = Field(min_length=1)
+
+
 class TriageRequest(BaseModel):
     triaged: bool = True
 

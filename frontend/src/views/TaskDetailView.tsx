@@ -41,6 +41,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ReadToggle } from '../components/ReadToggle';
 import { PrStatusPill } from '../components/PrStatusPill';
 import { PeopleStrip, mergePeople } from '../components/PeopleStrip';
+import { NoteEditButton } from '../components/NoteEditButton';
 import { itemLabel } from '../components/ItemLabel';
 import { SourceDot } from '../components/SourceDot';
 import { StatusPill } from '../components/StatusPill';
@@ -163,6 +164,7 @@ function ItemCard({ item }: ItemCardProps) {
             </Box>
           )}
         </Box>
+        {item.source === 'note' && <NoteEditButton item={item} />}
         <Text fz="xs" c="dimmed" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
           {formatAgo(item.occurred_at)}
         </Text>

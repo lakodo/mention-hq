@@ -153,6 +153,19 @@ async def create_note(db: AsyncSession, text: str, task_ids: list[str]) -> Item:
     return await _reload(db, item_id)
 
 
+async def update_note(db: AsyncSession, item_id: str, text: str) -> Item:
+    """Edit a brain-dump note's text. Only notes are editable — a source-derived item's label
+    is owned by its source and a sync would overwrite it anyway."""
+    item = await _require_item(db, item_id)
+    if item.source != "note":
+        raise ValueError("Only notes can be edited")
+    body = text.strip()
+    item.label = body[:1000]
+    item.extra = {**item.extra, "text": body, "reference_keys": sorted(all_reference_keys(body))}
+    await db.commit()
+    return await _reload(db, item_id)
+
+
 async def delete_item(db: AsyncSession, item_id: str) -> None:
     """Remove an item outright — its links cascade. For clearing out leftovers, e.g. items a
     since-deleted source left behind."""

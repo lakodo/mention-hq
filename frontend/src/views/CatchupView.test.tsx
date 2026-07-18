@@ -156,6 +156,40 @@ describe('CatchupView', () => {
     ).toBeInTheDocument();
   });
 
+  it('edits a brain-dump note in place', async () => {
+    const user = userEvent.setup();
+    db.catchup.push({
+      id: 'note:abc',
+      source: 'note',
+      label: 'old text',
+      url: null,
+      context: null,
+      occurred_at: new Date().toISOString(),
+      triaged: false,
+      triage_reason: null,
+      triaged_at: null,
+      pr_status: null,
+      pr_review_requested: false,
+      emoji: {},
+      people: [],
+      links: [],
+    });
+    renderApp('/catchup');
+
+    const card = (await screen.findByText('old text')).closest(
+      '[data-testid="catchup-card"]',
+    ) as HTMLElement;
+    await user.click(within(card).getByRole('button', { name: 'Edit note' }));
+    const textarea = await screen.findByLabelText('Note text');
+    await user.clear(textarea);
+    await user.type(textarea, 'new text');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(db.catchup.find((i) => i.id === 'note:abc')?.label).toBe('new text'),
+    );
+  });
+
   it('argues a proposal with its engine, confidence and reason', async () => {
     renderApp('/catchup');
 

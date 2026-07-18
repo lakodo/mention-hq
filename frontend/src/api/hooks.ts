@@ -21,6 +21,7 @@ import {
   deleteItem,
   enrichTasks,
   fetchEmojiMap,
+  updateNote,
   deletePerson,
   deleteTask,
   detectSource,
@@ -264,6 +265,18 @@ export function useCreateNote(): UseMutationResult<
 export function useDeleteItem(): UseMutationResult<void, Error, string> {
   const invalidate = useCatchupInvalidation();
   return useMutation({ mutationFn: deleteItem, onSuccess: invalidate });
+}
+
+export function useUpdateNote(): UseMutationResult<
+  ItemWithLinks,
+  Error,
+  { itemId: string; text: string }
+> {
+  const invalidate = useCatchupInvalidation();
+  return useMutation({
+    mutationFn: ({ itemId, text }) => updateNote(itemId, text),
+    onSuccess: invalidate,
+  });
 }
 
 /** Attaching an item to one or more tasks also triages it, so it leaves the inbox. */

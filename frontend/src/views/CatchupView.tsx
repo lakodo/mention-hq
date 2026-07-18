@@ -33,6 +33,7 @@ import { useMemo, useState } from 'react';
 import { SourceDot } from '../components/SourceDot';
 import { PrStatusPill } from '../components/PrStatusPill';
 import { PeopleStrip } from '../components/PeopleStrip';
+import { NoteEditButton } from '../components/NoteEditButton';
 import { itemLabel } from '../components/ItemLabel';
 import { LINK_STATE_META, sourceMeta } from '../constants';
 import { errorMessage } from '../api/client';
@@ -295,7 +296,17 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
             {item.triage_reason}
           </Badge>
         )}
-        <Text fz="xs" c="dimmed" ml="auto">
+        {item.source === 'note' && (
+          <Box ml="auto">
+            <NoteEditButton item={item} />
+          </Box>
+        )}
+        <Text
+          fz="xs"
+          c="dimmed"
+          ml={item.source === 'note' ? undefined : 'auto'}
+          style={{ whiteSpace: 'nowrap' }}
+        >
           {formatAgo(skipped ? (item.triaged_at ?? item.occurred_at) : item.occurred_at)}
         </Text>
       </Group>
