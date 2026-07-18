@@ -525,13 +525,23 @@ function NotionConnect({ source }: { source: SourceStatus }) {
     try {
       const url = await startNotionAuthorize(source.id);
       const popup = window.open(url, 'notion-oauth', 'width=720,height=820');
-      // Re-check status once the consent popup is done, so the card flips to Connected.
-      const timer = window.setInterval(() => {
+      // The consent happens in the popup, so the outcome only shows here once it closes:
+      // re-read the status and say, either way, whether the token actually landed.
+      const timer = window.setInterval(async () => {
         if (popup && !popup.closed) return;
         window.clearInterval(timer);
         setConnecting(false);
-        void qc.invalidateQueries({ queryKey: queryKeys.notionOauth(source.id) });
+        const { data } = await info.refetch();
         void qc.invalidateQueries({ queryKey: queryKeys.sources() });
+        if (data?.connected) {
+          ok('Connected to Notion', 'HQ can now read your pages.');
+        } else {
+          notifications.show({
+            title: 'Notion not connected',
+            message: 'The login was cancelled or refused. Try Connect again.',
+            color: 'orange',
+          });
+        }
       }, 800);
     } catch (error) {
       setConnecting(false);

@@ -391,6 +391,10 @@ describe('AdminView', () => {
 
     await waitFor(() => expect(openSpy).toHaveBeenCalled());
     expect(openSpy.mock.calls[0][0]).toContain('api.notion.com/v1/oauth/authorize');
+
+    // Once the popup resolves, the outcome must surface — here the token never lands
+    // (the mocked popup closes without connecting), so a notification says so.
+    expect(await screen.findByText('Notion not connected')).toBeInTheDocument();
     openSpy.mockRestore();
   });
 });

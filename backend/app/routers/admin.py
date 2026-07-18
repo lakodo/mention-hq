@@ -359,12 +359,15 @@ async def notion_oauth_callback(request: Request, db: AsyncSession = Depends(get
 
 def _oauth_page(message: str, ok: bool) -> HTMLResponse:
     colour = "#2b8a3e" if ok else "#c92a2a"
+    # Only self-close on success. On failure the message is the whole point — the redirect
+    # URI mismatch, the refused exchange — so leave it up for the user to read and close.
+    closer = "<script>setTimeout(()=>window.close(),1500)</script>" if ok else ""
+    hint = "" if ok else "<p style='color:#868e96;font-size:.85rem'>You can close this tab.</p>"
     body = (
         "<!doctype html><meta charset='utf-8'><title>Notion</title>"
-        "<body style='font-family:system-ui;display:flex;height:100vh;margin:0;"
-        "align-items:center;justify-content:center'>"
-        f"<p style='color:{colour};font-size:1rem'>{message}</p>"
-        "<script>setTimeout(()=>window.close(),1500)</script></body>"
+        "<body style='font-family:system-ui;display:flex;flex-direction:column;height:100vh;"
+        "margin:0;gap:.5rem;align-items:center;justify-content:center;text-align:center;padding:1rem'>"
+        f"<p style='color:{colour};font-size:1rem'>{message}</p>{hint}{closer}</body>"
     )
     return HTMLResponse(body)
 
