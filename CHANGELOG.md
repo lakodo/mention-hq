@@ -1,72 +1,78 @@
 # Changelog
 
 All notable changes to Personal HQ are recorded here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it cuts releases.
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-07-18 — "Notion Sickness"
 
-### Added
+The first release. HQ aggregates your activity across GitHub, Linear, Slack, Notion, Dust and
+local files (git branches, todos, markdown docs) and groups it into tasks on a board, so you
+can regain context on a subject fast. It reads by default and writes to a source only on a
+deliberate action you take — never as a side effect of a sync.
 
-- Sources: GitHub PRs/issues, Linear issues (assigned — including backlog), Slack (one item
-  per thread, rich markup/emoji rendering), Notion (pages you created, own, or a comment
-  mentions you in), git branches, todos, markdown.
-- Notion connects over OAuth for workspaces where an admin blocks static tokens: a Connect
-  button runs the consent handshake, the redirect URI is detected from your own host (so it
-  works behind a proxy or custom domain, not just localhost), and the access token refreshes
-  itself. Pasting a personal token still works where that's allowed.
-- Notion MCP: a second Notion source that reads over the hosted MCP server
-  (mcp.notion.com). It registers HQ as an OAuth client on the fly (dynamic client
-  registration + PKCE), so it needs no admin-provisioned token or app at all — the path that
-  works when a workspace has locked down API tokens and OAuth apps. Just Connect and log in.
-  It finds pages that **mention you** — put your name and email in the source, and full-text
-  search catches your name even written plainly in a table with no @-handle — and can also
-  pull pages matching topic search terms.
-- Brain dump: a distraction-free page (and an always-present button in the header) to type
-  a thought straight into an item, optionally filed onto tasks as you submit it; notes stay
-  editable in place from the task or catch-up.
-- People directory and tab: one person per human with handles across sources; add, edit,
-  merge and delete; sources resolve ids through a shared, cached directory. Items now carry
-  the people they concern (PR author/assignees/reviewers, Linear assignee/creator, Slack
-  mentions, Notion creator/owner/mentions), shown as a people strip on the item and task.
-- Delete an item outright from the timeline — for clearing out what a since-removed source
+### Sources
+
+- **GitHub** (PRs and assigned issues, with review/merge status as a pill), **Linear** (issues
+  assigned to you, including backlog), **Slack** (one item per thread, rich markup and emoji
+  rendering), **Notion**, **Notion MCP**, **Dust**, **git branches**, **todo files** and
+  **markdown docs**. Each adapter declares its own config, so the Admin panel can set it up.
+- **Notion over OAuth** for workspaces where an admin blocks static tokens: a Connect button
+  runs the consent handshake, the redirect URI is detected from your own host (so it works
+  behind a proxy or custom domain, not just localhost), and the access token refreshes itself.
+  A pasted personal token still works where that's allowed.
+- **Notion MCP** — a second Notion source over the hosted MCP server (mcp.notion.com). It
+  registers HQ as an OAuth client on the fly (dynamic client registration + PKCE), needing no
+  admin-provisioned token or app at all. It finds pages that **mention you** — full-text
+  search catches your name even written plainly in a table with no @-handle — plus pages
+  matching topic search terms.
+- **Slack custom emoji**: map your org's non-standard emoji to image URLs in the source
+  config so `:custom-emoji:` renders as the picture.
+
+### Capture & catch-up
+
+- **Catch-up inbox** of everything you haven't ruled on: item→task matching (a keyword/title
+  engine and the AI brain), a drainable **Match all** with a live progress bar and Stop,
+  **triage rules** that auto-skip noise, and a skipped-items tab you can un-skip from.
+  Confirming a proposed match stages it in the attach box so you can add more before filing.
+- **Brain dump**: a distraction-free page (and an always-present header button) to type a
+  thought straight into an item, optionally filed onto tasks as you submit it; notes stay
+  editable in place.
+- **Manual links**: a brain dump can carry a URL and title, becoming a clickable item whose
+  typed text is its description — which feeds the AI next-action.
+- **Delete an item** outright from the timeline, for clearing out what a since-removed source
   left behind.
-- Slack: map your org's custom (non-standard) emoji to image URLs in the source config, so
-  `:custom-emoji:` renders as the picture instead of the code.
-- Catch-up: brain-powered item→task matching, automatic matching with a drainable "Match
-  all" (live progress bar + Stop), triage rules that auto-skip noise, and a skipped-items
-  tab that can un-skip.
-- Tasks: priority (0–100) with sort by date or priority; group the sidebar by bucket, tags
-  or flat; description; a candidates panel of proposed items; a brain "next action"; and a
-  task-preview popover from a catch-up proposal.
-- Precomputed context: creating or confirming a task kicks off a background pass that writes
-  its "next action" and, for a new or still-uncategorised task, adopts the brain's
-  recommended bucket when it's confident — so the task is already framed when you open it. A
-  one-click backfill runs it for existing tasks.
-- Board: create, archive and delete buckets (with a cascade-to-tasks prompt) and change a
-  task's bucket from its card.
-- Timeline: a full feed of every item with attach/create-from-row and column filters.
-- PR items show their review/merge status as a pill.
-- AI brain: the local `claude` CLI is a detected engine alongside a Claude/OpenAI API key.
-- Ops: dated database backups on migration and from the Admin screen.
 
-### Changed
+### Tasks & board
 
-- Creating a task from an item, or attaching it, now files the item out of the inbox
-  (attached means handled).
-- An already-attached catch-up item shows its task pre-selected in the attach box instead
-  of a separate CONFIRMED badge.
+- **Tasks** with priority (0 to 100, sortable by date or priority), a sidebar grouped by
+  bucket, tags or flat, a description, a candidates panel of proposed items, and an AI
+  **next action** (a card with its own refresh).
+- **Precomputed context**: creating or confirming a task kicks off a background pass that
+  writes its next action and, for a new or still-uncategorised task, adopts the brain's
+  recommended bucket when it's confident. A one-click backfill runs it for existing tasks.
+- **Buckets**: create, archive and delete (with a cascade-to-tasks prompt), change a task's
+  bucket from its card, and get a bucket suggestion right next to an uncategorised task.
+- **Timeline**: a full feed of every item, with attach / create-from-row and column filters.
 
-### Fixed
+### People
 
-- Brain matches whose task id dropped the `task:` prefix are no longer discarded, so
-  confident matches actually land.
-- Linear issues assigned to you in a backlog state are fetched, not only active ones.
-- Background brain matching no longer blocks a sync or locks the SQLite database.
-- The board no longer crashes when a bucket is named "Uncategorized", and picking a bucket
-  from a card no longer navigates to the task.
-- Slack usergroup mentions like `<@S…|mo-crew>` render as their label instead of a raw id,
-  and custom emoji resolve against a workspace-wide map so an item already in a task picks
-  up an emoji added to the config afterwards.
+- **People directory and tab**: one person per human with handles across sources; add, edit,
+  merge and delete; sources resolve ids through a shared, cached directory. Every author,
+  assignee and mention an item names is ingested here automatically.
+- **Avatars**: items carry the people they concern, shown as a people strip that resolves
+  through the directory — so one human across Slack and GitHub collapses to a single avatar.
+  Sources carry images where they're free (GitHub, Linear), and you can **choose a person's
+  avatar** from their platform images or a pasted URL.
 
-[Unreleased]: https://github.com/lakodo/mention-hq/commits/feat/hq-foundation
+### Platform & ops
+
+- **AI brain**: the local `claude` CLI is a detected engine alongside a Claude/OpenAI API key;
+  next-action and matching treat item content as your own trusted context.
+- **Secrets** live in the OS keychain, never the database or a log line.
+- **Backups**: a dated database copy on every migration and from the Admin screen.
+- **Local HTTPS**: serve the whole app under your own local domain with Caddy's built-in CA
+  (`tls internal`), which also makes strict OAuth redirect URIs work.
+- **Auto-sync** runs hourly in the background; a manual Sync button is always there.
+
+[1.0.0]: https://github.com/lakodo/mention-hq/releases/tag/v1.0.0
