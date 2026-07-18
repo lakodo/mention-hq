@@ -20,9 +20,10 @@ class NotionSource(Source):
     name = "Notion"
     description = "Pages you created, own, or are mentioned in"
     setup = (
-        "Notion → Settings → Connections → Develop or manage integrations → New internal "
-        "integration. Copy its token, then open each page or database you want HQ to see and, "
-        "under ••• → Connections, add the integration — it only ever sees what it is shared with."
+        "Notion → Settings → Connections → Access the developer portal → Personal access "
+        "tokens → create one and copy it (starts with ntn_). Not 'New connection' — that path "
+        "is for OAuth apps and your admin may restrict it. If a page you expect is missing, "
+        "open it and add the token under ••• → Connections; a token only sees what you share."
     )
     setup_url = "https://www.notion.so/my-integrations"
     fields: ClassVar[list[ConfigField]] = [
@@ -31,7 +32,7 @@ class NotionSource(Source):
             label="Integration token",
             kind="secret",
             placeholder="ntn_… / secret_…",
-            help="An internal integration token, shared with the pages you want surfaced.",
+            help="A personal access token from the developer portal (starts with ntn_).",
             help_url="https://www.notion.so/my-integrations",
         ),
         ConfigField(
