@@ -92,6 +92,44 @@ describe('PeopleView', () => {
     );
   });
 
+  it('edits a person to add an email', async () => {
+    const user = userEvent.setup();
+    renderApp('/people');
+
+    const grace = await cardFor('Grace Hopper');
+    await user.click(within(grace).getByRole('button', { name: 'Actions for Grace Hopper' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Email'), 'grace@acme.dev');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(db.people.find((p) => p.id === 'person:grace')?.email).toBe('grace@acme.dev'),
+    );
+    expect(
+      await within(await cardFor('Grace Hopper')).findByText('grace@acme.dev'),
+    ).toBeInTheDocument();
+  });
+
+  it('adds an avatar URL to a person with no platform avatars', async () => {
+    const user = userEvent.setup();
+    renderApp('/people');
+
+    // Grace has no identity avatars — the paste field must still be available.
+    const grace = await cardFor('Grace Hopper');
+    await user.type(
+      within(grace).getByLabelText('Avatar URL for Grace Hopper'),
+      'https://img/grace.png{Enter}',
+    );
+
+    await waitFor(() =>
+      expect(db.people.find((p) => p.id === 'person:grace')?.avatar_url).toBe(
+        'https://img/grace.png',
+      ),
+    );
+  });
+
   it('picks an identity avatar for a person', async () => {
     const user = userEvent.setup();
     db.people.find((p) => p.id === ADA_ID)!.identities[1].avatar_url = 'https://github/adal.png';

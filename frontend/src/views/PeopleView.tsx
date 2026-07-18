@@ -19,7 +19,7 @@ import {
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { IconDots, IconPlus, IconUserPlus, IconX } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { errorMessage } from '../api/client';
 import {
   useAddIdentity,
@@ -172,48 +172,46 @@ function PersonCard({ person, others }: PersonCardProps) {
         ))}
       </Group>
 
-      {(avatarOptions.length > 0 || person.avatar_url) && (
-        <Group gap={6} mb="sm" align="center" wrap="wrap">
-          <Text fz="xs" c="dimmed">
-            Avatar
-          </Text>
-          {avatarOptions.map((url) => (
-            <Tooltip key={url} label="Use this avatar" withArrow>
-              <ActionIcon
-                variant="transparent"
-                aria-label="Use this avatar"
-                onClick={() => chooseAvatar(url)}
-                style={{
-                  borderRadius: '50%',
-                  outline:
-                    person.avatar_url === url ? '2px solid var(--mantine-color-blue-5)' : 'none',
-                }}
-              >
-                <Avatar src={url} size={26} radius="xl" />
-              </ActionIcon>
-            </Tooltip>
-          ))}
-          <TextInput
-            size="xs"
-            placeholder="or paste an image URL"
-            aria-label={`Avatar URL for ${person.display_name}`}
-            value={pasteUrl}
-            onChange={(e) => setPasteUrl(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && pasteUrl.trim()) {
-                chooseAvatar(pasteUrl.trim());
-                setPasteUrl('');
-              }
-            }}
-            style={{ flex: 1, minWidth: 140 }}
-          />
-          {person.avatar_url && (
-            <Button size="xs" variant="subtle" color="gray" onClick={() => chooseAvatar(null)}>
-              Clear
-            </Button>
-          )}
-        </Group>
-      )}
+      <Group gap={6} mb="sm" align="center" wrap="wrap">
+        <Text fz="xs" c="dimmed">
+          Avatar
+        </Text>
+        {avatarOptions.map((url) => (
+          <Tooltip key={url} label="Use this avatar" withArrow>
+            <ActionIcon
+              variant="transparent"
+              aria-label="Use this avatar"
+              onClick={() => chooseAvatar(url)}
+              style={{
+                borderRadius: '50%',
+                outline:
+                  person.avatar_url === url ? '2px solid var(--mantine-color-blue-5)' : 'none',
+              }}
+            >
+              <Avatar src={url} size={26} radius="xl" />
+            </ActionIcon>
+          </Tooltip>
+        ))}
+        <TextInput
+          size="xs"
+          placeholder="or paste an image URL"
+          aria-label={`Avatar URL for ${person.display_name}`}
+          value={pasteUrl}
+          onChange={(e) => setPasteUrl(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && pasteUrl.trim()) {
+              chooseAvatar(pasteUrl.trim());
+              setPasteUrl('');
+            }
+          }}
+          style={{ flex: 1, minWidth: 140 }}
+        />
+        {person.avatar_url && (
+          <Button size="xs" variant="subtle" color="gray" onClick={() => chooseAvatar(null)}>
+            Clear
+          </Button>
+        )}
+      </Group>
 
       <Group gap={8} wrap="nowrap">
         <Select
@@ -257,6 +255,15 @@ function EditPerson({ person, opened, onClose }: { person: Person } & ModalProps
   const [name, setName] = useState(person.display_name);
   const [email, setEmail] = useState(person.email ?? '');
   const update = useUpdatePerson();
+
+  // The modal is always mounted, so its fields would otherwise keep the values from first
+  // render. Refresh them each time it opens (or the person behind it changes).
+  useEffect(() => {
+    if (opened) {
+      setName(person.display_name);
+      setEmail(person.email ?? '');
+    }
+  }, [opened, person.display_name, person.email]);
 
   const save = () =>
     update.mutate(
