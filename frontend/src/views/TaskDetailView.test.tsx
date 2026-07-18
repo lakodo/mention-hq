@@ -283,6 +283,17 @@ describe('TaskDetailView', () => {
     expect(db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)?.bucket).toBe('Payments');
   });
 
+  it('offers Suggest bucket next to the badge when the task is uncategorized', async () => {
+    const user = userEvent.setup();
+    db.tasks.find((t) => t.id === PAYMENTS_TASK_ID)!.bucket = 'Uncategorized';
+    renderApp(detailRoute(PAYMENTS_TASK_ID));
+
+    const detail = await panel();
+    // The inline (near-badge) button — the action-row one is hidden while uncategorized.
+    await user.click(within(detail).getByRole('button', { name: /Suggest bucket/ }));
+    expect(await screen.findByText('Suggested bucket')).toBeInTheDocument();
+  });
+
   it('creates the bucket and moves the task when a new-bucket suggestion is accepted', async () => {
     const user = userEvent.setup();
     renderApp(detailRoute(PAYMENTS_TASK_ID));

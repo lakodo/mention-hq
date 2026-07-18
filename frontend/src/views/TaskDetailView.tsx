@@ -45,7 +45,7 @@ import { NoteEditButton } from '../components/NoteEditButton';
 import { itemLabel } from '../components/ItemLabel';
 import { SourceDot } from '../components/SourceDot';
 import { StatusPill } from '../components/StatusPill';
-import { SLACK_ACCENT, sourceMeta } from '../constants';
+import { SLACK_ACCENT, UNCATEGORIZED, sourceMeta } from '../constants';
 import { errorMessage } from '../api/client';
 import {
   useConfirmTaskCandidate,
@@ -823,6 +823,18 @@ export function TaskDetailView() {
               <Badge variant="default" radius="xl">
                 {selected.bucket}
               </Badge>
+              {selected.bucket === UNCATEGORIZED && (
+                <Button
+                  size="compact-xs"
+                  variant="light"
+                  color="violet"
+                  leftSection={<IconSparkles size={12} />}
+                  loading={suggest.isPending}
+                  onClick={askForSuggestion}
+                >
+                  Suggest bucket
+                </Button>
+              )}
               {selected.archived && (
                 <Badge
                   variant="light"
@@ -926,16 +938,20 @@ export function TaskDetailView() {
                   updateTask.mutate({ id: selected.id, patch: { unread: !selected.unread } })
                 }
               />
-              <Button
-                size="xs"
-                variant="light"
-                color="violet"
-                leftSection={<IconSparkles size={14} />}
-                loading={suggest.isPending}
-                onClick={askForSuggestion}
-              >
-                Suggest bucket
-              </Button>
+              {/* When uncategorized, Suggest bucket sits next to the badge instead. Here it's
+                  the re-bucket affordance for a task that already has one. */}
+              {selected.bucket !== UNCATEGORIZED && (
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="violet"
+                  leftSection={<IconSparkles size={14} />}
+                  loading={suggest.isPending}
+                  onClick={askForSuggestion}
+                >
+                  Suggest bucket
+                </Button>
+              )}
               <Button
                 size="xs"
                 variant="light"
