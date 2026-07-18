@@ -862,7 +862,9 @@ class TestNotion:
 
 
 def _mcp_search_result(entry: dict) -> dict:
-    return {"jsonrpc": "2.0", "id": 2, "result": {"structuredContent": {"results": [entry]}}}
+    # notion-search returns its results as a JSON string inside a text content block.
+    payload = json.dumps({"results": [entry], "type": "workspace_search"})
+    return {"jsonrpc": "2.0", "id": 2, "result": {"content": [{"type": "text", "text": payload}]}}
 
 
 def _mcp_handler(search_response: httpx.Response):
@@ -885,7 +887,7 @@ def _mcp_handler(search_response: httpx.Response):
 
 @pytest.fixture
 def notion_mcp() -> NotionMcpSource:
-    return NotionMcpSource({"token": "mcp-token"})
+    return NotionMcpSource({"token": "mcp-token", "query": "project"})
 
 
 class TestNotionMcp:
@@ -895,7 +897,9 @@ class TestNotionMcp:
             "id": "page-1",
             "title": "Roadmap",
             "url": "https://notion.so/page-1",
-            "last_edited_time": "2026-07-16T09:00:00Z",
+            "type": "page",
+            "highlight": "the Q3 roadmap",
+            "timestamp": "2026-07-16T09:00:00.000Z",
         }
         respx.post("https://mcp.notion.com/mcp").mock(
             side_effect=_mcp_handler(httpx.Response(200, json=_mcp_search_result(entry)))
@@ -907,6 +911,8 @@ class TestNotionMcp:
         assert items[0].source == "notion_mcp"
         assert items[0].id == "notion_mcp:page-1"
         assert items[0].label == "Roadmap"
+        assert items[0].context == "the Q3 roadmap"
+        assert items[0].occurred_at.year == 2026
         assert items[0].url == "https://notion.so/page-1"
 
     @respx.mock
@@ -977,3 +983,8 @@ class TestNotionMcp:
 
     async def test_unconfigured_mcp_fetches_nothing(self):
         assert await NotionMcpSource({}).fetch() == []
+
+    async def test_no_search_terms_means_no_fetch(self):
+        # notion-search rejects an empty query, so a connected source with no terms fetches
+        # nothing rather than erroring — no MCP call is made at all (no respx mock needed).
+        assert await NotionMcpSource({"token": "mcp-token"}).fetch() == []

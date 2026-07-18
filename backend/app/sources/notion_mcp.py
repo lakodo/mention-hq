@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from typing import ClassVar
 
@@ -61,8 +62,9 @@ class NotionMcpSource(Source):
             key="query",
             label="Search terms",
             required=False,
-            placeholder="Leave blank for your most recent pages",
-            help="What the MCP search asks for. Blank searches broadly.",
+            placeholder="e.g. a project or team name — one per line",
+            help="Notion MCP search is query-based (there's no list-everything). Give a term "
+            "per line or comma; each is searched and the results merged.",
         ),
         ConfigField(key="token", label="Access token", kind="secret", required=False, hidden=True),
         ConfigField(key="refresh_token", label="Refresh token", kind="secret", required=False, hidden=True),
@@ -162,20 +164,30 @@ class NotionMcpSource(Source):
 
     # -- MCP transport (Streamable HTTP) ------------------------------------------------
 
+    def _queries(self) -> list[str]:
+        return [part.strip() for part in re.split(r"[\n,]", self.get("query")) if part.strip()]
+
     async def fetch(self) -> list[RawItem]:
-        if not self.is_configured():
+        # notion-search needs a non-empty query — there's no list-everything mode — so with no
+        # search terms configured there's nothing to fetch.
+        queries = self._queries()
+        if not self.is_configured() or not queries:
             return []
+        by_id: dict[str, RawItem] = {}
         async with httpx.AsyncClient(timeout=30) as client:
             session_id, protocol = await self._open_session(client)
-            result = await self._rpc(
-                client,
-                "tools/call",
-                {"name": "search", "arguments": {"query": self.get("query")}},
-                session_id=session_id,
-                protocol=protocol,
-                req_id=2,
-            )
-        return _items_from_search(result)
+            for offset, query in enumerate(queries):
+                result = await self._rpc(
+                    client,
+                    "tools/call",
+                    {"name": "notion-search", "arguments": {"query": query}},
+                    session_id=session_id,
+                    protocol=protocol,
+                    req_id=2 + offset,
+                )
+                for item in _items_from_search(result):
+                    by_id.setdefault(item.external_id, item)
+        return list(by_id.values())
 
     async def _open_session(self, client: httpx.AsyncClient) -> tuple[str | None, str]:
         response = await self._post(
@@ -273,17 +285,18 @@ def _items_from_search(result: dict) -> list[RawItem]:
         if not page_id:
             continue
         title = _entry_title(entry)
-        url = entry.get("url")
+        highlight = entry.get("highlight")
         items.append(
             RawItem(
                 source="notion_mcp",
                 external_id=page_id,
                 label=title,
                 occurred_at=_entry_time(entry),
-                url=url,
+                url=entry.get("url"),
+                context=highlight if isinstance(highlight, str) else None,
                 title=title,
                 reference_keys=all_reference_keys(title),
-                extra={},
+                extra={"notion_type": entry.get("type")},
             )
         )
     return items
@@ -315,7 +328,7 @@ def _entry_title(entry: dict) -> str:
 
 
 def _entry_time(entry: dict) -> datetime:
-    for key in ("last_edited_time", "last_edited", "updated_at"):
+    for key in ("timestamp", "last_edited_time", "last_edited", "updated_at"):
         raw = entry.get(key)
         if isinstance(raw, str) and raw:
             try:
