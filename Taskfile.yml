@@ -35,9 +35,11 @@ tasks:
         read -rp "Local domain (e.g. myhq): " domain
         [ -n "$domain" ] || { echo "No domain given — nothing written."; exit 1; }
         sed "s/__DOMAIN__/$domain/g" ops/Caddyfile.example > ops/Caddyfile
-        echo "Wrote ops/Caddyfile for http://$domain"
-        echo "Point the name at your machine (once), then run: task proxy"
+        echo "Wrote ops/Caddyfile for https://$domain"
+        echo "Point the name at your machine (once):"
         echo "  echo \"127.0.0.1 $domain\" | sudo tee -a /etc/hosts"
+        echo "Then run: task proxy   (Caddy serves HTTPS with its local CA; first run"
+        echo "installs the CA into your trust store, so the browser shows a real padlock)"
 
   proxy:
     desc: Serve the app at your bare domain (run alongside `task dev`; needs `task proxy:set` first)
@@ -47,14 +49,24 @@ tasks:
           echo "No ops/Caddyfile yet. Run: task proxy:set"
           exit 1
         }
-      # Caddy binds port 80, which is privileged — so sudo, and an absolute path because
-      # sudo drops the devbox PATH that put caddy there. `task dev` must already be running.
+      # Caddy binds 443 (and 80 for the redirect), both privileged — so sudo, and an absolute
+      # path because sudo drops the devbox PATH that put caddy there. It also installs its
+      # local CA into the system trust store on first run, which likewise needs sudo. `task
+      # dev` must already be running.
       - 'sudo "$(command -v caddy)" run --config ops/Caddyfile --adapter caddyfile'
+
+  proxy:trust:
+    desc: Install Caddy's local CA into the system trust store (run once if the padlock is missing)
+    # `task proxy` does this automatically on first run; this is the explicit escape hatch —
+    # after a "Not Secure" warning that won't clear, or to trust the cert in a second browser.
+    cmds:
+      - 'sudo "$(command -v caddy)" trust'
 
   up:
     desc: The whole stack behind your domain — backend + frontend + proxy (Caddy prompts for sudo)
     # Same parallel deps as `task dev`, plus the proxy. Each server tees to its own log;
-    # Caddy asks for a password once (port 80). Needs `task proxy:set` first. Ctrl-C stops all.
+    # Caddy asks for a password once (binds 443, installs its local CA). Needs `task
+    # proxy:set` first. Ctrl-C stops all.
     deps:
       - back:dev
       - front:dev
