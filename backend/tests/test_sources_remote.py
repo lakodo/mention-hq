@@ -156,6 +156,9 @@ class TestGitHub:
         assert by_login["grace"] == "assignee"
         assert by_login["ada"] == "reviewer"
         assert by_login["linus"] == "reviewer"
+        # Every GitHub login has an avatar at github.com/<login>.png — no extra call needed.
+        author = next(p for p in people if p["value"] == "someone")
+        assert author["avatar"] == "https://github.com/someone.png?size=64"
 
     async def test_unconfigured_fetches_nothing_rather_than_failing(self):
         assert await GitHubSource({}).fetch() == []
@@ -227,7 +230,11 @@ class TestLinear:
     async def test_an_issue_carries_its_assignee_and_creator(self, linear):
         issue = {
             **LINEAR_ISSUES["data"]["issues"]["nodes"][0],
-            "assignee": {"displayName": "Ada Lovelace", "email": "ada@acme.dev"},
+            "assignee": {
+                "displayName": "Ada Lovelace",
+                "email": "ada@acme.dev",
+                "avatarUrl": "https://linear.app/avatar/ada.png",
+            },
             "creator": {"displayName": "Grace Hopper", "email": "grace@acme.dev"},
         }
         respx.post("https://api.linear.app/graphql").mock(
@@ -239,6 +246,8 @@ class TestLinear:
 
         assert by_name["Ada Lovelace"] == "assignee"
         assert by_name["Grace Hopper"] == "creator"
+        ada = next(p for p in people if p["name"] == "Ada Lovelace")
+        assert ada["avatar"] == "https://linear.app/avatar/ada.png"
 
     @respx.mock
     async def test_graphql_errors_arrive_with_status_200(self, linear):

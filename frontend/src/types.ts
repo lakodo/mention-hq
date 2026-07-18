@@ -28,6 +28,7 @@ export interface ItemPerson {
   value: string;
   name: string;
   role: string;
+  avatar?: string | null;
 }
 
 export interface Item {

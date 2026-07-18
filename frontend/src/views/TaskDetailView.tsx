@@ -936,7 +936,7 @@ export function TaskDetailView() {
                 >
                   People
                 </Text>
-                <PeopleStrip people={mergePeople(selected.items)} size={24} />
+                <PeopleStrip people={mergePeople(selected.items)} size={32} />
               </Group>
             )}
 

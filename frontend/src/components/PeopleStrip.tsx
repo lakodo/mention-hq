@@ -1,5 +1,7 @@
 import { Avatar, Text, Tooltip } from '@mantine/core';
-import type { ItemPerson } from '../types';
+import { useMemo } from 'react';
+import { usePeople } from '../api/hooks';
+import type { ItemPerson, Person } from '../types';
 
 function initials(name: string): string {
   const parts = name
@@ -23,23 +25,68 @@ export function mergePeople(items: { people: ItemPerson[] }[]): ItemPerson[] {
   return [...byKey.values()];
 }
 
+interface Resolved {
+  key: string;
+  name: string;
+  role: string;
+  avatar?: string | null;
+}
+
 interface PeopleStripProps {
   people: ItemPerson[];
   size?: number;
 }
 
-export function PeopleStrip({ people, size = 20 }: PeopleStripProps) {
-  if (people.length === 0) return null;
+/**
+ * One row of avatars for the people an item (or task) concerns. Identities are resolved
+ * through the people directory, so the same human across sources — a Slack id and a GitHub
+ * login — collapses to a single avatar under their directory name, and the first source that
+ * carries an image wins. People not yet in the directory fall back to their source name.
+ */
+export function PeopleStrip({ people, size = 28 }: PeopleStripProps) {
+  const { data: directory = [] } = usePeople();
+
+  const byIdentity = useMemo(() => {
+    const map = new Map<string, Person>();
+    for (const person of directory) {
+      for (const id of person.identities) map.set(`${id.kind}:${id.value}`, person);
+    }
+    return map;
+  }, [directory]);
+
+  const resolved = useMemo<Resolved[]>(() => {
+    const groups = new Map<string, Resolved>();
+    for (const person of people) {
+      const match = byIdentity.get(`${person.kind}:${person.value}`);
+      const key = match ? `person:${match.id}` : `${person.kind}:${person.value}`;
+      const existing = groups.get(key);
+      if (!existing) {
+        groups.set(key, {
+          key,
+          name: match?.display_name || person.name,
+          role: person.role,
+          avatar: person.avatar ?? undefined,
+        });
+      } else if (!existing.avatar && person.avatar) {
+        existing.avatar = person.avatar; // first source with an image wins
+      }
+    }
+    return [...groups.values()];
+  }, [people, byIdentity]);
+
+  if (resolved.length === 0) return null;
   return (
     <Avatar.Group spacing="xs">
-      {people.map((person) => (
-        <Tooltip
-          key={`${person.kind}:${person.value}`}
-          label={`${person.name} · ${person.role}`}
-          withArrow
-        >
-          <Avatar size={size} radius="xl" color="gray" name={person.name}>
-            <Text fz={9} fw={600}>
+      {resolved.map((person) => (
+        <Tooltip key={person.key} label={`${person.name} · ${person.role}`} withArrow>
+          <Avatar
+            size={size}
+            radius="xl"
+            color="gray"
+            name={person.name}
+            src={person.avatar || undefined}
+          >
+            <Text fz={Math.round(size * 0.4)} fw={600}>
               {initials(person.name)}
             </Text>
           </Avatar>

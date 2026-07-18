@@ -33,8 +33,8 @@ query MyIssues($userId: ID!) {
       state { name type }
       labels { nodes { name } }
       project { name }
-      assignee { displayName email }
-      creator { displayName email }
+      assignee { displayName email avatarUrl }
+      creator { displayName email avatarUrl }
     }
   }
 }
@@ -145,6 +145,7 @@ def _to_item(node: dict) -> RawItem:
                     "value": person.get("email") or person["displayName"],
                     "name": person["displayName"],
                     "role": role,
+                    "avatar": person.get("avatarUrl"),
                 }
             )
 

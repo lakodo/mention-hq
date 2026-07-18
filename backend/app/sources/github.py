@@ -170,7 +170,16 @@ class GitHubSource(Source):
 def _add_person(people: list[dict], login: str | None, role: str) -> None:
     """Add a GitHub login once — a person keeps the first role they turn up in."""
     if login and not any(p["value"] == login for p in people):
-        people.append({"kind": "github", "value": login, "name": login, "role": role})
+        # GitHub serves every login's avatar at this URL, so no extra API call is needed.
+        people.append(
+            {
+                "kind": "github",
+                "value": login,
+                "name": login,
+                "role": role,
+                "avatar": f"https://github.com/{login}.png?size=64",
+            }
+        )
 
 
 def _to_item(raw: dict, kind: str) -> RawItem:

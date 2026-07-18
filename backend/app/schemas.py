@@ -23,6 +23,8 @@ class ItemPersonOut(BaseModel):
     value: str
     name: str
     role: str
+    # A source-provided avatar image, when it has one. The UI prefers it over initials.
+    avatar: str | None = None
 
 
 class ItemOut(BaseModel):
