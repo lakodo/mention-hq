@@ -66,7 +66,8 @@ export function Header() {
       onClick={() => navigate(tab.path)}
       rightSection={
         tab.path === '/catchup' && catchupCount > 0 ? (
-          <Badge size="xs" circle variant="filled" color="pink">
+          // Not `circle`: a fixed-width circle clips a two-digit count to "1..". A pill grows.
+          <Badge size="xs" variant="filled" color="pink" px={6}>
             {catchupBadge}
           </Badge>
         ) : undefined

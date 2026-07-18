@@ -1002,3 +1002,8 @@ class TestNotionMcp:
         # notion-search rejects an empty query, so a connected source with no terms fetches
         # nothing rather than erroring — no MCP call is made at all (no respx mock needed).
         assert await NotionMcpSource({"token": "mcp-token"}).fetch() == []
+
+    def test_detail_nudges_when_connected_without_search_terms(self):
+        assert NotionMcpSource({}).detail() == "Not connected"
+        assert "add your name" in NotionMcpSource({"token": "x"}).detail()
+        assert NotionMcpSource({"token": "x", "identity": "Ada"}).detail() == "Connected over MCP"

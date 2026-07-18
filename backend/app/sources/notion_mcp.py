@@ -82,7 +82,13 @@ class NotionMcpSource(Source):
     ]
 
     def detail(self) -> str:
-        return "Connected over MCP" if self.is_configured() else "Not connected"
+        if not self.is_configured():
+            return "Not connected"
+        # Connected but with nothing to search reads as broken ("why no items?"). Say what's
+        # missing: MCP search needs a term, so an empty source pulls nothing until you add one.
+        if not (self.get("identity") or self.get("query")):
+            return "Connected — add your name or a search term below to pull items"
+        return "Connected over MCP"
 
     def is_configured(self) -> bool:
         return bool(self.get("token"))
