@@ -12,6 +12,7 @@ import respx
 
 from app.sources.github import GitHubSource
 from app.sources.linear import LinearSource
+from app.sources.notion import NotionSource
 from app.sources.slack import SlackSource
 
 PR_SEARCH = {
@@ -656,3 +657,145 @@ class TestSlack:
         )
 
         assert (await slack.fetch())[0].label == "#eng - shared a file: design-v2.fig"
+
+
+NOTION_SEARCH = {
+    "results": [
+        {
+            "object": "page",
+            "id": "page-1",
+            "url": "https://notion.so/page-1",
+            "last_edited_time": "2026-07-16T09:00:00.000Z",
+            "created_by": {"object": "user", "id": "me", "name": "Ada Lovelace"},
+            "last_edited_by": {"object": "user", "id": "grace", "name": "Grace Hopper"},
+            "properties": {
+                "title": {"type": "title", "title": [{"plain_text": "Roadmap "}, {"plain_text": "Q3"}]}
+            },
+        },
+        {
+            "object": "page",
+            "id": "page-2",
+            "url": "https://notion.so/page-2",
+            "last_edited_time": "2026-07-15T09:00:00.000Z",
+            "created_by": {"object": "user", "id": "grace", "name": "Grace Hopper"},
+            "last_edited_by": {"object": "user", "id": "grace", "name": "Grace Hopper"},
+            "properties": {"Name": {"type": "title", "title": [{"plain_text": "Design notes"}]}},
+        },
+        {
+            "object": "page",
+            "id": "page-3",
+            "url": "https://notion.so/page-3",
+            "last_edited_time": "2026-07-14T09:00:00.000Z",
+            "created_by": {"object": "user", "id": "grace", "name": "Grace Hopper"},
+            "last_edited_by": {"object": "user", "id": "grace", "name": "Grace Hopper"},
+            "properties": {"title": {"type": "title", "title": [{"plain_text": "Someone else's page"}]}},
+        },
+    ]
+}
+
+NOTION_COMMENTS = {
+    "page-2": {
+        "results": [
+            {
+                "created_by": {"object": "user", "id": "grace", "name": "Grace Hopper"},
+                "rich_text": [
+                    {"type": "text", "plain_text": "cc "},
+                    {
+                        "type": "mention",
+                        "mention": {"type": "user", "user": {"id": "me", "name": "Ada Lovelace"}},
+                        "plain_text": "@Ada",
+                    },
+                ],
+            }
+        ]
+    }
+}
+
+
+def _notion_comments(request):
+    block = request.url.params.get("block_id", "")
+    return httpx.Response(200, json=NOTION_COMMENTS.get(block, {"results": []}))
+
+
+@pytest.fixture
+def notion() -> NotionSource:
+    return NotionSource({"token": "ntn_x", "user_id": "me"})
+
+
+class TestNotion:
+    @respx.mock
+    async def test_surfaces_pages_you_created_own_or_are_mentioned_in(self, notion):
+        respx.post("https://api.notion.com/v1/search").mock(
+            return_value=httpx.Response(200, json=NOTION_SEARCH)
+        )
+        respx.get("https://api.notion.com/v1/comments").mock(side_effect=_notion_comments)
+
+        items = await notion.fetch()
+
+        # page-1 (you created it) and page-2 (a comment mentions you); page-3 is someone
+        # else's with no involvement, so it never lands in your board.
+        assert {item.external_id for item in items} == {"page-1", "page-2"}
+        page1 = next(i for i in items if i.external_id == "page-1")
+        assert page1.source == "notion"
+        assert page1.id == "notion:page-1"
+        assert page1.label == "Roadmap Q3"
+        assert page1.url == "https://notion.so/page-1"
+
+    @respx.mock
+    async def test_a_created_page_names_its_creator_and_owner(self, notion):
+        respx.post("https://api.notion.com/v1/search").mock(
+            return_value=httpx.Response(200, json=NOTION_SEARCH)
+        )
+        respx.get("https://api.notion.com/v1/comments").mock(side_effect=_notion_comments)
+
+        page1 = next(i for i in await notion.fetch() if i.external_id == "page-1")
+        by_name = {p["name"]: p["role"] for p in page1.people}
+
+        assert by_name["Ada Lovelace"] == "creator"
+        assert by_name["Grace Hopper"] == "owner"
+
+    @respx.mock
+    async def test_a_comment_mention_carries_the_mentioned_person(self, notion):
+        respx.post("https://api.notion.com/v1/search").mock(
+            return_value=httpx.Response(200, json=NOTION_SEARCH)
+        )
+        respx.get("https://api.notion.com/v1/comments").mock(side_effect=_notion_comments)
+
+        page2 = next(i for i in await notion.fetch() if i.external_id == "page-2")
+        roles = {p["value"]: p["role"] for p in page2.people}
+
+        assert roles["me"] == "mentioned"
+        assert roles["grace"] == "creator"
+
+    @respx.mock
+    async def test_missing_comment_access_does_not_sink_the_sync(self, notion):
+        respx.post("https://api.notion.com/v1/search").mock(
+            return_value=httpx.Response(200, json=NOTION_SEARCH)
+        )
+        respx.get("https://api.notion.com/v1/comments").mock(
+            return_value=httpx.Response(403, json={"message": "no comment capability"})
+        )
+
+        # Comments are a separate integration capability; without it, creator/owner pages
+        # still come through — you just lose the mention signal.
+        items = await notion.fetch()
+
+        assert {item.external_id for item in items} == {"page-1"}
+
+    @respx.mock
+    async def test_resolves_you_from_the_token_when_user_id_is_blank(self):
+        source = NotionSource({"token": "ntn_x"})
+        respx.get("https://api.notion.com/v1/users/me").mock(
+            return_value=httpx.Response(200, json={"bot": {"owner": {"type": "user", "user": {"id": "me"}}}})
+        )
+        respx.post("https://api.notion.com/v1/search").mock(
+            return_value=httpx.Response(200, json=NOTION_SEARCH)
+        )
+        respx.get("https://api.notion.com/v1/comments").mock(side_effect=_notion_comments)
+
+        items = await source.fetch()
+
+        assert {item.external_id for item in items} == {"page-1", "page-2"}
+
+    async def test_unconfigured_notion_fetches_nothing(self):
+        assert await NotionSource({}).fetch() == []

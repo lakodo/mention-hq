@@ -22,6 +22,7 @@ from app.sources.git import GitSource
 from app.sources.github import GitHubSource
 from app.sources.linear import LinearSource
 from app.sources.markdown import MarkdownSource
+from app.sources.notion import NotionSource
 from app.sources.slack import SlackSource
 from app.sources.todos import TodoSource
 
@@ -29,6 +30,7 @@ SOURCE_CLASSES: list[type[Source]] = [
     GitHubSource,
     LinearSource,
     SlackSource,
+    NotionSource,
     GitSource,
     TodoSource,
     MarkdownSource,
