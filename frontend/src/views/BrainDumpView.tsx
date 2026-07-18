@@ -1,4 +1,13 @@
-import { Button, Center, Group, MultiSelect, Stack, Text, Textarea } from '@mantine/core';
+import {
+  Button,
+  Center,
+  Group,
+  MultiSelect,
+  Stack,
+  Text,
+  Textarea,
+  TextInput,
+} from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -10,6 +19,8 @@ export function BrainDumpView() {
   const { data: tasks } = useTasks();
   const createNote = useCreateNote();
   const [text, setText] = useState('');
+  const [url, setUrl] = useState('');
+  const [title, setTitle] = useState('');
   const [taskIds, setTaskIds] = useState<string[]>([]);
 
   const taskOptions = useMemo(
@@ -18,10 +29,18 @@ export function BrainDumpView() {
     [tasks],
   );
 
+  // A link needs no body; a plain note does — so allow submit when either is filled.
+  const canSubmit = Boolean(text.trim() || url.trim());
+
   const submit = () => {
-    if (!text.trim()) return;
+    if (!canSubmit) return;
     createNote.mutate(
-      { text: text.trim(), taskIds },
+      {
+        text: text.trim(),
+        taskIds,
+        url: url.trim() || undefined,
+        title: title.trim() || undefined,
+      },
       {
         onSuccess: () => {
           notifications.show({
@@ -30,6 +49,8 @@ export function BrainDumpView() {
             color: 'teal',
           });
           setText('');
+          setUrl('');
+          setTitle('');
           setTaskIds([]);
           navigate(taskIds.length ? '/task' : '/catchup');
         },
@@ -48,15 +69,32 @@ export function BrainDumpView() {
           </Text>
           <Text c="dimmed" fz="sm">
             Type anything — it becomes an item and flows into Catch-up, or straight onto a task if
-            you pick one.
+            you pick one. Add a link to save a clickable URL; the text becomes its description.
           </Text>
         </Stack>
 
+        <TextInput
+          placeholder="Link (optional) — https://…"
+          value={url}
+          onChange={(e) => setUrl(e.currentTarget.value)}
+          aria-label="Link URL"
+        />
+        {url.trim() && (
+          <TextInput
+            placeholder="Title (optional)"
+            value={title}
+            onChange={(e) => setTitle(e.currentTarget.value)}
+            aria-label="Link title"
+          />
+        )}
+
         <Textarea
           autosize
-          minRows={8}
+          minRows={6}
           maxRows={20}
-          placeholder="What's on your mind?"
+          placeholder={
+            url.trim() ? 'Why this matters — helps decide the next action' : "What's on your mind?"
+          }
           value={text}
           onChange={(e) => setText(e.currentTarget.value)}
           onKeyDown={(e) => {
@@ -78,7 +116,7 @@ export function BrainDumpView() {
             style={{ flex: 1, minWidth: 0 }}
             comboboxProps={{ withinPortal: true }}
           />
-          <Button onClick={submit} loading={createNote.isPending} disabled={!text.trim()}>
+          <Button onClick={submit} loading={createNote.isPending} disabled={!canSubmit}>
             Capture
           </Button>
         </Group>

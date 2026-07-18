@@ -487,6 +487,26 @@ async def test_a_note_can_be_edited_but_a_source_item_cannot(client, db):
     assert (await client.patch(f"/api/items/{item.id}", json={"text": "nope"})).status_code == 400
 
 
+async def test_a_link_note_is_clickable_with_the_text_as_description(client):
+    response = await client.post(
+        "/api/items",
+        json={"url": "https://example.com/spec", "title": "The spec", "text": "read before review"},
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["source"] == "note"
+    assert body["url"] == "https://example.com/spec"
+    assert body["label"] == "The spec"
+    # The description lands in context, which the engine and the AI next-action both read.
+    assert body["context"] == "read before review"
+
+
+async def test_a_link_needs_no_description_but_something_is_required(client):
+    assert (await client.post("/api/items", json={"url": "https://example.com/x"})).status_code == 201
+    assert (await client.post("/api/items", json={})).status_code == 400
+
+
 async def test_brain_dump_with_a_task_files_it_straight_away(client, db):
     await _make_task(db)
     await db.commit()

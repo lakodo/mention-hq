@@ -24,9 +24,13 @@ async def create_note(request: BrainDumpRequest, db: AsyncSession = Depends(get_
     """A brain dump: turn typed text into an item. It flows through catch-up like any item,
     unless tasks are given, in which case it is filed straight onto them."""
     try:
-        return await catchup.create_note(db, request.text, request.task_ids)
+        return await catchup.create_note(
+            db, request.text, request.task_ids, url=request.url, title=request.title
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.patch("/{item_id}", response_model=ItemWithLinks)

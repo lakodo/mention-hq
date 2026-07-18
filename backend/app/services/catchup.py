@@ -118,27 +118,49 @@ async def create_task_from_item(
     return (await db.execute(stmt)).scalars().one()
 
 
-async def create_note(db: AsyncSession, text: str, task_ids: list[str]) -> Item:
+async def create_note(
+    db: AsyncSession,
+    text: str,
+    task_ids: list[str],
+    url: str | None = None,
+    title: str | None = None,
+) -> Item:
     """A brain-dump: a hand-typed item. With no tasks it lands in catch-up like anything
     else; with tasks it is filed straight onto them. It has no source instance, so a sync
-    keeps it (nothing re-fetches it) and the engine can still propose tasks for it."""
+    keeps it (nothing re-fetches it) and the engine can still propose tasks for it.
+
+    Give a `url` and it becomes a clickable link item: `title` is its label and the typed
+    text is its description — kept in `context` so the engine and the AI next-action read it."""
     body = text.strip()
+    clean_url = (url or "").strip() or None
+    note_title = (title or "").strip()
+    if not (body or clean_url):
+        raise ValueError("A note needs some text or a link")
     now = datetime.now(UTC)
     item_id = f"note:{uuid.uuid4().hex[:12]}"
+    if clean_url:
+        label = note_title or clean_url
+        context = body or None
+        keys_source = f"{note_title} {body}"
+    else:
+        label = body
+        context = None
+        keys_source = body
     item = Item(
         id=item_id,
         source="note",
         instance_id=None,
-        label=body[:1000],
-        url=None,
-        context=None,
+        label=label[:1000],
+        url=clean_url,
+        context=context,
         occurred_at=now,
         first_seen_at=now,
         triaged=bool(task_ids),
         extra={
             "text": body,
+            "title": note_title,
             "identity_keys": [],
-            "reference_keys": sorted(all_reference_keys(body)),
+            "reference_keys": sorted(all_reference_keys(keys_source)),
         },
     )
     db.add(item)

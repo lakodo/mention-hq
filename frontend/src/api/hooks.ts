@@ -65,7 +65,7 @@ import {
   triageItem,
   updatePerson,
 } from './client';
-import type { NotionOAuthInfo } from './client';
+import type { NoteInput, NotionOAuthInfo } from './client';
 import type {
   AIStatus,
   AppSettings,
@@ -265,16 +265,9 @@ function useCatchupInvalidation() {
   };
 }
 
-export function useCreateNote(): UseMutationResult<
-  ItemWithLinks,
-  Error,
-  { text: string; taskIds: string[] }
-> {
+export function useCreateNote(): UseMutationResult<ItemWithLinks, Error, NoteInput> {
   const invalidate = useCatchupInvalidation();
-  return useMutation({
-    mutationFn: ({ text, taskIds }) => createNote(text, taskIds),
-    onSuccess: invalidate,
-  });
+  return useMutation({ mutationFn: createNote, onSuccess: invalidate });
 }
 
 export function useDeleteItem(): UseMutationResult<void, Error, string> {

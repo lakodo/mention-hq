@@ -244,14 +244,20 @@ export const handlers = [
   ),
 
   http.post(`${BASE}/items`, async ({ request }) => {
-    const body = (await request.json()) as { text: string; task_ids?: string[] };
+    const body = (await request.json()) as {
+      text: string;
+      task_ids?: string[];
+      url?: string | null;
+      title?: string | null;
+    };
     const taskIds = body.task_ids ?? [];
+    const cleanUrl = (body.url ?? '').trim() || null;
     const item: ItemWithLinks = {
       id: `note:${Math.random().toString(16).slice(2, 10)}`,
       source: 'note',
-      label: body.text.slice(0, 1000),
-      url: null,
-      context: null,
+      label: (cleanUrl ? (body.title ?? '').trim() || cleanUrl : body.text).slice(0, 1000),
+      url: cleanUrl,
+      context: cleanUrl ? body.text.trim() || null : null,
       occurred_at: new Date().toISOString(),
       triaged: taskIds.length > 0,
       triage_reason: null,

@@ -23,4 +23,30 @@ describe('BrainDumpView', () => {
     renderApp('/braindump');
     expect(await screen.findByRole('button', { name: 'Capture' })).toBeDisabled();
   });
+
+  it('captures a link as a clickable item with the text as its description', async () => {
+    const user = userEvent.setup();
+    renderApp('/braindump');
+
+    await user.type(await screen.findByLabelText('Link URL'), 'https://example.com/spec');
+    await user.type(await screen.findByLabelText('Link title'), 'The spec');
+    await user.type(screen.getByLabelText('Brain dump text'), 'read before the review');
+    await user.click(screen.getByRole('button', { name: 'Capture' }));
+
+    await waitFor(() => {
+      const item = db.catchup.find((i) => i.url === 'https://example.com/spec');
+      expect(item).toBeTruthy();
+      expect(item?.label).toBe('The spec');
+      expect(item?.context).toBe('read before the review');
+    });
+  });
+
+  it('can capture a link with no description', async () => {
+    const user = userEvent.setup();
+    renderApp('/braindump');
+
+    await user.type(await screen.findByLabelText('Link URL'), 'https://example.com/x');
+    // With a URL present, an empty body is fine — the button is enabled.
+    expect(screen.getByRole('button', { name: 'Capture' })).toBeEnabled();
+  });
 });

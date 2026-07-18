@@ -150,7 +150,10 @@ class CreateTaskFromItemRequest(BaseModel):
 
 
 class BrainDumpRequest(BaseModel):
-    text: str = Field(min_length=1)
+    text: str = ""
+    # A link makes the item clickable; title becomes its label; text is the description.
+    url: str | None = None
+    title: str | None = None
     task_ids: list[str] = []
 
 

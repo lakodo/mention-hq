@@ -132,8 +132,20 @@ export async function enrichTasks(): Promise<{ scheduled: number }> {
   return data;
 }
 
-export async function createNote(text: string, taskIds: string[]): Promise<ItemWithLinks> {
-  const { data } = await api.post<ItemWithLinks>('/items', { text, task_ids: taskIds });
+export interface NoteInput {
+  text: string;
+  taskIds: string[];
+  url?: string;
+  title?: string;
+}
+
+export async function createNote(input: NoteInput): Promise<ItemWithLinks> {
+  const { data } = await api.post<ItemWithLinks>('/items', {
+    text: input.text,
+    task_ids: input.taskIds,
+    url: input.url,
+    title: input.title,
+  });
   return data;
 }
 
