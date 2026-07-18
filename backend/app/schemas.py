@@ -302,6 +302,7 @@ class PersonIdentityOut(BaseModel):
     kind: str
     value: str
     label: str | None = None
+    avatar_url: str | None = None
 
 
 class PersonIdentityIn(BaseModel):
@@ -317,6 +318,7 @@ class PersonOut(BaseModel):
     display_name: str
     email: str | None = None
     note: str | None = None
+    avatar_url: str | None = None
     identities: list[PersonIdentityOut] = []
 
 
@@ -331,6 +333,8 @@ class PersonPatch(BaseModel):
     display_name: str | None = None
     email: str | None = None
     note: str | None = None
+    # Send a URL to pick an avatar, or null to clear it (falls back to an identity's avatar).
+    avatar_url: str | None = None
 
 
 class PersonMerge(BaseModel):

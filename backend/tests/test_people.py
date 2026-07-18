@@ -41,6 +41,41 @@ async def test_remembering_a_known_handle_adds_no_duplicate(db):
     assert everyone[0].display_name == "Ada"
 
 
+async def test_record_people_ingests_handles_with_avatars(db):
+    await people.record_people(
+        db,
+        [
+            {"kind": "github", "value": "ada", "name": "ada", "avatar": "https://gh/ada.png"},
+            {"kind": "linear", "value": "grace@acme.dev", "name": "Grace", "avatar": None},
+        ],
+    )
+
+    everyone = {p.display_name: p for p in await people.list_people(db)}
+    assert set(everyone) == {"ada", "Grace"}
+    ada_identity = everyone["ada"].identities[0]
+    assert ada_identity.avatar_url == "https://gh/ada.png"
+
+
+async def test_record_people_backfills_a_missing_avatar_on_an_existing_identity(db):
+    await people.record_people(db, [{"kind": "github", "value": "ada", "name": "ada", "avatar": None}])
+    await people.record_people(
+        db, [{"kind": "github", "value": "ada", "name": "ada", "avatar": "https://gh/ada.png"}]
+    )
+
+    everyone = await people.list_people(db)
+    assert len(everyone) == 1, "the same handle stays one person"
+    assert everyone[0].identities[0].avatar_url == "https://gh/ada.png"
+
+
+async def test_choosing_an_avatar_for_a_person(db):
+    person = await people.create_person(db, "Ada")
+    updated = await people.update_person(db, person.id, avatar_url="https://chosen/ada.png")
+    assert updated.avatar_url == "https://chosen/ada.png"
+
+    cleared = await people.update_person(db, person.id, avatar_url=None)
+    assert cleared.avatar_url is None
+
+
 async def test_an_identity_belongs_to_one_person(db):
     await people.create_person(db, "Ada", identities=[{"kind": "slack", "value": "U9"}])
     other = await people.create_person(db, "Someone else")

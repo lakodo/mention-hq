@@ -59,16 +59,22 @@ export function PeopleStrip({ people, size = 28 }: PeopleStripProps) {
     for (const person of people) {
       const match = byIdentity.get(`${person.kind}:${person.value}`);
       const key = match ? `person:${match.id}` : `${person.kind}:${person.value}`;
+      // Prefer the avatar chosen for the directory person, then any identity's avatar, then
+      // the one this source carries.
+      const dirAvatar = match
+        ? match.avatar_url || match.identities.find((id) => id.avatar_url)?.avatar_url
+        : undefined;
+      const avatar = dirAvatar || person.avatar || undefined;
       const existing = groups.get(key);
       if (!existing) {
         groups.set(key, {
           key,
           name: match?.display_name || person.name,
           role: person.role,
-          avatar: person.avatar ?? undefined,
+          avatar,
         });
-      } else if (!existing.avatar && person.avatar) {
-        existing.avatar = person.avatar; // first source with an image wins
+      } else if (!existing.avatar && avatar) {
+        existing.avatar = avatar;
       }
     }
     return [...groups.values()];

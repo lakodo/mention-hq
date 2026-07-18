@@ -126,6 +126,7 @@ export interface PersonIdentity {
   kind: string;
   value: string;
   label: string | null;
+  avatar_url: string | null;
 }
 
 export interface Person {
@@ -133,6 +134,7 @@ export interface Person {
   display_name: string;
   email: string | null;
   note: string | null;
+  avatar_url: string | null;
   identities: PersonIdentity[];
 }
 
@@ -147,6 +149,7 @@ export interface PersonPatch {
   display_name?: string;
   email?: string | null;
   note?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface IdentityInput {

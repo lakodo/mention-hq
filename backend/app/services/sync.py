@@ -29,7 +29,7 @@ from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, SyncLog, Task
 from app.schemas import SyncResult, SyncSourceResult
 from app.services import ai, triage
 from app.services.buckets import load_matcher
-from app.services.people import DbDirectory
+from app.services.people import DbDirectory, record_people
 from app.services.sources_factory import Connected, build_connected, persist_config
 from app.sources.base import STATUS_PRIORITY, TITLE_PRIORITY, RawItem
 
@@ -94,6 +94,9 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
     kept = await _stored_items_to_keep(db, refreshed)
 
     result = await _persist(db, _merge(kept, fetched))
+    # Register everyone an item names into the directory, with their source avatar, so people
+    # are mergeable and their avatars pickable in the People tab.
+    await record_people(db, [person for _, raw in fetched for person in raw.people])
     await _skip_by_rules(db)
 
     # Rules run after the engine proposes, so a proposal on a now-skipped item is no longer

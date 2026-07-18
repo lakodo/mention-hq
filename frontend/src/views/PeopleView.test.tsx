@@ -91,4 +91,17 @@ describe('PeopleView', () => {
       'U0AERGW78CX',
     );
   });
+
+  it('picks an identity avatar for a person', async () => {
+    const user = userEvent.setup();
+    db.people.find((p) => p.id === ADA_ID)!.identities[1].avatar_url = 'https://github/adal.png';
+    renderApp('/people');
+
+    const ada = await cardFor('Ada Lovelace');
+    await user.click(await within(ada).findByRole('button', { name: 'Use this avatar' }));
+
+    await waitFor(() =>
+      expect(db.people.find((p) => p.id === ADA_ID)?.avatar_url).toBe('https://github/adal.png'),
+    );
+  });
 });

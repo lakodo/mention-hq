@@ -410,11 +410,13 @@ export const handlers = [
       display_name: body.display_name ?? '',
       email: body.email ?? null,
       note: body.note ?? null,
+      avatar_url: null,
       identities: (body.identities ?? []).map((i, n) => ({
         id: `pid:${Math.random().toString(16).slice(2, 8)}${n}`,
         kind: i.kind,
         value: i.value,
         label: i.label ?? null,
+        avatar_url: null,
       })),
     };
     db.people.push(person);
@@ -463,6 +465,7 @@ export const handlers = [
       kind: identity.kind,
       value: identity.value,
       label: identity.label ?? null,
+      avatar_url: null,
     });
     return HttpResponse.json(person, { status: 201 });
   }),

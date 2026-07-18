@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Avatar,
   Badge,
   Box,
   Button,
@@ -13,6 +14,7 @@ import {
   Stack,
   Text,
   TextInput,
+  Tooltip,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
@@ -51,6 +53,17 @@ function PersonCard({ person, others }: PersonCardProps) {
   const addIdentity = useAddIdentity();
   const removeIdentity = useRemoveIdentity();
   const deletePerson = useDeletePerson();
+  const update = useUpdatePerson();
+  const [pasteUrl, setPasteUrl] = useState('');
+
+  const resolvedAvatar =
+    person.avatar_url ?? person.identities.find((i) => i.avatar_url)?.avatar_url ?? undefined;
+  const avatarOptions = [
+    ...new Set(person.identities.map((i) => i.avatar_url).filter((u): u is string => Boolean(u))),
+  ];
+
+  const chooseAvatar = (url: string | null) =>
+    update.mutate({ id: person.id, patch: { avatar_url: url } }, { onError: fail });
 
   const submitIdentity = () => {
     if (!kind || !value.trim()) return;
@@ -83,16 +96,19 @@ function PersonCard({ person, others }: PersonCardProps) {
   return (
     <Card withBorder radius="md" p="md" data-testid="person-card">
       <Group justify="space-between" wrap="nowrap" mb={6}>
-        <Box style={{ minWidth: 0 }}>
-          <Text fw={600} truncate>
-            {person.display_name}
-          </Text>
-          {person.email && (
-            <Text fz="xs" c="dimmed" truncate>
-              {person.email}
+        <Group gap={10} wrap="nowrap" style={{ minWidth: 0 }}>
+          <Avatar src={resolvedAvatar} size={40} radius="xl" name={person.display_name} />
+          <Box style={{ minWidth: 0 }}>
+            <Text fw={600} truncate>
+              {person.display_name}
             </Text>
-          )}
-        </Box>
+            {person.email && (
+              <Text fz="xs" c="dimmed" truncate>
+                {person.email}
+              </Text>
+            )}
+          </Box>
+        </Group>
         <Menu position="bottom-end" withArrow>
           <Menu.Target>
             <ActionIcon
@@ -155,6 +171,49 @@ function PersonCard({ person, others }: PersonCardProps) {
           </Badge>
         ))}
       </Group>
+
+      {(avatarOptions.length > 0 || person.avatar_url) && (
+        <Group gap={6} mb="sm" align="center" wrap="wrap">
+          <Text fz="xs" c="dimmed">
+            Avatar
+          </Text>
+          {avatarOptions.map((url) => (
+            <Tooltip key={url} label="Use this avatar" withArrow>
+              <ActionIcon
+                variant="transparent"
+                aria-label="Use this avatar"
+                onClick={() => chooseAvatar(url)}
+                style={{
+                  borderRadius: '50%',
+                  outline:
+                    person.avatar_url === url ? '2px solid var(--mantine-color-blue-5)' : 'none',
+                }}
+              >
+                <Avatar src={url} size={26} radius="xl" />
+              </ActionIcon>
+            </Tooltip>
+          ))}
+          <TextInput
+            size="xs"
+            placeholder="or paste an image URL"
+            aria-label={`Avatar URL for ${person.display_name}`}
+            value={pasteUrl}
+            onChange={(e) => setPasteUrl(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && pasteUrl.trim()) {
+                chooseAvatar(pasteUrl.trim());
+                setPasteUrl('');
+              }
+            }}
+            style={{ flex: 1, minWidth: 140 }}
+          />
+          {person.avatar_url && (
+            <Button size="xs" variant="subtle" color="gray" onClick={() => chooseAvatar(null)}>
+              Clear
+            </Button>
+          )}
+        </Group>
+      )}
 
       <Group gap={8} wrap="nowrap">
         <Select

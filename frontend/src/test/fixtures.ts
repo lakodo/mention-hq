@@ -20,9 +20,10 @@ export function makePeople(): Person[] {
       display_name: 'Ada Lovelace',
       email: 'ada@acme.dev',
       note: null,
+      avatar_url: null,
       identities: [
-        { id: 'pid:1', kind: 'slack', value: 'U9', label: 'ada.l' },
-        { id: 'pid:2', kind: 'github', value: 'adal', label: null },
+        { id: 'pid:1', kind: 'slack', value: 'U9', label: 'ada.l', avatar_url: null },
+        { id: 'pid:2', kind: 'github', value: 'adal', label: null, avatar_url: null },
       ],
     },
     {
@@ -30,7 +31,10 @@ export function makePeople(): Person[] {
       display_name: 'Grace Hopper',
       email: null,
       note: null,
-      identities: [{ id: 'pid:3', kind: 'slack', value: 'U0AERGW78CX', label: null }],
+      avatar_url: null,
+      identities: [
+        { id: 'pid:3', kind: 'slack', value: 'U0AERGW78CX', label: null, avatar_url: null },
+      ],
     },
   ];
 }

@@ -14,9 +14,10 @@ describe('PeopleStrip', () => {
         display_name: 'Ada Lovelace',
         email: null,
         note: null,
+        avatar_url: null,
         identities: [
-          { id: 'i1', kind: 'slack', value: 'U1', label: null },
-          { id: 'i2', kind: 'github', value: 'ada', label: null },
+          { id: 'i1', kind: 'slack', value: 'U1', label: null, avatar_url: null },
+          { id: 'i2', kind: 'github', value: 'ada', label: null, avatar_url: null },
         ],
       },
     ];
@@ -35,6 +36,46 @@ describe('PeopleStrip', () => {
     // the github raw-name initials ("AD") are gone, only the merged "AL" remains.
     await waitFor(() => expect(screen.queryByText('AD')).not.toBeInTheDocument());
     expect(screen.getByText('AL')).toBeInTheDocument();
+  });
+
+  it('prefers the avatar chosen on the directory person over source images', async () => {
+    db.people = [
+      {
+        id: 'p1',
+        display_name: 'Ada',
+        email: null,
+        note: null,
+        avatar_url: 'https://chosen/ada.png',
+        identities: [
+          {
+            id: 'i1',
+            kind: 'github',
+            value: 'ada',
+            label: null,
+            avatar_url: 'https://github/ada.png',
+          },
+        ],
+      },
+    ];
+    const { container } = render(
+      <Providers>
+        <PeopleStrip
+          people={[
+            {
+              kind: 'github',
+              value: 'ada',
+              name: 'ada',
+              role: 'author',
+              avatar: 'https://item/ada.png',
+            },
+          ]}
+        />
+      </Providers>,
+    );
+
+    await waitFor(() =>
+      expect(container.querySelector('img')).toHaveAttribute('src', 'https://chosen/ada.png'),
+    );
   });
 
   it('renders a source avatar image when one is provided', async () => {

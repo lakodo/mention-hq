@@ -303,6 +303,8 @@ class Person(Base):
     display_name: Mapped[str] = mapped_column(String, nullable=False)
     email: Mapped[str | None] = mapped_column(String)
     note: Mapped[str | None] = mapped_column(Text)
+    # The avatar the user chose for this person; null falls back to an identity's avatar.
+    avatar_url: Mapped[str | None] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
 
@@ -334,6 +336,8 @@ class PersonIdentity(Base):
     value: Mapped[str] = mapped_column(String, nullable=False)
     # What the source called them when captured, kept for display even before a name is set.
     label: Mapped[str | None] = mapped_column(String)
+    # The avatar this source has for them, when it carries one (GitHub, Linear, …).
+    avatar_url: Mapped[str | None] = mapped_column(String)
 
     person: Mapped[Person] = relationship(back_populates="identities")
 

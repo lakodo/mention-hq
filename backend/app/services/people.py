@@ -84,6 +84,7 @@ async def update_person(
     display_name: str | None = None,
     email: str | None | object = _UNSET,
     note: str | None | object = _UNSET,
+    avatar_url: str | None | object = _UNSET,
 ) -> Person:
     person = await db.get(Person, person_id)
     if person is None:
@@ -94,6 +95,8 @@ async def update_person(
         person.email = email or None
     if note is not _UNSET:
         person.note = note or None
+    if avatar_url is not _UNSET:
+        person.avatar_url = (avatar_url or "").strip() or None
     person.updated_at = datetime.now(UTC)
     await db.commit()
     return await _reload(db, person_id)
@@ -179,6 +182,45 @@ async def remember(db: AsyncSession, kind: str, names: dict[str, str]) -> None:
             await db.commit()
         except IntegrityError:
             # A concurrent sync got there first; its row is as good as ours.
+            await db.rollback()
+
+
+async def record_people(db: AsyncSession, people: list[dict]) -> None:
+    """Ingest the people an item concerns into the directory — a Person + identity per handle,
+    carrying the source's avatar. An identity that already exists keeps its Person (so hand
+    merges hold); a missing avatar or label is filled in. Duplicates are folded later by hand."""
+    now = datetime.now(UTC)
+    for person in people:
+        kind = (person.get("kind") or "").strip()
+        value = (person.get("value") or "").strip()
+        if not kind or not value:
+            continue
+        name = (person.get("name") or "").strip() or None
+        avatar = (person.get("avatar") or "").strip() or None
+
+        existing = await _identity_owner(db, kind, value)
+        if existing is not None:
+            changed = False
+            if avatar and not existing.avatar_url:
+                existing.avatar_url, changed = avatar, True
+            if name and not existing.label:
+                existing.label, changed = name, True
+            if changed:
+                await db.commit()
+            continue
+
+        new_person = Person(id=_person_id(), display_name=name or value, updated_at=now)
+        db.add(new_person)
+        await db.flush()
+        db.add(
+            PersonIdentity(
+                id=_identity_id(), person=new_person, kind=kind, value=value, label=name, avatar_url=avatar
+            )
+        )
+        try:
+            await db.commit()
+        except IntegrityError:
+            # A concurrent writer created the identity first; its row is as good as ours.
             await db.rollback()
 
 
