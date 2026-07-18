@@ -738,9 +738,17 @@ function SourceCard({ source }: SourceCardProps) {
       )}
 
       {source.fields.length > 0 && (
-        <Stack gap={8} mt="sm">
+        <Box
+          mt="sm"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+            gap: 12,
+            alignItems: 'start',
+          }}
+        >
           {source.fields.map(renderField)}
-        </Stack>
+        </Box>
       )}
 
       {source.kind === 'notion' && <NotionConnect source={source} />}
@@ -889,17 +897,11 @@ function SourcesSection() {
           </Text>
         </Card>
       ) : (
-        <Box
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-            gap: 14,
-          }}
-        >
+        <Stack gap={12}>
           {rows.map((source) => (
             <SourceCard key={source.id} source={source} />
           ))}
-        </Box>
+        </Stack>
       )}
     </Box>
   );
