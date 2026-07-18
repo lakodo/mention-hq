@@ -197,10 +197,13 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
   // An item can already be attached (a confirmed link) yet still sit untriaged. Show those
   // tasks pre-selected in the attach box rather than as a separate badge, so Attach files it.
   const confirmedTaskIds = item.links.filter((l) => l.state === 'confirmed').map((l) => l.task.id);
-  // Confirmed links move into the attach box as pre-selected tasks; proposed and rejected
-  // links stay visible as their own rows to decide on.
-  const shownLinks = item.links.filter((l) => l.state !== 'confirmed');
   const [selected, setSelected] = useState<string[]>(confirmedTaskIds);
+  // Confirmed links, and any proposal the user just accepted, live in the attach box as
+  // pre-selected tasks; the rest stay visible as their own rows to decide on. Accepting a
+  // proposal stages it (so you can add more, then Attach) rather than filing on the spot.
+  const shownLinks = item.links.filter(
+    (l) => l.state !== 'confirmed' && !selected.includes(l.task.id),
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [title, setTitle] = useState(item.label);
   const [bucket, setBucket] = useState<string | null>(null);
@@ -348,7 +351,7 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
               key={`${link.task.id}:${link.state}`}
               link={link}
               busy={busy}
-              onConfirm={() => attach([link.task.id])}
+              onConfirm={() => setSelected((prev) => [...new Set([...prev, link.task.id])])}
               onReject={() =>
                 reject.mutate({ itemId: item.id, taskId: link.task.id }, { onError: fail })
               }

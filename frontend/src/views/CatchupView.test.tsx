@@ -202,20 +202,28 @@ describe('CatchupView', () => {
     ).toBeInTheDocument();
   });
 
-  it('confirms a proposal, taking the item out of the inbox', async () => {
+  it('stages a confirmed proposal in the attach box, then Attach files it', async () => {
     const user = userEvent.setup();
     renderApp('/catchup');
 
     const proposed = await screen.findByTestId('link-proposed');
+    const card = proposed.closest('[data-testid="catchup-card"]') as HTMLElement;
     await user.click(within(proposed).getByRole('button', { name: 'Confirm' }));
+
+    // Accepting a proposal stages it — its row moves into the attach box and the item stays
+    // in the inbox — rather than filing on the spot, so you can add more tasks first.
+    await waitFor(() =>
+      expect(within(card).queryByTestId('link-proposed')).not.toBeInTheDocument(),
+    );
+    expect(db.catchup.find((i) => i.id === SLACK_ITEM_ID)?.triaged).toBe(false);
+
+    await user.click(within(card).getByRole('button', { name: 'Attach' }));
 
     await waitFor(() => {
       const item = db.catchup.find((i) => i.id === SLACK_ITEM_ID);
       expect(item?.triaged).toBe(true);
-      expect(item?.links[0].state).toBe('confirmed');
+      expect(item?.links.some((l) => l.state === 'confirmed')).toBe(true);
     });
-
-    await waitFor(() => expect(screen.getAllByTestId('catchup-card')).toHaveLength(1));
   });
 
   it('rejects a proposal but keeps the item to decide on', async () => {
@@ -300,7 +308,10 @@ describe('CatchupView', () => {
     renderApp('/catchup');
 
     const proposed = await screen.findByTestId('link-proposed');
+    const card = proposed.closest('[data-testid="catchup-card"]') as HTMLElement;
     await user.click(within(proposed).getByRole('button', { name: 'Confirm' }));
+    // The failure only happens on Attach now — Confirm just stages the task.
+    await user.click(within(card).getByRole('button', { name: 'Attach' }));
 
     expect(await screen.findByText(`Task not found: ${PAYMENTS_TASK_ID}`)).toBeInTheDocument();
   });
