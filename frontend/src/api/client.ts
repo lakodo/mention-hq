@@ -321,6 +321,24 @@ export async function putSourceConfig(
   return data;
 }
 
+export interface NotionOAuthInfo {
+  redirect_uri: string;
+  connected: boolean;
+  oauth_ready: boolean;
+}
+
+export async function fetchNotionOauth(id: string): Promise<NotionOAuthInfo> {
+  const { data } = await api.get<NotionOAuthInfo>(`/admin/sources/${seg(id)}/notion`);
+  return data;
+}
+
+export async function startNotionAuthorize(id: string): Promise<string> {
+  const { data } = await api.post<{ authorize_url: string }>(
+    `/admin/sources/${seg(id)}/notion/authorize`,
+  );
+  return data.authorize_url;
+}
+
 export async function fetchAIStatus(): Promise<AIStatus> {
   const { data } = await api.get<AIStatus>('/admin/ai');
   return data;

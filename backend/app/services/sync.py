@@ -30,7 +30,7 @@ from app.schemas import SyncResult, SyncSourceResult
 from app.services import ai, triage
 from app.services.buckets import load_matcher
 from app.services.people import DbDirectory
-from app.services.sources_factory import Connected, build_connected
+from app.services.sources_factory import Connected, build_connected, persist_config
 from app.sources.base import STATUS_PRIORITY, TITLE_PRIORITY, RawItem
 
 log = structlog.get_logger(__name__)
@@ -70,6 +70,18 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
         connected = [c for c in connected if only in (c.instance.id, c.instance.kind)]
         if not connected:
             raise ValueError(f"Unknown source: {only}")
+
+    # Refresh credentials up front, in series, while the session is ours alone — a token a
+    # source rotates here has to be written back before the concurrent fetches read it.
+    for c in connected:
+        try:
+            updates = await c.source.prepare()
+        except Exception as exc:  # a failed refresh must not sink the whole sync
+            log.warning("source_prepare_failed", instance=c.instance.id, error=str(exc))
+            continue
+        if updates:
+            await persist_config(db, c.instance, updates)
+            c.source.apply_config(updates)
 
     # Concurrently: these are independent network calls, and run in series the sync takes
     # as long as every source added together. _fetch never raises, so gather is safe.

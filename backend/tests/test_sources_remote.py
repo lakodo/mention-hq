@@ -6,6 +6,8 @@ each API has that a status code alone won't reveal.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import httpx
 import pytest
 import respx
@@ -799,3 +801,59 @@ class TestNotion:
 
     async def test_unconfigured_notion_fetches_nothing(self):
         assert await NotionSource({}).fetch() == []
+
+    @respx.mock
+    async def test_exchange_code_returns_the_token_and_its_owner(self):
+        source = NotionSource({"client_id": "cid", "client_secret": "csec"})
+        respx.post("https://api.notion.com/v1/oauth/token").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "access_token": "ntn_new",
+                    "refresh_token": "refresh_1",
+                    "expires_in": 3600,
+                    "owner": {"type": "user", "user": {"id": "me"}},
+                },
+            )
+        )
+
+        updates = await source.exchange_code("code123", "http://jojohq/api/admin/oauth/notion/callback")
+
+        assert updates["token"] == "ntn_new"
+        assert updates["refresh_token"] == "refresh_1"
+        assert updates["user_id"] == "me"
+        assert "token_expiry" in updates
+
+    @respx.mock
+    async def test_prepare_refreshes_a_token_that_is_about_to_lapse(self):
+        past = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
+        source = NotionSource(
+            {
+                "client_id": "cid",
+                "client_secret": "csec",
+                "refresh_token": "r1",
+                "token": "old",
+                "token_expiry": past,
+            }
+        )
+        route = respx.post("https://api.notion.com/v1/oauth/token").mock(
+            return_value=httpx.Response(
+                200, json={"access_token": "ntn_fresh", "refresh_token": "r2", "expires_in": 3600}
+            )
+        )
+
+        updates = await source.prepare()
+
+        assert route.called
+        assert updates["token"] == "ntn_fresh"
+        assert updates["refresh_token"] == "r2"
+
+    async def test_prepare_is_a_noop_without_a_refresh_token(self):
+        assert await NotionSource({"token": "ntn_x"}).prepare() is None
+
+    async def test_prepare_is_a_noop_while_the_token_is_still_valid(self):
+        future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+        source = NotionSource(
+            {"client_id": "c", "client_secret": "s", "refresh_token": "r1", "token_expiry": future}
+        )
+        assert await source.prepare() is None

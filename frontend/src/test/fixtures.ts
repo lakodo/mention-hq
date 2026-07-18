@@ -343,6 +343,43 @@ export function makeSourceFields(kind: string): ConfigField[] {
       },
     ];
   }
+  if (kind === 'notion') {
+    return [
+      {
+        key: 'client_id',
+        label: 'OAuth client ID',
+        kind: 'text',
+        required: false,
+        placeholder: '',
+        help: '',
+        help_url: '',
+        value: null,
+        is_set: false,
+      },
+      {
+        key: 'client_secret',
+        label: 'OAuth client secret',
+        kind: 'secret',
+        required: false,
+        placeholder: '',
+        help: '',
+        help_url: '',
+        value: null,
+        is_set: false,
+      },
+      {
+        key: 'token',
+        label: 'Token',
+        kind: 'secret',
+        required: false,
+        placeholder: '',
+        help: '',
+        help_url: '',
+        value: null,
+        is_set: false,
+      },
+    ];
+  }
   return [
     {
       key: 'path',

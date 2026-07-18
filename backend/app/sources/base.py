@@ -38,6 +38,9 @@ class ConfigField:
     help: str = ""
     # Where the user goes to obtain this value, when it comes from a web page.
     help_url: str = ""
+    # Stored and resolved like any other field, but kept off the Admin form — for values a
+    # flow writes and owns, such as an OAuth refresh token, that the user never types.
+    hidden: bool = False
 
 
 @dataclass
@@ -137,6 +140,10 @@ class Source(abc.ABC):
     def get(self, key: str, default: str = "") -> str:
         return (self._config.get(key) or default).strip()
 
+    def apply_config(self, updates: dict[str, str]) -> None:
+        """Merge freshly persisted values (e.g. a refreshed token) into the live config."""
+        self._config.update(updates)
+
     def get_list(self, key: str) -> list[str]:
         return [part.strip() for part in self.get(key).split(",") if part.strip()]
 
@@ -149,6 +156,13 @@ class Source(abc.ABC):
 
     @abc.abstractmethod
     async def fetch(self) -> list[RawItem]: ...
+
+    async def prepare(self) -> dict[str, str] | None:
+        """A chance to refresh credentials before a fetch. Return config updates to persist
+        — secret keys land in the keychain, the rest in app_config — or None to change nothing.
+        Runs sequentially in sync (unlike fetch), so it may safely do network I/O whose result
+        has to be written back before the concurrent fetches begin."""
+        return None
 
     def detail(self) -> str:
         return ""

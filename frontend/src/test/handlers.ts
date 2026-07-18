@@ -523,6 +523,25 @@ export const handlers = [
 
   http.get(`${BASE}/admin/sources`, () => HttpResponse.json(db.sources)),
 
+  http.get(`${BASE}/admin/sources/:id/notion`, ({ params }) => {
+    const source = db.sources.find((s) => s.id === params.id);
+    if (!source) return notFound(`No source: ${String(params.id)}`);
+    const isSet = (key: string) => source.fields.find((f) => f.key === key)?.is_set ?? false;
+    return HttpResponse.json({
+      redirect_uri: 'http://jojohq/api/admin/oauth/notion/callback',
+      connected: isSet('token'),
+      oauth_ready: isSet('client_id') && isSet('client_secret'),
+    });
+  }),
+
+  http.post(`${BASE}/admin/sources/:id/notion/authorize`, ({ params }) => {
+    const source = db.sources.find((s) => s.id === params.id);
+    if (!source) return notFound(`No source: ${String(params.id)}`);
+    return HttpResponse.json({
+      authorize_url: 'https://api.notion.com/v1/oauth/authorize?client_id=cid&state=nonce',
+    });
+  }),
+
   http.post(`${BASE}/admin/sources`, async ({ request }) => {
     const body = (await request.json()) as { kind: string; name?: string };
     const kind = db.sourceKinds.find((k) => k.kind === body.kind);

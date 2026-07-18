@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import SourceInstance
 from app.security import get_secret_store
-from app.services.app_config import get_namespace
+from app.services.app_config import get_namespace, set_value
 from app.sources.base import Source
 from app.sources.dust import DustSource
 from app.sources.git import GitSource
@@ -71,6 +71,20 @@ async def resolve_config(db: AsyncSession, instance: SourceInstance) -> dict[str
         if value:
             config[spec.key] = value
     return config
+
+
+async def persist_config(db: AsyncSession, instance: SourceInstance, updates: dict[str, str]) -> None:
+    """Write config back for one source: secret keys to the keychain, the rest to app_config.
+    Also updates the live source's in-memory config so the change takes effect immediately."""
+    source_class = BY_KIND[instance.kind]
+    secret_keys = {f.key for f in source_class.fields if f.kind == "secret"}
+    secrets = get_secret_store()
+    for key, value in updates.items():
+        if key in secret_keys:
+            secrets.set(instance.id, key, value)
+        else:
+            await set_value(db, instance.id, key, value)
+    await db.commit()
 
 
 async def instances(db: AsyncSession) -> list[SourceInstance]:

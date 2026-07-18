@@ -11,6 +11,10 @@ All notable changes to Personal HQ are recorded here. The format follows
 - Sources: GitHub PRs/issues, Linear issues (assigned — including backlog), Slack (one item
   per thread, rich markup/emoji rendering), Notion (pages you created, own, or a comment
   mentions you in), git branches, todos, markdown.
+- Notion connects over OAuth for workspaces where an admin blocks static tokens: a Connect
+  button runs the consent handshake, the redirect URI is detected from your own host (so it
+  works behind a proxy or custom domain, not just localhost), and the access token refreshes
+  itself. Pasting a personal token still works where that's allowed.
 - Brain dump: a distraction-free page (and an always-present button in the header) to type
   a thought straight into an item, optionally filed onto tasks as you submit it; notes stay
   editable in place from the task or catch-up.

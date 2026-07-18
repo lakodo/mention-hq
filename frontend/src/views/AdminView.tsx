@@ -30,9 +30,10 @@ import {
   IconSparkles,
   IconTrash,
 } from '@tabler/icons-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { CONNECTION_META, UNCATEGORIZED } from '../constants';
-import { errorMessage } from '../api/client';
+import { errorMessage, startNotionAuthorize } from '../api/client';
 import {
   useAIStatus,
   useAddSource,
@@ -42,6 +43,8 @@ import {
   useDeleteBucket,
   useDetectSource,
   useEnrichTasks,
+  useNotionOauth,
+  queryKeys,
   useReassignBuckets,
   useRemoveSource,
   useRenameSource,
@@ -504,6 +507,72 @@ interface SourceCardProps {
  * The form is built from `fields`, so a source the backend grows tomorrow gets a
  * working setup form here without a line of code.
  */
+/**
+ * Notion can't use a pasted token when an admin blocks static tokens, so it authenticates
+ * over OAuth. The redirect URI is detected from the browser's own origin — every user is on
+ * a different host (localhost, a Caddy domain) — and shown here to register in Notion.
+ */
+function NotionConnect({ source }: { source: SourceStatus }) {
+  const info = useNotionOauth(source.id, source.kind === 'notion');
+  const qc = useQueryClient();
+  const [connecting, setConnecting] = useState(false);
+
+  if (!info.data) return null;
+  const { redirect_uri, oauth_ready, connected } = info.data;
+
+  const connect = async () => {
+    setConnecting(true);
+    try {
+      const url = await startNotionAuthorize(source.id);
+      const popup = window.open(url, 'notion-oauth', 'width=720,height=820');
+      // Re-check status once the consent popup is done, so the card flips to Connected.
+      const timer = window.setInterval(() => {
+        if (popup && !popup.closed) return;
+        window.clearInterval(timer);
+        setConnecting(false);
+        void qc.invalidateQueries({ queryKey: queryKeys.notionOauth(source.id) });
+        void qc.invalidateQueries({ queryKey: queryKeys.sources() });
+      }, 800);
+    } catch (error) {
+      setConnecting(false);
+      fail(error);
+    }
+  };
+
+  return (
+    <Stack gap={6} mt="sm">
+      <Box>
+        <Text fz="xs" fw={600}>
+          Redirect URI
+        </Text>
+        <Text fz="xs" c="dimmed">
+          Register this exact URL in your Notion connection.
+        </Text>
+        <Group gap={6} mt={4} wrap="nowrap">
+          <Code style={{ flex: 1, overflowX: 'auto', whiteSpace: 'nowrap' }}>{redirect_uri}</Code>
+          <CopyButton value={redirect_uri} timeout={1500}>
+            {({ copied, copy }) => (
+              <Button size="xs" variant="light" onClick={copy}>
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
+            )}
+          </CopyButton>
+        </Group>
+      </Box>
+      <Group gap={8}>
+        <Button size="xs" onClick={connect} loading={connecting} disabled={!oauth_ready}>
+          {connected ? 'Reconnect to Notion' : 'Connect to Notion'}
+        </Button>
+        {!oauth_ready && (
+          <Text fz="xs" c="dimmed">
+            Save the client ID and secret first.
+          </Text>
+        )}
+      </Group>
+    </Stack>
+  );
+}
+
 function SourceCard({ source }: SourceCardProps) {
   const test = useTestSource();
   const save = useUpdateSourceConfig();
@@ -673,6 +742,8 @@ function SourceCard({ source }: SourceCardProps) {
           {source.fields.map(renderField)}
         </Stack>
       )}
+
+      {source.kind === 'notion' && <NotionConnect source={source} />}
 
       <Group gap={8} mt="md" justify="space-between">
         <Text fz={10} c="dimmed">

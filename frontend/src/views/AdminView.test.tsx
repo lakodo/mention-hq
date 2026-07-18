@@ -1,8 +1,10 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderApp } from '../test/utils';
 import { db } from '../test/handlers';
+import { makeSourceFields } from '../test/fixtures';
+import type { SourceStatus } from '../types';
 
 /** Walk the Add-a-source picker: pick a kind, name the instance, submit. */
 async function addSource(user: ReturnType<typeof userEvent.setup>, kind: string, name: string) {
@@ -348,5 +350,47 @@ describe('AdminView', () => {
 
     await waitFor(() => expect(db.ai.available).toBe(true));
     expect(await screen.findByText('Available')).toBeInTheDocument();
+  });
+
+  it('offers OAuth Connect for a Notion source, with the detected redirect URI', async () => {
+    const fields = makeSourceFields('notion').map((field) =>
+      field.key === 'client_id' || field.key === 'client_secret'
+        ? { ...field, is_set: true }
+        : field,
+    );
+    const notion: SourceStatus = {
+      id: 'notion-notion',
+      kind: 'notion',
+      name: 'Notion',
+      position: 1,
+      description: 'Pages you created, own, or are mentioned in',
+      status: 'unconfigured',
+      detail: 'Not configured',
+      last_checked_at: null,
+      error: null,
+      fields,
+      setup: '',
+      setup_url: '',
+      manifest: '',
+      manifest_hint: '',
+      detectable: false,
+    };
+    db.sources = [notion];
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    const user = userEvent.setup();
+    renderApp('/admin');
+
+    const card = await screen.findByTestId('source-card-notion-notion');
+    expect(
+      await within(card).findByText('http://jojohq/api/admin/oauth/notion/callback'),
+    ).toBeInTheDocument();
+
+    const connect = within(card).getByRole('button', { name: 'Connect to Notion' });
+    expect(connect).toBeEnabled();
+    await user.click(connect);
+
+    await waitFor(() => expect(openSpy).toHaveBeenCalled());
+    expect(openSpy.mock.calls[0][0]).toContain('api.notion.com/v1/oauth/authorize');
+    openSpy.mockRestore();
   });
 });

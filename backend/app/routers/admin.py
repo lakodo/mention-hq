@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime
+from secrets import token_urlsafe
 
-from fastapi import APIRouter, Depends, HTTPException
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +22,8 @@ from app.schemas import (
     BackupOut,
     ConfigFieldOut,
     DetectionOut,
+    NotionAuthorizeOut,
+    NotionOAuthOut,
     SourceConfigUpdate,
     SourceCreate,
     SourceKindOut,
@@ -29,6 +35,7 @@ from app.services import ai
 from app.services.app_config import (
     get_app_name,
     get_auto_sync,
+    get_value,
     set_app_name,
     set_auto_sync,
     set_value,
@@ -40,9 +47,11 @@ from app.services.sources_factory import (
     Connected,
     build_connected,
     new_instance_id,
+    persist_config,
     resolve_config,
 )
 from app.sources.base import Source
+from app.sources.notion import NotionSource
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -266,6 +275,100 @@ async def update_source_config(
     return await _status(await _connected(db, instance_id))
 
 
+_OAUTH_STATE_NS = "notion_oauth_state"
+
+
+def _notion_redirect_uri(request: Request) -> str:
+    """The callback URL, from the origin the browser is actually on — so a user behind a
+    proxy (a Caddy host, a domain) registers and receives the redirect on that same host,
+    not a hardcoded localhost the redirect would never reach."""
+    origin = request.headers.get("origin")
+    if origin:
+        base = origin.rstrip("/")
+    else:
+        proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+        base = f"{proto}://{host}"
+    return f"{base}/api/admin/oauth/notion/callback"
+
+
+async def _notion_source(db: AsyncSession, instance_id: str) -> NotionSource:
+    instance = await _require(db, instance_id)
+    if instance.kind != "notion":
+        raise HTTPException(status_code=400, detail="Not a Notion source")
+    return BY_KIND["notion"](await resolve_config(db, instance))
+
+
+@router.get("/sources/{instance_id}/notion", response_model=NotionOAuthOut)
+async def notion_oauth_info(
+    instance_id: str, request: Request, db: AsyncSession = Depends(get_db)
+) -> NotionOAuthOut:
+    source = await _notion_source(db, instance_id)
+    return NotionOAuthOut(
+        redirect_uri=_notion_redirect_uri(request),
+        connected=source.is_configured(),
+        oauth_ready=source.oauth_configured(),
+    )
+
+
+@router.post("/sources/{instance_id}/notion/authorize", response_model=NotionAuthorizeOut)
+async def notion_oauth_authorize(
+    instance_id: str, request: Request, db: AsyncSession = Depends(get_db)
+) -> NotionAuthorizeOut:
+    source = await _notion_source(db, instance_id)
+    if not source.oauth_configured():
+        raise HTTPException(status_code=400, detail="Save the client ID and secret first")
+    redirect_uri = _notion_redirect_uri(request)
+    # A single-use nonce the callback trades back for the source and redirect URI, so a stray
+    # callback can't attach a token to a source it was never authorised for.
+    nonce = token_urlsafe(24)
+    await set_value(
+        db, _OAUTH_STATE_NS, nonce, json.dumps({"sid": instance_id, "redirect_uri": redirect_uri})
+    )
+    await db.commit()
+    return NotionAuthorizeOut(authorize_url=source.authorize_url(redirect_uri, nonce))
+
+
+@router.get("/oauth/notion/callback")
+async def notion_oauth_callback(request: Request, db: AsyncSession = Depends(get_db)) -> HTMLResponse:
+    params = request.query_params
+    if params.get("error"):
+        return _oauth_page(f"Notion returned an error: {params['error']}", ok=False)
+
+    raw_state = await get_value(db, _OAUTH_STATE_NS, params.get("state", ""))
+    code = params.get("code")
+    if not raw_state or not code:
+        return _oauth_page("This login could not be verified. Start again from Connect.", ok=False)
+    await set_value(db, _OAUTH_STATE_NS, params["state"], None)  # burn the nonce
+    await db.commit()
+
+    claims = json.loads(raw_state)
+    instance = await db.get(SourceInstance, claims["sid"])
+    if instance is None or instance.kind != "notion":
+        return _oauth_page("That Notion source no longer exists.", ok=False)
+
+    source = BY_KIND["notion"](await resolve_config(db, instance))
+    try:
+        updates = await source.exchange_code(code, claims["redirect_uri"])
+    except httpx.HTTPError as exc:
+        return _oauth_page(f"Notion refused the token exchange: {exc}", ok=False)
+
+    await persist_config(db, instance, updates)
+    return _oauth_page("Connected to Notion — you can close this tab.", ok=True)
+
+
+def _oauth_page(message: str, ok: bool) -> HTMLResponse:
+    colour = "#2b8a3e" if ok else "#c92a2a"
+    body = (
+        "<!doctype html><meta charset='utf-8'><title>Notion</title>"
+        "<body style='font-family:system-ui;display:flex;height:100vh;margin:0;"
+        "align-items:center;justify-content:center'>"
+        f"<p style='color:{colour};font-size:1rem'>{message}</p>"
+        "<script>setTimeout(()=>window.close(),1500)</script></body>"
+    )
+    return HTMLResponse(body)
+
+
 async def _require(db: AsyncSession, instance_id: str) -> SourceInstance:
     instance = await db.get(SourceInstance, instance_id)
     if instance is None or instance.kind not in BY_KIND:
@@ -317,6 +420,7 @@ async def _status(connected: Connected) -> SourceStatusOut:
             is_set=bool(source.get(spec.key)),
         )
         for spec in source.fields
+        if not spec.hidden
     ]
 
     return SourceStatusOut(

@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import ClassVar
 
 import httpx
 
-from app.sources.base import ConfigField, RawItem, Source
+from app.sources.base import ConfigField, RawItem, Source, SourceNotConfigured
 from app.sources.keys import all_reference_keys
 
 API_ROOT = "https://api.notion.com/v1"
+AUTHORIZE_URL = f"{API_ROOT}/oauth/authorize"
+TOKEN_URL = f"{API_ROOT}/oauth/token"
 # Pinned: Notion versions its API by date and rejects requests without this header.
 NOTION_VERSION = "2022-06-28"
+# Refresh a little before the token actually lapses, so a sync never races the expiry.
+_EXPIRY_SKEW = timedelta(minutes=5)
 
 
 class NotionSource(Source):
@@ -20,28 +24,45 @@ class NotionSource(Source):
     name = "Notion"
     description = "Pages you created, own, or are mentioned in"
     setup = (
-        "Notion → Settings → Connections → Access the developer portal → Personal access "
-        "tokens → create one and copy it (starts with ntn_). Not 'New connection' — that path "
-        "is for OAuth apps and your admin may restrict it. If a page you expect is missing, "
-        "open it and add the token under ••• → Connections; a token only sees what you share."
+        "In the Notion developer portal, create a New connection with the OAuth method, then "
+        "copy its Client ID and Client secret below. Register the redirect URI HQ shows you, "
+        "enable the read content / comments / user information capabilities, and click Connect. "
+        "If your admin allows static tokens instead, paste a personal access token as the token."
     )
     setup_url = "https://www.notion.so/my-integrations"
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
-            key="token",
-            label="Integration token",
-            kind="secret",
-            placeholder="ntn_… / secret_…",
-            help="A personal access token from the developer portal (starts with ntn_).",
+            key="client_id",
+            label="OAuth client ID",
+            placeholder="From the connection's settings",
+            help="Create a connection (OAuth) in the developer portal and copy its Client ID.",
             help_url="https://www.notion.so/my-integrations",
+            required=False,
+        ),
+        ConfigField(
+            key="client_secret",
+            label="OAuth client secret",
+            kind="secret",
+            help="The connection's Client secret. Used only to exchange the login for a token.",
+            required=False,
+        ),
+        ConfigField(
+            key="token",
+            label="Token",
+            kind="secret",
+            placeholder="Filled by Connect — or paste a personal token",
+            help="Set by the OAuth Connect flow. You can also paste a personal access token here.",
+            required=False,
         ),
         ConfigField(
             key="user_id",
             label="Your Notion user ID",
             placeholder="UUID",
-            help="Whose pages to surface. Leave blank and Test connection reads it from the token.",
+            help="Whose pages to surface. Left blank, it is read from the token owner.",
             required=False,
         ),
+        ConfigField(key="refresh_token", label="Refresh token", kind="secret", required=False, hidden=True),
+        ConfigField(key="token_expiry", label="Token expiry", required=False, hidden=True),
     ]
 
     def detail(self) -> str:
@@ -49,6 +70,9 @@ class NotionSource(Source):
 
     def is_configured(self) -> bool:
         return bool(self.get("token"))
+
+    def oauth_configured(self) -> bool:
+        return bool(self.get("client_id") and self.get("client_secret"))
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -58,10 +82,65 @@ class NotionSource(Source):
         }
 
     async def check(self) -> None:
-        await super().check()
+        if not self.is_configured():
+            raise SourceNotConfigured("Connect to Notion, or paste a token")
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(f"{API_ROOT}/users/me", headers=self._headers())
             response.raise_for_status()
+
+    def authorize_url(self, redirect_uri: str, state: str) -> str:
+        params = httpx.QueryParams(
+            client_id=self.get("client_id"),
+            redirect_uri=redirect_uri,
+            response_type="code",
+            owner="user",
+            state=state,
+        )
+        return f"{AUTHORIZE_URL}?{params}"
+
+    async def exchange_code(self, code: str, redirect_uri: str) -> dict[str, str]:
+        """Trade the one-time code from the consent redirect for tokens."""
+        return await self._token_request(
+            {"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri}
+        )
+
+    async def prepare(self) -> dict[str, str] | None:
+        """Refresh the access token when it's about to lapse, so the coming sync uses a live one.
+        Only possible with a refresh token, which only the OAuth flow yields."""
+        if not self.get("refresh_token") or not self._expired():
+            return None
+        return await self._token_request(
+            {"grant_type": "refresh_token", "refresh_token": self.get("refresh_token")}
+        )
+
+    async def _token_request(self, payload: dict[str, str]) -> dict[str, str]:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(
+                TOKEN_URL,
+                auth=(self.get("client_id"), self.get("client_secret")),
+                headers={"Notion-Version": NOTION_VERSION},
+                json=payload,
+            )
+            response.raise_for_status()
+            body = response.json()
+
+        updates = {
+            "token": body["access_token"],
+            "user_id": ((body.get("owner") or {}).get("user") or {}).get("id", "") or self.get("user_id"),
+        }
+        if body.get("refresh_token"):
+            updates["refresh_token"] = body["refresh_token"]
+        # Notion tokens may or may not expire; only track it when told an expiry.
+        if body.get("expires_in"):
+            expiry = datetime.now(UTC) + timedelta(seconds=int(body["expires_in"]))
+            updates["token_expiry"] = expiry.isoformat()
+        return updates
+
+    def _expired(self) -> bool:
+        raw = self.get("token_expiry")
+        if not raw:
+            return False
+        return datetime.fromisoformat(raw) - _EXPIRY_SKEW <= datetime.now(UTC)
 
     async def _resolve_user_id(self, client: httpx.AsyncClient) -> str:
         """Who 'you' are. A token's bot user isn't the human, so an internal integration owned

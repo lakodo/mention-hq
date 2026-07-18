@@ -359,6 +359,20 @@ class MatchStatusOut(BaseModel):
     remaining: int
 
 
+class NotionOAuthOut(BaseModel):
+    """What the Admin panel needs to drive the Notion OAuth handshake."""
+
+    # Detected from the request origin, so the user registers the right one for their host.
+    redirect_uri: str
+    connected: bool = False
+    # True once the client id/secret are saved, i.e. Connect can actually start.
+    oauth_ready: bool = False
+
+
+class NotionAuthorizeOut(BaseModel):
+    authorize_url: str
+
+
 class SyncSourceResult(BaseModel):
     source: str
     items_fetched: int = 0

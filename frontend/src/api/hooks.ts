@@ -30,6 +30,7 @@ import {
   fetchCatchup,
   fetchItems,
   fetchNextAction,
+  fetchNotionOauth,
   fetchPeople,
   fetchSettings,
   fetchSkippedItems,
@@ -64,6 +65,7 @@ import {
   triageItem,
   updatePerson,
 } from './client';
+import type { NotionOAuthInfo } from './client';
 import type {
   AIStatus,
   AppSettings,
@@ -107,6 +109,7 @@ export const queryKeys = {
   people: () => ['people'] as const,
   syncStatus: () => ['sync', 'status'] as const,
   sources: () => ['admin', 'sources'] as const,
+  notionOauth: (id: string) => ['admin', 'sources', id, 'notion'] as const,
   sourceKinds: () => ['admin', 'source-kinds'] as const,
   settings: () => ['admin', 'settings'] as const,
   ai: () => ['admin', 'ai'] as const,
@@ -150,6 +153,14 @@ export function useSyncStatus(limit?: number): UseQueryResult<SyncLogEntry[]> {
 
 export function useSources(): UseQueryResult<SourceStatus[]> {
   return useQuery({ queryKey: queryKeys.sources(), queryFn: fetchSources });
+}
+
+export function useNotionOauth(id: string, enabled: boolean): UseQueryResult<NotionOAuthInfo> {
+  return useQuery({
+    queryKey: queryKeys.notionOauth(id),
+    queryFn: () => fetchNotionOauth(id),
+    enabled,
+  });
 }
 
 export function useSourceKinds(): UseQueryResult<SourceKind[]> {
