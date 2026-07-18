@@ -299,7 +299,10 @@ export function TaskDetailView() {
     );
   }
 
-  if (ordered.length === 0) {
+  // Only the genuine empty state takes over the whole screen. In the Archived view an empty
+  // result must keep the layout — otherwise the Archived toggle vanishes with it and there's
+  // no way back to your tasks.
+  if (ordered.length === 0 && !showArchived) {
     return (
       <Center style={{ flex: 1 }}>
         <Text c="dimmed">No tasks yet.</Text>

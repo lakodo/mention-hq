@@ -598,7 +598,7 @@ const WINDOW_OPTIONS = [
   { value: '', label: 'All time' },
 ];
 
-const DEFAULT_WINDOW = '168';
+const DEFAULT_WINDOW = '24';
 
 function sinceParam(hours: string): string | undefined {
   if (!hours) return undefined;

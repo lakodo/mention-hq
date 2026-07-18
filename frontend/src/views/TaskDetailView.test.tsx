@@ -233,6 +233,25 @@ describe('TaskDetailView', () => {
     );
   });
 
+  it('keeps the sidebar and toggle when the Archived view is empty', async () => {
+    const user = userEvent.setup();
+    renderApp('/task'); // no archived tasks in the default fixtures
+
+    await screen.findByText('Select a task from the list.');
+    await user.click(screen.getByRole('button', { name: /Archived/ }));
+
+    // Empty archived view must not take over the whole screen — the toggle has to stay so
+    // there's a way back to your tasks.
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Stripe webhook handling for invoice payments'),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText('No tasks yet.')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Archived/ })).toBeInTheDocument();
+    expect(screen.getByText('Select a task from the list.')).toBeInTheDocument();
+  });
+
   it('deletes a task only after confirming in the dialog', async () => {
     const user = userEvent.setup();
     renderApp(detailRoute(AUTH_TASK_ID));
