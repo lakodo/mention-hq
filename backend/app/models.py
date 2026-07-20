@@ -239,6 +239,16 @@ class Item(Base):
         """For a git-spice branch: the downstack chain from the base of the stack up to it."""
         return (self.extra or {}).get("stack") or []
 
+    @property
+    def branch(self) -> str | None:
+        """A local git branch item's branch name — what a PR's head branch joins against."""
+        return (self.extra or {}).get("branch")
+
+    @property
+    def head_branch(self) -> str | None:
+        """A PR's head branch — the local branch it was pushed from, when known."""
+        return (self.extra or {}).get("head_branch")
+
 
 class Bucket(Base):
     """A topic column on the board, grouping tasks.

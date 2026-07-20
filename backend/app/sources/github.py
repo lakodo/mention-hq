@@ -126,6 +126,9 @@ class GitHubSource(Source):
             state = review.get(item.external_id, {})
             item.extra["pr_status"] = _pr_status(item.extra.get("draft", False), state.get("decision"))
             item.extra["pr_review_requested"] = state.get("pending", False)
+            if state.get("head_branch"):
+                # Lets the board join a PR to the local branch it was pushed from.
+                item.extra["head_branch"] = state["head_branch"]
             for login in state.get("reviewers", []):
                 _add_person(item.people, login, "reviewer")
         return items
@@ -142,6 +145,7 @@ class GitHubSource(Source):
             nodes {
               ... on PullRequest {
                 number
+                headRefName
                 repository { nameWithOwner }
                 reviewDecision
                 reviewRequests(first: 20) { totalCount nodes { requestedReviewer { ... on User { login } } } }
@@ -177,6 +181,7 @@ class GitHubSource(Source):
                 "decision": node.get("reviewDecision"),
                 "pending": requests.get("totalCount", 0) > 0,
                 "reviewers": sorted(login for login in reviewers if login),
+                "head_branch": node.get("headRefName"),
             }
         return states
 

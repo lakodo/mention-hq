@@ -126,12 +126,12 @@ describe('TaskDetailView', () => {
     expect(screen.getByText('1 selected')).toBeInTheDocument();
   });
 
-  it('gives Slack its own section ahead of the other sources', async () => {
+  it('splits the task into an Activity lane (Slack first) and a Code lane', async () => {
     renderApp(detailRoute(PAYMENTS_TASK_ID));
 
     const detail = await panel();
     const headings = within(detail).getAllByTestId('section-heading');
-    expect(headings.map((h) => h.textContent)).toEqual(['Slack', 'Other sources']);
+    expect(headings.map((h) => h.textContent)).toEqual(['Slack', 'Activity', 'Code']);
 
     const slack = within(detail).getByTestId('slack-section');
     expect(within(slack).getAllByTestId('detail-item')).toHaveLength(1);
@@ -139,8 +139,36 @@ describe('TaskDetailView', () => {
       within(slack).getByText('thread: webhook retries flaking on staging'),
     ).toBeInTheDocument();
 
-    const other = within(detail).getByTestId('other-section');
-    expect(within(other).getAllByTestId('detail-item')).toHaveLength(2);
+    // The PR left the Activity lane for the Code lane; only the todo remains there.
+    const activity = within(detail).getByTestId('other-section');
+    expect(within(activity).getAllByTestId('detail-item')).toHaveLength(1);
+    expect(within(activity).getByText('Write tests for payments retry logic')).toBeInTheDocument();
+
+    const codeLane = within(detail).getByTestId('code-lane');
+    expect(within(codeLane).getAllByTestId('code-item')).toHaveLength(1);
+    expect(
+      within(codeLane).getByText('feat(payments): add Stripe webhook handler'),
+    ).toBeInTheDocument();
+  });
+
+  it('joins a PR to the local branch it was pushed from, in one Code card', async () => {
+    renderApp(detailRoute(AUTH_TASK_ID));
+
+    const detail = await panel();
+    const codeLane = within(detail).getByTestId('code-lane');
+    // The PR and its branch collapse into a single code card, not two.
+    const cards = within(codeLane).getAllByTestId('code-item');
+    expect(cards).toHaveLength(1);
+
+    const card = cards[0];
+    expect(
+      within(card).getByText('fix(auth): rotate refresh tokens on scope change'),
+    ).toBeInTheDocument();
+    // The joined branch rides underneath, tagged local, with its git-spice stack (where the
+    // branch name shows again, hence getAllByText).
+    expect(within(card).getAllByText('dev/auth-session-timeout').length).toBeGreaterThan(0);
+    expect(within(card).getByText('local')).toBeInTheDocument();
+    expect(within(card).getByText('dev/auth-base')).toBeInTheDocument();
   });
 
   it('links an item out to its url in a new tab', async () => {

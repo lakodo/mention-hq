@@ -81,6 +81,44 @@ export function splitSlackItems(task: Task): { slack: Item[]; other: Item[] } {
   };
 }
 
+const CODE_SOURCES: Source[] = ['pr', 'branch'];
+
+/** A code reference in the task's Code lane: a PR, a local branch, or the two joined when
+ *  the branch is the one the PR was pushed from. At least one of the two is always set. */
+export interface CodeUnit {
+  pr: Item | null;
+  branch: Item | null;
+}
+
+/** The task detail splits three ways: Slack leads the Activity lane, other non-code items
+ *  follow it, and PRs and branches move to a Code lane — a PR joined to its local branch. */
+export function splitTaskItems(task: Task): {
+  slack: Item[];
+  other: Item[];
+  code: CodeUnit[];
+} {
+  const slack = task.items.filter((item) => item.source === 'slack');
+  const other = task.items.filter(
+    (item) => item.source !== 'slack' && !CODE_SOURCES.includes(item.source),
+  );
+  const prs = task.items.filter((item) => item.source === 'pr');
+  const branches = task.items.filter((item) => item.source === 'branch');
+
+  const joined = new Set<string>();
+  const code: CodeUnit[] = prs.map((pr) => {
+    const match = pr.head_branch
+      ? branches.find((b) => !joined.has(b.id) && b.branch === pr.head_branch)
+      : undefined;
+    if (match) joined.add(match.id);
+    return { pr, branch: match ?? null };
+  });
+  for (const branch of branches) {
+    if (!joined.has(branch.id)) code.push({ pr: null, branch });
+  }
+
+  return { slack, other, code };
+}
+
 /** The dot colour source for a sidebar row: Slack if present, else the first item. */
 export function primarySource(task: Task): Source | null {
   const slack = task.items.find((item) => item.source === 'slack');

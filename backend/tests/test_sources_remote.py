@@ -181,6 +181,24 @@ class TestGitHub:
         author = next(p for p in people if p["value"] == "someone")
         assert author["avatar"] == "https://github.com/someone.png?size=64"
 
+    @respx.mock
+    async def test_a_pr_carries_its_head_branch_for_joining_to_a_local_branch(self, github):
+        respx.get("https://api.github.com/search/issues").mock(side_effect=_github_search(PR_SEARCH))
+        _github_graphql(
+            [
+                {
+                    "number": 1201,
+                    "headRefName": "someone/eng-42-pagination",
+                    "repository": {"nameWithOwner": "acme/widgets"},
+                    "reviewDecision": None,
+                }
+            ]
+        )
+
+        item = (await github.fetch())[0]
+
+        assert item.extra["head_branch"] == "someone/eng-42-pagination"
+
     async def test_unconfigured_fetches_nothing_rather_than_failing(self):
         assert await GitHubSource({}).fetch() == []
 

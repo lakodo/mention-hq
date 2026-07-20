@@ -47,6 +47,10 @@ export interface Item {
   people: ItemPerson[];
   /** For a git-spice branch: the downstack chain from the base of the stack up to it. */
   stack: string[];
+  /** A local git branch item's branch name. */
+  branch: string | null;
+  /** A PR's head branch — joins the PR to the local branch it was pushed from. */
+  head_branch: string | null;
 }
 
 /** One item's attachment to one task, and who decided it. */

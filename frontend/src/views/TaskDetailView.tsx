@@ -8,11 +8,13 @@ import {
   Card,
   Center,
   Checkbox,
+  Divider,
   Group,
   Loader,
   Menu,
   NumberInput,
   SegmentedControl,
+  SimpleGrid,
   Stack,
   Text,
   Textarea,
@@ -30,6 +32,7 @@ import {
   IconChevronRight,
   IconDots,
   IconExternalLink,
+  IconGitBranch,
   IconPlus,
   IconRefresh,
   IconSearch,
@@ -63,12 +66,13 @@ import {
 } from '../api/hooks';
 import { matchesSidebarQuery } from '../lib/search';
 import {
+  type CodeUnit,
   groupByTag,
   groupTasksByBucket,
   newestItemAt,
   primarySource,
   sortTasksByRecency,
-  splitSlackItems,
+  splitTaskItems,
   taskIdFromParam,
   taskPath,
 } from '../lib/tasks';
@@ -122,56 +126,91 @@ interface ItemCardProps {
   item: Item;
 }
 
-function ItemCard({ item }: ItemCardProps) {
+function ItemCardBody({ item }: ItemCardProps) {
   const { data: emojiMap = {} } = useEmojiMap();
   const meta = sourceMeta(item.source);
 
   return (
-    <Card withBorder radius="sm" p="sm" data-testid="detail-item">
-      <Group gap={12} align="flex-start" wrap="nowrap">
-        <Box mt={5}>
-          <SourceDot source={item.source} />
-        </Box>
-        <Box style={{ flex: 1, minWidth: 0 }}>
-          <Text fz={10} c="dimmed" fw={700} tt="uppercase" style={{ letterSpacing: '0.04em' }}>
-            {meta.label}
-          </Text>
-          {item.url ? (
-            <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" lh={1.4}>
-              <Group gap={4} wrap="nowrap">
-                {itemLabel(item.label, { ...emojiMap, ...item.emoji })}
-                <IconExternalLink size={12} />
-              </Group>
-            </Anchor>
-          ) : (
-            <Text fz="sm" lh={1.4}>
-              {itemLabel(item.label, { ...emojiMap, ...item.emoji })}
-            </Text>
-          )}
-          {item.context && (
-            <Text fz="xs" c="dimmed">
-              {item.context}
-            </Text>
-          )}
-          <StackTrail stack={item.stack} />
-          {item.pr_status && (
-            <PrStatusPill
-              status={item.pr_status}
-              reviewRequested={item.pr_review_requested}
-              size="xs"
-            />
-          )}
-          {item.people.length > 0 && (
-            <Box mt={6}>
-              <PeopleStrip people={item.people} />
-            </Box>
-          )}
-        </Box>
-        {item.source === 'note' && <NoteEditButton item={item} />}
-        <Text fz="xs" c="dimmed" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
-          {formatAgo(item.occurred_at)}
+    <Group gap={12} align="flex-start" wrap="nowrap">
+      <Box mt={5}>
+        <SourceDot source={item.source} />
+      </Box>
+      <Box style={{ flex: 1, minWidth: 0 }}>
+        <Text fz={10} c="dimmed" fw={700} tt="uppercase" style={{ letterSpacing: '0.04em' }}>
+          {meta.label}
         </Text>
-      </Group>
+        {item.url ? (
+          <Anchor href={item.url} target="_blank" rel="noreferrer" fz="sm" lh={1.4}>
+            <Group gap={4} wrap="nowrap">
+              {itemLabel(item.label, { ...emojiMap, ...item.emoji })}
+              <IconExternalLink size={12} />
+            </Group>
+          </Anchor>
+        ) : (
+          <Text fz="sm" lh={1.4}>
+            {itemLabel(item.label, { ...emojiMap, ...item.emoji })}
+          </Text>
+        )}
+        {item.context && (
+          <Text fz="xs" c="dimmed">
+            {item.context}
+          </Text>
+        )}
+        <StackTrail stack={item.stack} />
+        {item.pr_status && (
+          <PrStatusPill
+            status={item.pr_status}
+            reviewRequested={item.pr_review_requested}
+            size="xs"
+          />
+        )}
+        {item.people.length > 0 && (
+          <Box mt={6}>
+            <PeopleStrip people={item.people} />
+          </Box>
+        )}
+      </Box>
+      {item.source === 'note' && <NoteEditButton item={item} />}
+      <Text fz="xs" c="dimmed" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+        {formatAgo(item.occurred_at)}
+      </Text>
+    </Group>
+  );
+}
+
+function ItemCard({ item }: ItemCardProps) {
+  return (
+    <Card withBorder radius="sm" p="sm" data-testid="detail-item">
+      <ItemCardBody item={item} />
+    </Card>
+  );
+}
+
+/** A Code-lane card: a PR, a branch, or the two joined — the PR leads and the local branch
+ *  it was pushed from rides underneath, with its git-spice stack if it has one. */
+function CodeCard({ unit }: { unit: CodeUnit }) {
+  const primary = unit.pr ?? unit.branch;
+  const joined = unit.pr && unit.branch ? unit.branch : null;
+  if (!primary) return null;
+
+  return (
+    <Card withBorder radius="sm" p="sm" data-testid="code-item">
+      <ItemCardBody item={primary} />
+      {joined && (
+        <Box mt={8} ml={28}>
+          <Divider mb={8} variant="dashed" />
+          <Group gap={6} wrap="nowrap">
+            <IconGitBranch size={14} color="var(--mantine-color-orange-6)" />
+            <Text fz="xs" truncate style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
+              {joined.branch}
+            </Text>
+            <Badge size="xs" variant="light" color="gray">
+              local
+            </Badge>
+          </Group>
+          {joined.stack.length > 1 && <StackTrail stack={joined.stack} />}
+        </Box>
+      )}
     </Card>
   );
 }
@@ -510,7 +549,9 @@ export function TaskDetailView() {
     });
   };
 
-  const { slack, other } = selected ? splitSlackItems(selected) : { slack: [], other: [] };
+  const { slack, other, code } = selected
+    ? splitTaskItems(selected)
+    : { slack: [], other: [], code: [] as CodeUnit[] };
   const sidebarGroups: { label: string; tasks: Task[] }[] =
     groupMode === 'tags'
       ? groupByTag(filtered).map((g) => ({ label: g.tag, tasks: g.tasks }))
@@ -1090,46 +1131,79 @@ export function TaskDetailView() {
               </Box>
             )}
 
-            {slack.length > 0 && (
-              <Box mb="lg" data-testid="slack-section">
-                <Text
-                  fz="xs"
-                  fw={700}
-                  tt="uppercase"
-                  mb={8}
-                  data-testid="section-heading"
-                  style={{ color: SLACK_ACCENT, letterSpacing: '0.05em' }}
-                >
-                  Slack
-                </Text>
-                <Stack gap={8}>
-                  {slack.map((item) => (
-                    <ItemCard key={item.id} item={item} />
-                  ))}
-                </Stack>
-              </Box>
-            )}
+            <SimpleGrid
+              cols={{ base: 1, md: slack.length + other.length > 0 && code.length > 0 ? 2 : 1 }}
+              spacing="lg"
+              style={{ alignItems: 'start' }}
+            >
+              {slack.length + other.length > 0 && (
+                <Box data-testid="activity-lane">
+                  {slack.length > 0 && (
+                    <Box mb="lg" data-testid="slack-section">
+                      <Text
+                        fz="xs"
+                        fw={700}
+                        tt="uppercase"
+                        mb={8}
+                        data-testid="section-heading"
+                        style={{ color: SLACK_ACCENT, letterSpacing: '0.05em' }}
+                      >
+                        Slack
+                      </Text>
+                      <Stack gap={8}>
+                        {slack.map((item) => (
+                          <ItemCard key={item.id} item={item} />
+                        ))}
+                      </Stack>
+                    </Box>
+                  )}
 
-            {other.length > 0 && (
-              <Box data-testid="other-section">
-                <Text
-                  fz="xs"
-                  fw={700}
-                  c="dimmed"
-                  tt="uppercase"
-                  mb={8}
-                  data-testid="section-heading"
-                  style={{ letterSpacing: '0.05em' }}
-                >
-                  Other sources
-                </Text>
-                <Stack gap={8}>
-                  {other.map((item) => (
-                    <ItemCard key={item.id} item={item} />
-                  ))}
-                </Stack>
-              </Box>
-            )}
+                  {other.length > 0 && (
+                    <Box data-testid="other-section">
+                      <Text
+                        fz="xs"
+                        fw={700}
+                        c="dimmed"
+                        tt="uppercase"
+                        mb={8}
+                        data-testid="section-heading"
+                        style={{ letterSpacing: '0.05em' }}
+                      >
+                        Activity
+                      </Text>
+                      <Stack gap={8}>
+                        {other.map((item) => (
+                          <ItemCard key={item.id} item={item} />
+                        ))}
+                      </Stack>
+                    </Box>
+                  )}
+                </Box>
+              )}
+
+              {code.length > 0 && (
+                <Box data-testid="code-lane">
+                  <Box data-testid="code-section">
+                    <Text
+                      fz="xs"
+                      fw={700}
+                      c="orange.7"
+                      tt="uppercase"
+                      mb={8}
+                      data-testid="section-heading"
+                      style={{ letterSpacing: '0.05em' }}
+                    >
+                      Code
+                    </Text>
+                    <Stack gap={8}>
+                      {code.map((unit) => (
+                        <CodeCard key={unit.pr?.id ?? unit.branch?.id} unit={unit} />
+                      ))}
+                    </Stack>
+                  </Box>
+                </Box>
+              )}
+            </SimpleGrid>
 
             {selected.items.length === 0 && (
               <Text c="dimmed" fz="sm">

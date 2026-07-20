@@ -130,6 +130,8 @@ describe('CatchupView', () => {
       pr_review_requested: false,
       emoji: {},
       stack: [],
+      branch: null,
+      head_branch: null,
       people: [],
       links: [
         {
@@ -173,6 +175,8 @@ describe('CatchupView', () => {
       pr_review_requested: false,
       emoji: {},
       stack: [],
+      branch: null,
+      head_branch: null,
       people: [],
       links: [],
     });

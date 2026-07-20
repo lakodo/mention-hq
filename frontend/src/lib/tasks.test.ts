@@ -6,6 +6,7 @@ import {
   itemCountLabel,
   primarySource,
   splitSlackItems,
+  splitTaskItems,
   taskIdFromParam,
   taskPath,
   uniqueSources,
@@ -91,6 +92,36 @@ describe('splitSlackItems', () => {
     const { slack, other } = splitSlackItems(stripe);
     expect(slack.map((i) => i.source)).toEqual(['slack']);
     expect(other.map((i) => i.source)).toEqual(['pr', 'todo']);
+  });
+});
+
+describe('splitTaskItems', () => {
+  it('keeps Slack and non-code items in the Activity lane, PRs and branches in Code', () => {
+    const { slack, other, code } = splitTaskItems(stripe);
+    expect(slack.map((i) => i.source)).toEqual(['slack']);
+    // The PR moved to the Code lane; only the non-code item is left in Activity.
+    expect(other.map((i) => i.source)).toEqual(['todo']);
+    expect(code).toHaveLength(1);
+    expect(code[0].pr?.source).toBe('pr');
+    expect(code[0].branch).toBeNull();
+  });
+
+  it('joins a branch to the PR whose head branch it is', () => {
+    const { code } = splitTaskItems(auth);
+    expect(code).toHaveLength(1);
+    expect(code[0].pr?.id).toBe('pr:acme/webapp:1188');
+    expect(code[0].branch?.branch).toBe('dev/auth-session-timeout');
+  });
+
+  it('leaves a branch with no matching PR standing on its own', () => {
+    const orphanBranch: Task = {
+      ...auth,
+      items: [{ ...auth.items[1], head_branch: null }],
+    };
+    const { code } = splitTaskItems(orphanBranch);
+    expect(code).toHaveLength(1);
+    expect(code[0].pr).toBeNull();
+    expect(code[0].branch?.branch).toBe('dev/auth-session-timeout');
   });
 });
 

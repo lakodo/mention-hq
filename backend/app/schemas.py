@@ -44,6 +44,8 @@ class ItemOut(BaseModel):
     emoji: dict[str, str] = {}
     people: list[ItemPersonOut] = []
     stack: list[str] = []
+    branch: str | None = None
+    head_branch: str | None = None
 
 
 class LinkOut(BaseModel):
