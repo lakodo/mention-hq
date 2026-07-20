@@ -25,11 +25,13 @@ import { notifications } from '@mantine/notifications';
 import {
   IconChevronDown,
   IconChevronUp,
+  IconFolderSearch,
   IconPencil,
   IconPlus,
   IconSparkles,
   IconTrash,
 } from '@tabler/icons-react';
+import { RepoBrowser } from '../components/RepoBrowser';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { CONNECTION_META, UNCATEGORIZED } from '../constants';
@@ -599,6 +601,7 @@ function SourceCard({ source }: SourceCardProps) {
   const [detection, setDetection] = useState<Detection | null>(null);
   const [draftName, setDraftName] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [browsingKey, setBrowsingKey] = useState<string | null>(null);
 
   const meta = CONNECTION_META[source.status] ?? CONNECTION_META.unconfigured;
   const dirty = Object.keys(edits).length > 0;
@@ -606,6 +609,17 @@ function SourceCard({ source }: SourceCardProps) {
 
   const fieldValue = (field: ConfigField): string =>
     edits[field.key] ?? (field.kind === 'secret' ? '' : (field.value ?? ''));
+
+  // Add a picked path to a comma-separated field, keeping what's typed and dropping duplicates.
+  const appendPath = (field: ConfigField, path: string) => {
+    const existing = fieldValue(field)
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (existing.includes(path)) return;
+    const next = [...existing, path].join(', ');
+    setEdits((prev) => ({ ...prev, [field.key]: next }));
+  };
 
   const renderField = (field: ConfigField) => {
     const common = {
@@ -656,6 +670,34 @@ function SourceCard({ source }: SourceCardProps) {
             }
           />
           {help}
+        </Box>
+      );
+    }
+    if (field.browse) {
+      return (
+        <Box key={field.key}>
+          <TextInput
+            {...common}
+            rightSectionWidth={36}
+            rightSection={
+              <Tooltip label="Browse for a folder" withArrow>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  aria-label="Browse for a folder"
+                  onClick={() => setBrowsingKey(field.key)}
+                >
+                  <IconFolderSearch size={16} />
+                </ActionIcon>
+              </Tooltip>
+            }
+          />
+          {help}
+          <RepoBrowser
+            opened={browsingKey === field.key}
+            onClose={() => setBrowsingKey(null)}
+            onPick={(path) => appendPath(field, path)}
+          />
         </Box>
       );
     }

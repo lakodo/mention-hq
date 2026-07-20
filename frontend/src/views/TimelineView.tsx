@@ -31,6 +31,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SourceDot } from '../components/SourceDot';
 import { PrStatusPill } from '../components/PrStatusPill';
+import { StackTrail } from '../components/StackTrail';
 import { itemLabel } from '../components/ItemLabel';
 import { sourceMeta } from '../constants';
 import { errorMessage } from '../api/client';
@@ -261,6 +262,7 @@ function TimelineRow({
               {item.context}
             </Text>
           )}
+          <StackTrail stack={item.stack} />
           {item.pr_status && (
             <PrStatusPill
               status={item.pr_status}

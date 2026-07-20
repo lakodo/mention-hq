@@ -43,6 +43,7 @@ class ItemOut(BaseModel):
     pr_review_requested: bool = False
     emoji: dict[str, str] = {}
     people: list[ItemPersonOut] = []
+    stack: list[str] = []
 
 
 class LinkOut(BaseModel):
@@ -200,9 +201,24 @@ class ConfigFieldOut(BaseModel):
     placeholder: str
     help: str
     help_url: str = ""
+    browse: bool = False
     # For secrets this is a mask like "••••••••1234", never the value itself.
     value: str | None = None
     is_set: bool = False
+
+
+class BrowseEntryOut(BaseModel):
+    """One directory the user can descend into or pick as a repo."""
+
+    name: str
+    path: str
+    is_repo: bool
+
+
+class BrowseOut(BaseModel):
+    path: str
+    parent: str | None
+    entries: list[BrowseEntryOut]
 
 
 class SourceKindOut(BaseModel):

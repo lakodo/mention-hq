@@ -4,6 +4,7 @@ import type {
   AppSettings,
   AppSettingsPatch,
   Backup,
+  BrowseResult,
   Bucket,
   BucketArchive,
   BucketCreate,
@@ -124,6 +125,11 @@ export async function fetchCatchup(limit?: number): Promise<ItemWithLinks[]> {
 
 export async function fetchEmojiMap(): Promise<Record<string, string>> {
   const { data } = await api.get<Record<string, string>>('/admin/emoji');
+  return data;
+}
+
+export async function browsePath(path?: string): Promise<BrowseResult> {
+  const { data } = await api.get<BrowseResult>('/admin/browse', { params: { path } });
   return data;
 }
 

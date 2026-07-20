@@ -41,6 +41,9 @@ class ConfigField:
     # Stored and resolved like any other field, but kept off the Admin form — for values a
     # flow writes and owns, such as an OAuth refresh token, that the user never types.
     hidden: bool = False
+    # Offer a filesystem picker beside the input — for a path (or comma-separated paths) the
+    # user would otherwise have to type exactly right.
+    browse: bool = False
 
 
 @dataclass

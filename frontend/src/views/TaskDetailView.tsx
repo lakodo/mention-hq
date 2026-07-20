@@ -41,6 +41,7 @@ import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useState } from
 import { useNavigate, useParams } from 'react-router-dom';
 import { ReadToggle } from '../components/ReadToggle';
 import { PrStatusPill } from '../components/PrStatusPill';
+import { StackTrail } from '../components/StackTrail';
 import { PeopleStrip, mergePeople } from '../components/PeopleStrip';
 import { NoteEditButton } from '../components/NoteEditButton';
 import { itemLabel } from '../components/ItemLabel';
@@ -152,6 +153,7 @@ function ItemCard({ item }: ItemCardProps) {
               {item.context}
             </Text>
           )}
+          <StackTrail stack={item.stack} />
           {item.pr_status && (
             <PrStatusPill
               status={item.pr_status}

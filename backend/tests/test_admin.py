@@ -26,6 +26,45 @@ def point_backup_at(monkeypatch, tmp_path):
     return _point
 
 
+class TestBrowse:
+    async def test_lists_sub_directories_and_flags_repos(self, client, tmp_path):
+        base = tmp_path / "code"
+        base.mkdir()
+        (base / "plain").mkdir()
+        repo = base / "my-repo"
+        repo.mkdir()
+        (repo / ".git").mkdir()
+        (base / ".hidden").mkdir()
+        (base / "a-file.txt").write_text("x")
+
+        response = await client.get("/api/admin/browse", params={"path": str(base)})
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["path"] == str(base)
+        by_name = {e["name"]: e for e in body["entries"]}
+        # Files and dotdirs are left out; directories are offered, repos marked.
+        assert set(by_name) == {"plain", "my-repo"}
+        assert by_name["my-repo"]["is_repo"] is True
+        assert by_name["plain"]["is_repo"] is False
+
+    async def test_a_path_that_is_not_a_directory_is_a_clean_404(self, client, tmp_path):
+        target = tmp_path / "nope.txt"
+        target.write_text("x")
+
+        response = await client.get("/api/admin/browse", params={"path": str(target)})
+
+        assert response.status_code == 404
+
+    async def test_carries_the_parent_so_you_can_climb_back_up(self, client, tmp_path):
+        child = tmp_path / "child"
+        child.mkdir()
+
+        response = await client.get("/api/admin/browse", params={"path": str(child)})
+
+        assert response.json()["parent"] == str(tmp_path)
+
+
 class TestBackup:
     async def test_writes_a_dated_copy_beside_the_live_file(self, client, tmp_path, point_backup_at):
         live = tmp_path / "hq.db"

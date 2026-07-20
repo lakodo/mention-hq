@@ -32,6 +32,7 @@ import {
 import { useMemo, useState } from 'react';
 import { SourceDot } from '../components/SourceDot';
 import { PrStatusPill } from '../components/PrStatusPill';
+import { StackTrail } from '../components/StackTrail';
 import { PeopleStrip } from '../components/PeopleStrip';
 import { NoteEditButton } from '../components/NoteEditButton';
 import { itemLabel } from '../components/ItemLabel';
@@ -331,6 +332,7 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
           {item.context}
         </Text>
       )}
+      <StackTrail stack={item.stack} />
       {item.pr_status && (
         <PrStatusPill
           status={item.pr_status}

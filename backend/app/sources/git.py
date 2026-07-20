@@ -32,6 +32,7 @@ class GitSource(Source):
             label="Repository paths",
             placeholder="/Users/you/code/one, /Users/you/code/two",
             help="Comma-separated absolute paths",
+            browse=True,
         ),
         ConfigField(
             key="branch_prefix",
@@ -183,8 +184,8 @@ def _stack_chain(branch: str, bases: dict[str, str], trunk: str | None) -> list[
 
 
 async def _add_spice_stacks(repo_path: str, repo_name: str, items: list[RawItem]) -> None:
-    """Note each branch's git-spice stack on its item — the branch it's stacked on, the whole
-    downstack chain, and a chain shown in the item's context line."""
+    """Note each branch's git-spice stack on its item — the branch it's stacked on and the whole
+    downstack chain. The chain rides in `stack` for the UI to draw; context stays the repo name."""
     trunk, bases = await _spice_state(repo_path)
     if not bases:
         return
@@ -192,8 +193,5 @@ async def _add_spice_stacks(repo_path: str, repo_name: str, items: list[RawItem]
         branch = item.extra["branch"]
         if branch not in bases:
             continue
-        chain = _stack_chain(branch, bases, trunk)
         item.extra["stacked_on"] = bases[branch]
-        item.extra["stack"] = chain
-        if len(chain) > 1:
-            item.context = f"{repo_name} · {' → '.join(chain)}"
+        item.extra["stack"] = _stack_chain(branch, bases, trunk)

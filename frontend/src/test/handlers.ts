@@ -272,6 +272,7 @@ export const handlers = [
       pr_status: null,
       pr_review_requested: false,
       emoji: {},
+      stack: [],
       people: [],
       links: taskIds.map((taskId) => {
         const task = db.tasks.find((t) => t.id === taskId)!;
@@ -534,6 +535,18 @@ export const handlers = [
   ),
 
   http.get(`${BASE}/admin/emoji`, () => HttpResponse.json({})),
+
+  http.get(`${BASE}/admin/browse`, ({ request }) => {
+    const path = new URL(request.url).searchParams.get('path') ?? '/Users/you';
+    return HttpResponse.json({
+      path,
+      parent: path === '/Users/you' ? '/Users' : '/Users/you',
+      entries: [
+        { name: 'webapp', path: `${path}/webapp`, is_repo: true },
+        { name: 'notes', path: `${path}/notes`, is_repo: false },
+      ],
+    });
+  }),
 
   http.get(`${BASE}/admin/source-kinds`, () => HttpResponse.json(db.sourceKinds)),
 

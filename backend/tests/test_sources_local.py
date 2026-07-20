@@ -140,7 +140,8 @@ class TestGit:
         # feat-b is stacked on feat-a, which is on the trunk.
         assert by_branch["feat-b"].extra["stacked_on"] == "feat-a"
         assert by_branch["feat-b"].extra["stack"] == ["feat-a", "feat-b"]
-        assert "feat-a → feat-b" in by_branch["feat-b"].context
+        # The chain rides in `stack` for the UI; context stays the repo name.
+        assert by_branch["feat-b"].context == "widgets"
         # feat-a sits on the trunk, so its chain is just itself (trunk is excluded).
         assert by_branch["feat-a"].extra["stacked_on"] == "main"
         assert by_branch["feat-a"].extra["stack"] == ["feat-a"]

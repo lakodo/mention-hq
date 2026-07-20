@@ -45,6 +45,8 @@ export interface Item {
   pr_review_requested: boolean;
   emoji: Record<string, string>;
   people: ItemPerson[];
+  /** For a git-spice branch: the downstack chain from the base of the stack up to it. */
+  stack: string[];
 }
 
 /** One item's attachment to one task, and who decided it. */
@@ -169,9 +171,24 @@ export interface ConfigField {
   help: string;
   /** Where this value comes from, "" when the field speaks for itself. */
   help_url: string;
+  /** Offer a filesystem picker beside the input, for a path the user would else type. */
+  browse: boolean;
   /** For secrets this is a mask like "••••••••1234", never the value itself. */
   value: string | null;
   is_set: boolean;
+}
+
+/** One directory the browse picker can descend into or offer as a repo. */
+export interface BrowseEntry {
+  name: string;
+  path: string;
+  is_repo: boolean;
+}
+
+export interface BrowseResult {
+  path: string;
+  parent: string | null;
+  entries: BrowseEntry[];
 }
 
 export type SourceConnectionStatus = 'connected' | 'error' | 'unconfigured';

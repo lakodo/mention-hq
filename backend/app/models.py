@@ -234,6 +234,11 @@ class Item(Base):
         """People the item concerns — each `{kind, value, name, role}`, source-specific."""
         return (self.extra or {}).get("people") or []
 
+    @property
+    def stack(self) -> list[str]:
+        """For a git-spice branch: the downstack chain from the base of the stack up to it."""
+        return (self.extra or {}).get("stack") or []
+
 
 class Bucket(Base):
     """A topic column on the board, grouping tasks.

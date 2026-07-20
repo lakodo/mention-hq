@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from secrets import token_urlsafe
 
 import httpx
@@ -20,6 +21,8 @@ from app.schemas import (
     AppSettingsOut,
     AppSettingsPatch,
     BackupOut,
+    BrowseEntryOut,
+    BrowseOut,
     ConfigFieldOut,
     DetectionOut,
     NotionAuthorizeOut,
@@ -96,6 +99,34 @@ async def backup_now() -> BackupOut:
         size_bytes=stat.st_size,
         created_at=datetime.fromtimestamp(stat.st_mtime, UTC),
     )
+
+
+@router.get("/browse", response_model=BrowseOut)
+async def browse(path: str | None = None) -> BrowseOut:
+    """List the sub-directories of a path so a source's path field can be filled by clicking.
+    Flags which are git repositories. Local-only, like every source that reads this machine."""
+    base = (Path(path).expanduser() if path else Path.home()).resolve()
+    if not base.is_dir():
+        raise HTTPException(status_code=404, detail=f"Not a directory: {base}")
+
+    entries = []
+    try:
+        children = sorted(base.iterdir(), key=lambda c: c.name.lower())
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=f"Permission denied: {base}") from exc
+    for child in children:
+        if child.name.startswith("."):
+            continue
+        try:
+            if not child.is_dir():
+                continue
+            is_repo = (child / ".git").exists()
+        except OSError:
+            continue
+        entries.append(BrowseEntryOut(name=child.name, path=str(child), is_repo=is_repo))
+
+    parent = str(base.parent) if base.parent != base else None
+    return BrowseOut(path=str(base), parent=parent, entries=entries)
 
 
 @router.get("/emoji", response_model=dict[str, str])
@@ -494,6 +525,7 @@ async def _status(connected: Connected) -> SourceStatusOut:
             placeholder=spec.placeholder,
             help=spec.help,
             help_url=spec.help_url,
+            browse=spec.browse,
             value=(
                 secrets.hint(instance.id, spec.key) if spec.kind == "secret" else source.get(spec.key) or None
             ),
