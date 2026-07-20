@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import ClassVar
 
 import httpx
@@ -12,6 +12,10 @@ from app.sources.keys import all_reference_keys, github_key
 from app.sources.tools import run_tool
 
 API_ROOT = "https://api.github.com"
+# How far back to keep showing a merged PR. Recently-merged ones stay visible (as "merged")
+# rather than vanishing the moment they leave the is:open search; older ones age out — unless
+# you've filed one onto a task, which sync keeps regardless.
+MERGED_WINDOW_DAYS = 14
 
 
 class GitHubSource(Source):
@@ -87,8 +91,10 @@ class GitHubSource(Source):
         if not self.is_configured():
             return []
         username, org = self.get("username"), self.get("org")
+        merged_since = (datetime.now(UTC) - timedelta(days=MERGED_WINDOW_DAYS)).date().isoformat()
         queries = [
             (f"is:pr author:{username} org:{org} is:open", "pr"),
+            (f"is:pr author:{username} org:{org} is:merged merged:>={merged_since}", "pr"),
             (f"is:issue assignee:{username} org:{org} is:open", "issue"),
         ]
         items: list[RawItem] = []
@@ -108,12 +114,18 @@ class GitHubSource(Source):
         # A PR carries two independent facts: the overall review decision, and whether a
         # reviewer is still pending — a PR can be both "changes requested" and awaiting review.
         for item in items:
-            if item.source == "pr":
-                state = review.get(item.external_id, {})
-                item.extra["pr_status"] = _pr_status(item.extra.get("draft", False), state.get("decision"))
-                item.extra["pr_review_requested"] = state.get("pending", False)
-                for login in state.get("reviewers", []):
-                    _add_person(item.people, login, "reviewer")
+            if item.source != "pr":
+                continue
+            if item.status == "merged":
+                # A merged PR is done — its review decision no longer matters, and the review
+                # GraphQL only covers open PRs anyway.
+                item.extra["pr_status"] = "merged"
+                continue
+            state = review.get(item.external_id, {})
+            item.extra["pr_status"] = _pr_status(item.extra.get("draft", False), state.get("decision"))
+            item.extra["pr_review_requested"] = state.get("pending", False)
+            for login in state.get("reviewers", []):
+                _add_person(item.people, login, "reviewer")
         return items
 
     async def _review_states(self, client: httpx.AsyncClient, username: str, org: str) -> dict[str, dict]:

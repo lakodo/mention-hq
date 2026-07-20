@@ -157,6 +157,31 @@ async def test_a_legacy_auto_task_is_purged(db, settings, use_sources, item):
     assert len(await _items(db)) == 1
 
 
+async def test_a_sync_keeps_an_item_attached_to_a_task_the_source_dropped(db, settings, use_sources, item):
+    """A merged PR falls out of the source's is:open search, but it's filed on a task — keep it."""
+    await seed_task(db, "task:webhooks", "Webhook work")
+    await attach(db, "task:webhooks", "pr:acme~api~1", "pr")
+    use_sources(FakeSource([item("pr", "acme~api~2", title="Something else")]))
+
+    await sync_all(db, settings)
+
+    ids = {i.id for i in await _items(db)}
+    assert "pr:acme~api~1" in ids, "an attached item survives the source no longer returning it"
+    assert any(link.item_id == "pr:acme~api~1" for link in await _links(db)), "its attachment stays"
+
+
+async def test_a_sync_clears_an_unattached_item_the_source_dropped(db, settings, use_sources, item):
+    """The counterpart: an item nobody filed is cleared when the source stops returning it."""
+    use_sources(FakeSource([item("pr", "acme~api~1", title="Ephemeral")]))
+    await sync_all(db, settings)
+    assert "pr:acme~api~1" in {i.id for i in await _items(db)}
+
+    use_sources(FakeSource([item("pr", "acme~api~2", title="Replacement")]))
+    await sync_all(db, settings)
+
+    assert "pr:acme~api~1" not in {i.id for i in await _items(db)}
+
+
 # --- proposing against existing tasks --------------------------------------------------
 
 

@@ -403,6 +403,10 @@ async def _task_views(db: AsyncSession) -> list[TaskView]:
 async def _upsert_items(db: AsyncSession, owned: list[tuple[str | None, RawItem]]) -> tuple[int, int]:
     existing = {row.id: row for row in (await db.execute(select(Item))).scalars().all()}
     incoming = {item.id for _, item in owned}
+    # An item you've attached to a task is your decision to keep it. A source dropping it —
+    # a merged PR falling out of an is:open search, a closed thread — must not delete it from
+    # under the task. Only unattached, no-longer-fetched items are cleared.
+    attached = set((await db.execute(select(Link.item_id).where(Link.state == CONFIRMED))).scalars().all())
     added = updated = 0
 
     for instance_id, raw in owned:
@@ -446,7 +450,7 @@ async def _upsert_items(db: AsyncSession, owned: list[tuple[str | None, RawItem]
             row.occurred_at = raw.occurred_at
             updated += int(changed)
 
-    gone = set(existing) - incoming
+    gone = set(existing) - incoming - attached
     if gone:
         await db.execute(delete(Item).where(Item.id.in_(gone)))
     await db.flush()

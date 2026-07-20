@@ -48,7 +48,8 @@ def _github_search(pr_json: dict):
 
     def handler(request):
         q = request.url.params.get("q", "")
-        if q.startswith("is:pr"):
+        # The open-PR query returns pr_json; the merged-PR and issue queries return nothing.
+        if q.startswith("is:pr") and "is:merged" not in q:
             return httpx.Response(200, json=pr_json)
         return httpx.Response(200, json={"items": []})
 
@@ -98,6 +99,24 @@ class TestGitHub:
         _github_graphql()
 
         assert (await github.fetch())[0].status == "merged"
+
+    @respx.mock
+    async def test_a_recently_merged_pr_is_fetched_and_pilled_merged(self, github):
+        merged_pr = {**PR_SEARCH["items"][0], "pull_request": {"merged_at": "2026-07-19T10:00:00Z"}}
+
+        def handler(request):
+            q = request.url.params.get("q", "")
+            return httpx.Response(200, json={"items": [merged_pr]} if "is:merged" in q else {"items": []})
+
+        respx.get("https://api.github.com/search/issues").mock(side_effect=handler)
+        _github_graphql()
+
+        items = await github.fetch()
+
+        assert len(items) == 1, "the merged-window query brings it back after it left is:open"
+        assert items[0].status == "merged"
+        # The pill reads pr_status, which the review pass must not overwrite back to open.
+        assert items[0].extra["pr_status"] == "merged"
 
     @respx.mock
     async def test_a_draft_pr_is_open_not_in_progress(self, github):

@@ -4,6 +4,16 @@ All notable changes to Personal HQ are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A merged PR no longer vanishes from a task. Sync never deletes an item you've attached to a
+  task — a source dropping it (a merged PR leaving GitHub's `is:open` search, a closed thread)
+  can't remove your decision. GitHub also fetches PRs merged in the last 14 days, shown with a
+  **Merged** pill, so a just-merged PR stays visible (and reappears in catch-up) instead of
+  disappearing.
+
 ## [1.0.0] - 2026-07-18 — "Notion Sickness"
 
 The first release. HQ aggregates your activity across GitHub, Linear, Slack, Notion, Dust and
@@ -75,4 +85,5 @@ deliberate action you take — never as a side effect of a sync.
   (`tls internal`), which also makes strict OAuth redirect URIs work.
 - **Auto-sync** runs hourly in the background; a manual Sync button is always there.
 
+[Unreleased]: https://github.com/lakodo/mention-hq/compare/v1.0.0...main
 [1.0.0]: https://github.com/lakodo/mention-hq/releases/tag/v1.0.0
