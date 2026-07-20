@@ -100,4 +100,16 @@ describe('AppLayout sync', () => {
 
     await waitFor(() => expect(screen.getByText('2 items across 1 task')).toBeInTheDocument());
   });
+
+  it('focuses the search box on Cmd/Ctrl+K', async () => {
+    const user = userEvent.setup();
+    renderApp('/');
+
+    const search = await screen.findByLabelText('Search');
+    expect(search).not.toHaveFocus();
+
+    await user.keyboard('{Control>}k{/Control}');
+
+    expect(search).toHaveFocus();
+  });
 });

@@ -1,4 +1,5 @@
 import { Box } from '@mantine/core';
+import { useHotkeys } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet } from 'react-router-dom';
@@ -68,6 +69,31 @@ export function AppLayout() {
     const id = setInterval(() => runSync(true), AUTO_SYNC_INTERVAL_MS);
     return () => clearInterval(id);
   }, [autoSync, runSync]);
+
+  // ⌘/Ctrl+K jumps to whatever search box the current screen has — the header search on the
+  // board/catch-up/timeline, the task-list search on Tasks. Focus the first visible one.
+  useHotkeys(
+    [
+      [
+        'mod+K',
+        () => {
+          const candidates = Array.from(
+            document.querySelectorAll<HTMLInputElement>('input'),
+          ).filter(
+            (el) =>
+              /search/i.test(el.getAttribute('aria-label') ?? '') ||
+              /search/i.test(el.placeholder ?? ''),
+          );
+          // Prefer a laid-out (visible) one; fall back to the first match where layout is
+          // unavailable (only one search renders per screen anyway).
+          const search = candidates.find((el) => el.offsetParent !== null) ?? candidates[0];
+          search?.focus();
+          search?.select();
+        },
+      ],
+    ],
+    [],
+  );
 
   // Keeps the "Synced Xm ago" label honest without refetching anything.
   const [, setTick] = useState(0);
