@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from app.sources.git import GitSource
+from app.sources.git import SPICE_REF, GitSource
 from app.sources.keys import all_reference_keys, github_keys, linear_keys
 from app.sources.markdown import MarkdownSource
 from app.sources.todos import TodoSource
@@ -27,6 +28,40 @@ def repo(tmp_path: Path) -> Path:
     run("git", "commit", "-qm", "init")
     run("git", "checkout", "-q", "-b", "someone/eng-42-search-timeout")
     return path
+
+
+def _branch(repo: Path, name: str, base: str) -> None:
+    run = lambda *a: subprocess.run(a, cwd=repo, check=True, capture_output=True)  # noqa: E731
+    run("git", "checkout", "-q", base)
+    run("git", "checkout", "-q", "-b", name)
+    (repo / f"{name}.txt").write_text(name)
+    run("git", "add", "-A")
+    run("git", "commit", "-qm", name)
+
+
+def _make_spice(repo: Path, bases: dict[str, str], trunk: str = "main") -> None:
+    """Write a git-spice `refs/spice/data` ref the way the tool would, using git plumbing."""
+
+    def run(*args: str, stdin: bytes | None = None) -> str:
+        return (
+            subprocess.run(args, cwd=repo, check=True, capture_output=True, input=stdin)
+            .stdout.decode()
+            .strip()
+        )
+
+    def blob(text: str) -> str:
+        return run("git", "hash-object", "-w", "--stdin", stdin=text.encode())
+
+    repo_oid = blob(json.dumps({"trunk": trunk}))
+    entries = "\n".join(
+        f"100644 blob {blob(json.dumps({'base': {'name': base, 'hash': '0' * 40}}))}\t{branch}"
+        for branch, base in bases.items()
+    )
+    branches_tree = run("git", "mktree", stdin=entries.encode())
+    top = f"100644 blob {repo_oid}\trepo\n040000 tree {branches_tree}\tbranches"
+    top_tree = run("git", "mktree", stdin=top.encode())
+    commit = run("git", "commit-tree", top_tree, "-m", "spice")
+    run("git", "update-ref", SPICE_REF, commit)
 
 
 class TestKeys:
@@ -94,6 +129,25 @@ class TestGit:
 
     async def test_unconfigured_fetches_nothing(self):
         assert await GitSource({}).fetch() == []
+
+    async def test_reads_a_git_spice_stack(self, repo):
+        _branch(repo, "feat-a", "main")
+        _branch(repo, "feat-b", "feat-a")
+        _make_spice(repo, {"feat-a": "main", "feat-b": "feat-a"}, trunk="main")
+
+        by_branch = {i.extra["branch"]: i for i in await GitSource({"repos": str(repo)}).fetch()}
+
+        # feat-b is stacked on feat-a, which is on the trunk.
+        assert by_branch["feat-b"].extra["stacked_on"] == "feat-a"
+        assert by_branch["feat-b"].extra["stack"] == ["feat-a", "feat-b"]
+        assert "feat-a → feat-b" in by_branch["feat-b"].context
+        # feat-a sits on the trunk, so its chain is just itself (trunk is excluded).
+        assert by_branch["feat-a"].extra["stacked_on"] == "main"
+        assert by_branch["feat-a"].extra["stack"] == ["feat-a"]
+
+    async def test_a_repo_without_git_spice_carries_no_stack(self, repo):
+        items = await GitSource({"repos": str(repo)}).fetch()
+        assert all("stacked_on" not in item.extra for item in items)
 
 
 class TestTodos:

@@ -1,8 +1,9 @@
-"""Local git branches."""
+"""Local git branches, including git-spice stacks."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import ClassVar
@@ -11,13 +12,20 @@ from app.sources.base import ConfigField, RawItem, Source, SourceNotConfigured
 from app.sources.keys import all_reference_keys
 
 DEFAULT_MAX_AGE_DAYS = 30
+# git-spice keeps its stack state in this ref: a commit whose tree has a `repo` file (the
+# trunk) and a `branches/<name>` file per tracked branch, each JSON with `base.name` — the
+# branch it's stacked on. Reading it directly means no dependency on the `gs` CLI.
+SPICE_REF = "refs/spice/data"
 
 
 class GitSource(Source):
     id = "git"
     name = "Local Git"
-    description = "Branches you're working on in local repositories"
-    setup = "No credentials — it reads the repositories on this machine."
+    description = "Branches you're working on in local repositories, and their git-spice stacks"
+    setup = (
+        "No credentials — it reads the repositories on this machine. git-spice stacks are "
+        "detected automatically where a repo uses them."
+    )
     fields: ClassVar[list[ConfigField]] = [
         ConfigField(
             key="repos",
@@ -114,4 +122,78 @@ class GitSource(Source):
                     extra={"repo_path": repo_path, "repo_name": repo_name, "branch": branch},
                 )
             )
+
+        await _add_spice_stacks(repo_path, repo_name, items)
         return items
+
+
+async def _run_git(repo_path: str, *args: str) -> tuple[int, bytes]:
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        repo_path,
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    stdout, _ = await proc.communicate()
+    return proc.returncode or 0, stdout
+
+
+async def _spice_state(repo_path: str) -> tuple[str | None, dict[str, str]]:
+    """git-spice's stack as (trunk, {branch: base}). Empty when the repo doesn't use it."""
+    code, _ = await _run_git(repo_path, "rev-parse", "--verify", "--quiet", SPICE_REF)
+    if code != 0:
+        return None, {}
+
+    trunk = None
+    code, out = await _run_git(repo_path, "cat-file", "-p", f"{SPICE_REF}:repo")
+    if code == 0:
+        trunk = _read_json(out).get("trunk")
+
+    code, out = await _run_git(repo_path, "ls-tree", "-r", "--name-only", f"{SPICE_REF}:branches")
+    bases: dict[str, str] = {}
+    if code == 0:
+        for branch in out.decode().splitlines():
+            got, blob = await _run_git(repo_path, "cat-file", "-p", f"{SPICE_REF}:branches/{branch}")
+            base = (_read_json(blob).get("base") or {}).get("name") if got == 0 else None
+            if base:
+                bases[branch] = base
+    return trunk, bases
+
+
+def _read_json(raw: bytes) -> dict:
+    try:
+        value = json.loads(raw)
+        return value if isinstance(value, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def _stack_chain(branch: str, bases: dict[str, str], trunk: str | None) -> list[str]:
+    """The downstack chain from the base of the stack up to `branch` (trunk excluded)."""
+    chain = [branch]
+    seen = {branch}
+    current = branch
+    while (base := bases.get(current)) and base != trunk and base not in seen:
+        chain.insert(0, base)
+        seen.add(base)
+        current = base
+    return chain
+
+
+async def _add_spice_stacks(repo_path: str, repo_name: str, items: list[RawItem]) -> None:
+    """Note each branch's git-spice stack on its item — the branch it's stacked on, the whole
+    downstack chain, and a chain shown in the item's context line."""
+    trunk, bases = await _spice_state(repo_path)
+    if not bases:
+        return
+    for item in items:
+        branch = item.extra["branch"]
+        if branch not in bases:
+            continue
+        chain = _stack_chain(branch, bases, trunk)
+        item.extra["stacked_on"] = bases[branch]
+        item.extra["stack"] = chain
+        if len(chain) > 1:
+            item.context = f"{repo_name} · {' → '.join(chain)}"
