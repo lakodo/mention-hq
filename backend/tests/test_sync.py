@@ -345,6 +345,27 @@ async def test_a_new_item_un_triages_when_it_moves(db, settings, use_sources, it
     assert (await _items(db))[0].triaged is False
 
 
+async def test_new_activity_does_not_un_triage_an_item_you_have_attached(
+    db, settings, use_sources, item, now
+):
+    """A branch you filed keeps gathering commits; that must not drag it back to catch-up."""
+    await seed_task(db, "task:vera", "Vera")
+    await attach(db, "task:vera", "branch:apps~vera", "branch")
+    stored = (await _items(db))[0]
+    stored.triaged = True
+    stored.occurred_at = now - timedelta(hours=2)
+    await db.commit()
+
+    use_sources(FakeSource([item("branch", "apps~vera", occurred_at=now)]))
+    await sync_all(db, settings)
+
+    refreshed = (await _items(db))[0]
+    assert refreshed.triaged is True, (
+        "an attached item that moves stays filed — it doesn't re-enter the inbox"
+    )
+    assert any(link.item_id == "branch:apps~vera" for link in await _links(db)), "and it stays attached"
+
+
 # --- several accounts of one kind ------------------------------------------------------
 
 

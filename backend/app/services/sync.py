@@ -456,9 +456,11 @@ async def _upsert_items(
             row.context = raw.context
             row.extra = payload
             row.instance_id = instance_id
-            # New activity un-triages it: catch-up should resurface a thread that moved
-            # since you last dealt with it.
-            if raw.occurred_at > row.occurred_at:
+            # New activity un-triages it so catch-up resurfaces a thread that moved since you
+            # last dealt with it — but never an item you've already attached to a task. That
+            # decision stands: a branch you filed gathering new commits stays filed and out of
+            # the inbox, it doesn't come back every sync.
+            if raw.occurred_at > row.occurred_at and row.id not in attached:
                 row.triaged = False
             row.occurred_at = raw.occurred_at
             updated += int(changed)
