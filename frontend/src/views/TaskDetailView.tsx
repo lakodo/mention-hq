@@ -869,7 +869,7 @@ export function TaskDetailView() {
             <Text c="dimmed">Select a task from the list.</Text>
           </Center>
         ) : (
-          <Box style={{ maxWidth: 720 }}>
+          <Box style={{ maxWidth: 1400 }}>
             <Group gap={8} wrap="nowrap">
               {primarySource(selected) && <SourceDot source={primarySource(selected)!} />}
               <Badge variant="default" radius="xl">
