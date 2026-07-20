@@ -118,8 +118,10 @@ class GitHubSource(Source):
                 continue
             if item.status == "merged":
                 # A merged PR is done — its review decision no longer matters, and the review
-                # GraphQL only covers open PRs anyway.
+                # GraphQL only covers open PRs anyway. It refreshes a PR you've already filed
+                # (so it shows "merged") but doesn't flood catch-up with every recent merge.
                 item.extra["pr_status"] = "merged"
+                item.refresh_only = True
                 continue
             state = review.get(item.external_id, {})
             item.extra["pr_status"] = _pr_status(item.extra.get("draft", False), state.get("decision"))

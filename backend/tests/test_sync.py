@@ -182,6 +182,31 @@ async def test_a_sync_clears_an_unattached_item_the_source_dropped(db, settings,
     assert "pr:acme~api~1" not in {i.id for i in await _items(db)}
 
 
+async def test_a_sync_does_not_create_a_new_refresh_only_item(db, settings, use_sources, item):
+    """A merged PR you never filed shouldn't flood catch-up — refresh-only is update-or-skip."""
+    use_sources(FakeSource([item("pr", "acme~api~9", title="Merged, never seen", refresh_only=True)]))
+
+    await sync_all(db, settings)
+
+    assert await _items(db) == []
+
+
+async def test_a_sync_refreshes_an_attached_item_from_a_refresh_only_fetch(db, settings, use_sources, item):
+    """An attached PR that merges is refreshed (kept, restated), never deleted."""
+    await seed_task(db, "task:webhooks", "Webhook work")
+    await attach(db, "task:webhooks", "pr:acme~api~1", "pr")
+    use_sources(
+        FakeSource([item("pr", "acme~api~1", label="Now merged", status="merged", refresh_only=True)])
+    )
+
+    await sync_all(db, settings)
+
+    items = await _items(db)
+    assert {i.id for i in items} == {"pr:acme~api~1"}, "the attached item stays"
+    assert items[0].label == "Now merged", "and is refreshed from the merged fetch"
+    assert items[0].extra["status"] == "merged"
+
+
 # --- proposing against existing tasks --------------------------------------------------
 
 

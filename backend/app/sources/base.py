@@ -78,6 +78,10 @@ class RawItem:
     # way (a Slack mention, a PR reviewer, a Linear assignee). Aggregated onto the task.
     people: list[dict] = field(default_factory=list)
     extra: dict = field(default_factory=dict)
+    # Supplementary: refresh an item already stored (a merged PR still filed on a task) but
+    # never create a new one, and don't count as "seen" — so an unfiled one is cleared, not
+    # left to pile up in catch-up.
+    refresh_only: bool = False
 
     @property
     def id(self) -> str:

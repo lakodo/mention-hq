@@ -117,6 +117,8 @@ class TestGitHub:
         assert items[0].status == "merged"
         # The pill reads pr_status, which the review pass must not overwrite back to open.
         assert items[0].extra["pr_status"] == "merged"
+        # Refresh-only: it updates a PR already filed on a task, but doesn't flood catch-up.
+        assert items[0].refresh_only is True
 
     @respx.mock
     async def test_a_draft_pr_is_open_not_in_progress(self, github):

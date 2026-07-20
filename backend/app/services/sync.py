@@ -348,7 +348,7 @@ class _PersistResult:
 
 async def _persist(db: AsyncSession, owned: list[tuple[str | None, RawItem]]) -> _PersistResult:
     items = [item for _, item in owned]
-    items_added, items_updated = await _upsert_items(db, owned)
+    items_added, items_updated, skipped = await _upsert_items(db, owned)
     await _clear_stale_proposals(db)
     await _purge_auto_tasks(db)
 
@@ -360,6 +360,8 @@ async def _persist(db: AsyncSession, owned: list[tuple[str | None, RawItem]]) ->
 
     proposals = 0
     for raw in items:
+        if raw.id in skipped:
+            continue  # not in the DB — proposing it would dangle a link
         proposals += await _propose(db, raw, views, decisions.get(raw.id, {}))
 
     tasks_updated = await _refresh_tasks(db, {i.id: i for i in items}, matcher)
@@ -400,14 +402,20 @@ async def _task_views(db: AsyncSession) -> list[TaskView]:
     ]
 
 
-async def _upsert_items(db: AsyncSession, owned: list[tuple[str | None, RawItem]]) -> tuple[int, int]:
+async def _upsert_items(
+    db: AsyncSession, owned: list[tuple[str | None, RawItem]]
+) -> tuple[int, int, set[str]]:
     existing = {row.id: row for row in (await db.execute(select(Item))).scalars().all()}
-    incoming = {item.id for _, item in owned}
+    # A refresh-only item (a merged PR) doesn't count as "seen": it refreshes an item already
+    # here but is never kept alive by its own presence, so an unfiled one is cleared like any
+    # item the source stopped returning.
+    incoming = {item.id for _, item in owned if not item.refresh_only}
     # An item you've attached to a task is your decision to keep it. A source dropping it —
     # a merged PR falling out of an is:open search, a closed thread — must not delete it from
     # under the task. Only unattached, no-longer-fetched items are cleared.
     attached = set((await db.execute(select(Link.item_id).where(Link.state == CONFIRMED))).scalars().all())
     added = updated = 0
+    skipped: set[str] = set()
 
     for instance_id, raw in owned:
         payload = {
@@ -421,6 +429,11 @@ async def _upsert_items(db: AsyncSession, owned: list[tuple[str | None, RawItem]
         }
         row = existing.get(raw.id)
         if row is None:
+            if raw.refresh_only:
+                # Nothing to refresh and we don't create it — a merged PR you never filed
+                # isn't inbox-worthy.
+                skipped.add(raw.id)
+                continue
             db.add(
                 Item(
                     id=raw.id,
@@ -454,7 +467,7 @@ async def _upsert_items(db: AsyncSession, owned: list[tuple[str | None, RawItem]
     if gone:
         await db.execute(delete(Item).where(Item.id.in_(gone)))
     await db.flush()
-    return added, updated
+    return added, updated, skipped
 
 
 async def _clear_stale_proposals(db: AsyncSession) -> None:
