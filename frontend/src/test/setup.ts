@@ -6,10 +6,11 @@ import { resetDb } from './handlers';
 import { server } from './server';
 
 // A portalled menu/dropdown opens on a short transition timer. The whole suite runs across
-// many workers, so under CPU contention that timer can outlast the default 1s findBy wait —
-// the menu is opening, just not fast enough — and a test flakes. A longer ceiling absorbs the
-// contention without slowing the happy path: findBy resolves the instant the element appears.
-configure({ asyncUtilTimeout: 5000 });
+// many workers, so under CPU contention that timer can outlast a short findBy wait — the menu
+// is opening, just not fast enough — and a test flakes (a row menu whose "Delete item" never
+// shows within the ceiling). A generous ceiling absorbs the worst contention without slowing
+// the happy path: findBy resolves the instant the element appears.
+configure({ asyncUtilTimeout: 8000 });
 
 // Mantine relies on both of these; jsdom provides neither.
 Object.defineProperty(window, 'matchMedia', {

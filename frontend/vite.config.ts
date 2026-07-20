@@ -27,6 +27,15 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // One fork per core (15 here) oversubscribes badly: each runs jsdom + msw, and the GC
+    // pauses starve a Mantine Menu's open at click time — its dropdown never mounts within the
+    // findBy ceiling and a row-menu test flakes. Capping workers keeps real parallelism while
+    // leaving each one enough CPU to render a portal promptly. Also steadier on CI's fewer cores.
+    maxWorkers: 4,
+    minWorkers: 1,
+    // Headroom for a test that chains several portalled transitions (open menu, pick, confirm),
+    // each a findBy wait — so a brief contention spike can't trip vitest's default 5s ceiling.
+    testTimeout: 20000,
     // The app reads this for its API base; an absolute value keeps msw matching on a full
     // URL, which its onUnhandledRequest:'error' guard needs.
     env: {
