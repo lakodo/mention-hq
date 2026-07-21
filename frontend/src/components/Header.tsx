@@ -90,7 +90,14 @@ export function Header() {
       }}
     >
       <Stack gap={2} style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
-        <Text fw={700} fz="lg">
+        <Text
+          component={Link}
+          to="/welcome"
+          fw={700}
+          fz="lg"
+          c="inherit"
+          style={{ textDecoration: 'none', cursor: 'pointer' }}
+        >
           {appName}
         </Text>
         {isDetail ? (

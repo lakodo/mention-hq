@@ -13,12 +13,14 @@ import { LogView } from './views/LogView';
 import { PeopleView } from './views/PeopleView';
 import { TaskDetailView } from './views/TaskDetailView';
 import { TimelineView } from './views/TimelineView';
+import { WelcomeView } from './views/WelcomeView';
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<BoardView />} />
+        <Route path="welcome" element={<WelcomeView />} />
         <Route path="timeline" element={<TimelineView />} />
         <Route path="catchup" element={<CatchupView />} />
         <Route path="braindump" element={<BrainDumpView />} />
