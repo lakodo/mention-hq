@@ -360,6 +360,22 @@ async def test_app_name_is_configurable(client):
     assert (await client.get("/api/admin/settings")).json()["app_name"] == "My HQ"
 
 
+async def test_manifest_carries_the_configured_app_name(client):
+    """The installed PWA takes its name from the live setting, not a build-time constant."""
+    default = await client.get("/api/manifest.webmanifest")
+    assert default.status_code == 200
+    assert default.headers["content-type"].startswith("application/manifest+json")
+    assert default.json()["name"] == "Personal HQ"
+
+    await client.patch("/api/admin/settings", json={"app_name": "Jojo HQ!"})
+
+    body = (await client.get("/api/manifest.webmanifest")).json()
+    assert body["name"] == "Jojo HQ!"
+    assert body["short_name"] == "Jojo HQ!"
+    assert body["display"] == "standalone"
+    assert {icon["purpose"] for icon in body["icons"]} == {"any", "maskable"}
+
+
 async def test_auto_sync_is_a_saved_setting(client):
     assert (await client.get("/api/admin/settings")).json()["auto_sync"] is False
 

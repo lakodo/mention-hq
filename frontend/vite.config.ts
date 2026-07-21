@@ -16,26 +16,10 @@ export default defineConfig({
             registerType: 'autoUpdate',
             injectRegister: 'auto',
             includeAssets: ['icon.svg', 'icon-maskable.svg'],
-            manifest: {
-              name: 'Personal HQ',
-              short_name: 'HQ',
-              description:
-                'Your activity across GitHub, Linear, Slack, Notion and local files, grouped by subject.',
-              start_url: '/',
-              scope: '/',
-              display: 'standalone',
-              theme_color: '#ffffff',
-              background_color: '#f8f9fa',
-              icons: [
-                { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-                {
-                  src: 'icon-maskable.svg',
-                  sizes: 'any',
-                  type: 'image/svg+xml',
-                  purpose: 'maskable',
-                },
-              ],
-            },
+            // The manifest is served live by the API at /api/manifest.webmanifest (linked from
+            // index.html) so the installed app shows your own app name, not one frozen at build
+            // time. This plugin only owns the service worker.
+            manifest: false,
             workbox: {
               globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
               // The API is data, never the app shell: a client-side route falls back to

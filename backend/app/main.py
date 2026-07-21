@@ -5,12 +5,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import structlog
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.database import SessionLocal
+from app.database import SessionLocal, get_db
 from app.routers import admin, buckets, catchup, items, people, sync, tasks, triage
+from app.services.app_config import get_app_name
 from app.services.sync import sync_all
 
 log = structlog.get_logger(__name__)
@@ -65,6 +68,37 @@ app.include_router(admin.router, prefix=API_PREFIX)
 @app.get("/api/health", tags=["meta"])
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/manifest.webmanifest", tags=["meta"])
+async def manifest(db: AsyncSession = Depends(get_db)) -> JSONResponse:
+    """The PWA manifest, served live so the installed app carries your own app name rather than
+    a value baked in at build time. Under /api so the same route answers in dev (through the
+    Vite proxy) and in production (the API serving the built SPA)."""
+    name = await get_app_name(db)
+    return JSONResponse(
+        {
+            "name": name,
+            "short_name": name,
+            "description": "Your activity across GitHub, Linear, Slack, Notion and local files, "
+            "grouped by subject.",
+            "start_url": "/",
+            "scope": "/",
+            "display": "standalone",
+            "theme_color": "#ffffff",
+            "background_color": "#f8f9fa",
+            "icons": [
+                {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
+                {
+                    "src": "/icon-maskable.svg",
+                    "sizes": "any",
+                    "type": "image/svg+xml",
+                    "purpose": "maskable",
+                },
+            ],
+        },
+        media_type="application/manifest+json",
+    )
 
 
 def _serve_frontend(app: FastAPI) -> None:
