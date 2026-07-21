@@ -94,11 +94,14 @@ async def seed_task(db, task_id: str, title: str) -> Task:
     return task
 
 
-async def attach(db, task_id: str, item_id: str, source: str, *, identity=(), reference=()) -> Item:
+async def attach(
+    db, task_id: str, item_id: str, source: str, *, instance_id=None, identity=(), reference=()
+) -> Item:
     """Put an item on a task with a confirmed link, so the task carries its keys."""
     item = Item(
         id=item_id,
         source=source,
+        instance_id=instance_id,
         label=item_id,
         url=None,
         context=None,
@@ -205,6 +208,61 @@ async def test_a_sync_refreshes_an_attached_item_from_a_refresh_only_fetch(db, s
     assert {i.id for i in items} == {"pr:acme~api~1"}, "the attached item stays"
     assert items[0].label == "Now merged", "and is refreshed from the merged fetch"
     assert items[0].extra["status"] == "merged"
+
+
+async def _row(db, item_id: str) -> Item:
+    return next(i for i in await _items(db) if i.id == item_id)
+
+
+async def test_a_deleted_branch_you_filed_is_flagged_gone(db, settings, use_sources, item):
+    """The git source reports every branch that still exists, so one it stops reporting was
+    deleted. A filed branch is kept (never dropped from its task) but marked gone."""
+    await seed_task(db, "task:vera", "Vera")
+    await attach(db, "task:vera", "branch:apps~vera", "branch", instance_id="github-0")
+    use_sources(FakeSource([item("branch", "apps~other")]))
+
+    await sync_all(db, settings)
+
+    row = await _row(db, "branch:apps~vera")
+    assert row.extra.get("gone") is True, "a filed branch the source dropped reads as gone"
+    assert any(link.item_id == "branch:apps~vera" for link in await _links(db)), "and stays attached"
+
+
+async def test_an_aged_out_branch_that_still_exists_is_not_flagged_gone(db, settings, use_sources, item):
+    """Old but on disk: the git source reports it refresh-only, so it counts as seen — a filed
+    branch that's merely stale must not read as deleted."""
+    await seed_task(db, "task:vera", "Vera")
+    await attach(db, "task:vera", "branch:apps~vera", "branch", instance_id="github-0")
+    use_sources(FakeSource([item("branch", "apps~vera", refresh_only=True)]))
+
+    await sync_all(db, settings)
+
+    assert not (await _row(db, "branch:apps~vera")).extra.get("gone")
+
+
+async def test_a_recreated_branch_clears_the_gone_flag(db, settings, use_sources, item):
+    await seed_task(db, "task:vera", "Vera")
+    await attach(db, "task:vera", "branch:apps~vera", "branch", instance_id="github-0")
+    use_sources(FakeSource([]))
+    await sync_all(db, settings)
+    assert (await _row(db, "branch:apps~vera")).extra.get("gone") is True
+
+    use_sources(FakeSource([item("branch", "apps~vera")]))
+    await sync_all(db, settings)
+
+    assert not (await _row(db, "branch:apps~vera")).extra.get("gone"), "a recreated branch is back"
+
+
+async def test_a_windowed_source_dropping_a_filed_item_does_not_flag_it_gone(db, settings, use_sources, item):
+    """Only branches carry the gone flag. A PR falling out of an is:open search, or a thread
+    off the end of a window, hasn't been deleted — it just isn't in this fetch."""
+    await seed_task(db, "task:pay", "Payments")
+    await attach(db, "task:pay", "pr:acme~api~1", "pr", instance_id="github-0")
+    use_sources(FakeSource([item("pr", "acme~api~2")]))
+
+    await sync_all(db, settings)
+
+    assert not (await _row(db, "pr:acme~api~1")).extra.get("gone")
 
 
 # --- proposing against existing tasks --------------------------------------------------
@@ -350,7 +408,7 @@ async def test_new_activity_does_not_un_triage_an_item_you_have_attached(
 ):
     """A branch you filed keeps gathering commits; that must not drag it back to catch-up."""
     await seed_task(db, "task:vera", "Vera")
-    await attach(db, "task:vera", "branch:apps~vera", "branch")
+    await attach(db, "task:vera", "branch:apps~vera", "branch", instance_id="github-0")
     stored = (await _items(db))[0]
     stored.triaged = True
     stored.occurred_at = now - timedelta(hours=2)

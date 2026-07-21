@@ -110,12 +110,16 @@ class TestGit:
         items = await GitSource({"repos": str(repo)}).fetch()
         assert all("/" not in item.id for item in items)
 
-    async def test_old_branches_are_skipped_unless_they_carry_your_prefix(self, repo):
+    async def test_an_old_branch_rides_in_as_refresh_only_not_skipped(self, repo):
+        """Every branch that still exists is reported, so the sync can tell a deleted branch
+        from an aged-out one. Fresh or prefixed branches are normal; old ones are refresh-only,
+        so they keep a filed item current without landing in catch-up."""
         source = GitSource({"repos": str(repo), "branch_prefix": "someone/", "max_age_days": "0"})
 
-        labels = {item.label for item in await source.fetch()}
+        by_branch = {item.extra["branch"]: item for item in await source.fetch()}
 
-        assert labels == {"[widgets] someone/eng-42-search-timeout"}
+        assert by_branch["someone/eng-42-search-timeout"].refresh_only is False, "prefixed is fresh"
+        assert by_branch["main"].refresh_only is True, "old and unprefixed is refresh-only"
 
     async def test_a_broken_repo_does_not_fail_the_others(self, repo, tmp_path):
         source = GitSource({"repos": f"{tmp_path / 'not-a-repo'},{repo}"})

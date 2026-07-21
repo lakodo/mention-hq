@@ -46,6 +46,7 @@ class ItemOut(BaseModel):
     stack: list[str] = []
     branch: str | None = None
     head_branch: str | None = None
+    gone: bool = False
 
 
 class LinkOut(BaseModel):

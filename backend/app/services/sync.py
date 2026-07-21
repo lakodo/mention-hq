@@ -414,6 +414,10 @@ async def _upsert_items(
     # a merged PR falling out of an is:open search, a closed thread — must not delete it from
     # under the task. Only unattached, no-longer-fetched items are cleared.
     attached = set((await db.execute(select(Link.item_id).where(Link.state == CONFIRMED))).scalars().all())
+    # Everything the sources put in front of us this run — including refresh-only items. Absence
+    # from this set means the owning source didn't report it at all, which is how a deleted
+    # branch is told apart from one merely aged out (git reports every branch that still exists).
+    seen = {item.id for _, item in owned}
     added = updated = 0
     skipped: set[str] = set()
 
@@ -468,6 +472,16 @@ async def _upsert_items(
     gone = set(existing) - incoming - attached
     if gone:
         await db.execute(delete(Item).where(Item.id.in_(gone)))
+
+    # A branch you attached that the source no longer reports is a deleted branch: flag it so
+    # the board shows it's gone rather than leaving a filed item that looks live. Only 'branch'
+    # qualifies — it reports every branch that still exists, so absence means deletion; a
+    # re-fetched branch clears the flag, since the update above rebuilds extra without it.
+    for item_id in (set(existing) - seen) & attached:
+        row = existing[item_id]
+        if row.source == "branch" and not row.extra.get("gone"):
+            row.extra = {**row.extra, "gone": True}
+
     await db.flush()
     return added, updated, skipped
 

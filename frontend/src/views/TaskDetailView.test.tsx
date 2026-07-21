@@ -171,6 +171,18 @@ describe('TaskDetailView', () => {
     expect(within(card).getByText('dev/auth-base')).toBeInTheDocument();
   });
 
+  it('flags a filed branch as deleted once the source stops reporting it', async () => {
+    const auth = db.tasks.find((t) => t.id === AUTH_TASK_ID)!;
+    auth.items.find((i) => i.source === 'branch')!.gone = true;
+    renderApp(detailRoute(AUTH_TASK_ID));
+
+    const detail = await panel();
+    const card = within(detail).getByTestId('code-item');
+    // The joined branch line reads "deleted" instead of "local".
+    expect(within(card).getByText('deleted')).toBeInTheDocument();
+    expect(within(card).queryByText('local')).not.toBeInTheDocument();
+  });
+
   it('links an item out to its url in a new tab', async () => {
     renderApp(detailRoute(PAYMENTS_TASK_ID));
 

@@ -82,6 +82,7 @@ export function makeTasks(): Task[] {
           stack: [],
           branch: null,
           head_branch: null,
+          gone: false,
           people: [{ kind: 'github', value: 'ada', name: 'ada', role: 'author' }],
         },
         {
@@ -100,6 +101,7 @@ export function makeTasks(): Task[] {
           stack: [],
           branch: null,
           head_branch: null,
+          gone: false,
           people: [],
         },
         {
@@ -118,6 +120,7 @@ export function makeTasks(): Task[] {
           stack: [],
           branch: null,
           head_branch: null,
+          gone: false,
           people: [],
         },
       ],
@@ -153,6 +156,7 @@ export function makeTasks(): Task[] {
           stack: [],
           branch: null,
           head_branch: null,
+          gone: false,
           people: [],
         },
       ],
@@ -188,6 +192,7 @@ export function makeTasks(): Task[] {
           stack: [],
           branch: null,
           head_branch: 'dev/auth-session-timeout',
+          gone: false,
           people: [],
         },
         {
@@ -206,6 +211,7 @@ export function makeTasks(): Task[] {
           stack: ['dev/auth-base', 'dev/auth-session-timeout'],
           branch: 'dev/auth-session-timeout',
           head_branch: null,
+          gone: false,
           people: [],
         },
       ],
@@ -238,6 +244,7 @@ export function makeCatchupItems(): ItemWithLinks[] {
       stack: [],
       branch: null,
       head_branch: null,
+      gone: false,
       people: [],
       links: [
         {
@@ -269,6 +276,7 @@ export function makeCatchupItems(): ItemWithLinks[] {
       stack: [],
       branch: null,
       head_branch: null,
+      gone: false,
       people: [],
       links: [],
     },

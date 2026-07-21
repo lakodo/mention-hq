@@ -275,6 +275,7 @@ export const handlers = [
       stack: [],
       branch: null,
       head_branch: null,
+      gone: false,
       people: [],
       links: taskIds.map((taskId) => {
         const task = db.tasks.find((t) => t.id === taskId)!;

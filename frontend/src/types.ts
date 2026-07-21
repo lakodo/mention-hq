@@ -51,6 +51,8 @@ export interface Item {
   branch: string | null;
   /** A PR's head branch — joins the PR to the local branch it was pushed from. */
   head_branch: string | null;
+  /** A branch the git source stopped reporting — deleted upstream, shown as gone. */
+  gone: boolean;
 }
 
 /** One item's attachment to one task, and who decided it. */

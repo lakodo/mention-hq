@@ -249,6 +249,11 @@ class Item(Base):
         """A PR's head branch — the local branch it was pushed from, when known."""
         return (self.extra or {}).get("head_branch")
 
+    @property
+    def gone(self) -> bool:
+        """A branch item whose branch the source stopped reporting — deleted upstream."""
+        return bool((self.extra or {}).get("gone"))
+
 
 class Bucket(Base):
     """A topic column on the board, grouping tasks.

@@ -147,9 +147,19 @@ function ItemCardBody({ item }: ItemCardProps) {
             </Group>
           </Anchor>
         ) : (
-          <Text fz="sm" lh={1.4}>
+          <Text
+            fz="sm"
+            lh={1.4}
+            td={item.gone ? 'line-through' : undefined}
+            c={item.gone ? 'dimmed' : undefined}
+          >
             {itemLabel(item.label, { ...emojiMap, ...item.emoji })}
           </Text>
+        )}
+        {item.gone && (
+          <Badge size="xs" color="red" variant="light" mt={4}>
+            branch deleted
+          </Badge>
         )}
         {item.context && (
           <Text fz="xs" c="dimmed">
@@ -201,11 +211,17 @@ function CodeCard({ unit }: { unit: CodeUnit }) {
           <Divider mb={8} variant="dashed" />
           <Group gap={6} wrap="nowrap">
             <IconGitBranch size={14} color="var(--mantine-color-orange-6)" />
-            <Text fz="xs" truncate style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
+            <Text
+              fz="xs"
+              truncate
+              td={joined.gone ? 'line-through' : undefined}
+              c={joined.gone ? 'dimmed' : undefined}
+              style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}
+            >
               {joined.branch}
             </Text>
-            <Badge size="xs" variant="light" color="gray">
-              local
+            <Badge size="xs" variant="light" color={joined.gone ? 'red' : 'gray'}>
+              {joined.gone ? 'deleted' : 'local'}
             </Badge>
           </Group>
           {joined.stack.length > 1 && <StackTrail stack={joined.stack} />}

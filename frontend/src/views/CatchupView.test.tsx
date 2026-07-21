@@ -132,6 +132,7 @@ describe('CatchupView', () => {
       stack: [],
       branch: null,
       head_branch: null,
+      gone: false,
       people: [],
       links: [
         {
@@ -177,6 +178,7 @@ describe('CatchupView', () => {
       stack: [],
       branch: null,
       head_branch: null,
+      gone: false,
       people: [],
       links: [],
     });

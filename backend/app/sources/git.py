@@ -107,8 +107,11 @@ class GitSource(Source):
                 continue
             branch, raw_date = line.split("\t", 1)
             committed = datetime.fromisoformat(raw_date.strip()).astimezone(UTC)
-            if not (prefix and branch.startswith(prefix)) and committed < cutoff:
-                continue
+            # Every branch that still exists is reported so the sync can tell a deleted branch
+            # (gone from this list) from one that has merely aged out. A stale branch rides in
+            # as refresh-only: it keeps an item you filed current without putting old branches
+            # back in catch-up.
+            fresh = bool(prefix and branch.startswith(prefix)) or committed >= cutoff
             items.append(
                 RawItem(
                     source="branch",
@@ -117,6 +120,7 @@ class GitSource(Source):
                     occurred_at=committed,
                     context=repo_name,
                     status="in_progress",
+                    refresh_only=not fresh,
                     # Most branch-naming conventions embed the ticket ref, which is the
                     # cheapest cross-source link available.
                     reference_keys=all_reference_keys(branch.upper()),
