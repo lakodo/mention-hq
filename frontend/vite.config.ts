@@ -42,6 +42,10 @@ export default defineConfig({
               // index.html, but an /api path must always reach the backend over the network.
               navigateFallbackDenylist: [/^\/api\//],
             },
+            // The everyday way HQ runs is `task dev` behind the Caddy HTTPS proxy, not a
+            // production build — so serve the manifest and service worker in dev too, or the
+            // app is never installable from the machine it actually runs on.
+            devOptions: { enabled: true, type: 'module' },
           }),
         ]),
   ],
