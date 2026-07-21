@@ -8,7 +8,6 @@ import {
   Card,
   Center,
   Checkbox,
-  Divider,
   Group,
   Loader,
   Menu,
@@ -33,10 +32,12 @@ import {
   IconDots,
   IconExternalLink,
   IconGitBranch,
+  IconGitPullRequest,
   IconPlus,
   IconRefresh,
   IconSearch,
   IconSparkles,
+  IconStack2,
   IconTrash,
   IconX,
 } from '@tabler/icons-react';
@@ -66,13 +67,16 @@ import {
 } from '../api/hooks';
 import { matchesSidebarQuery } from '../lib/search';
 import {
-  type CodeUnit,
+  type PrStack,
+  type StackRow,
+  type TaskCode,
   groupByTag,
   groupTasksByBucket,
   newestItemAt,
   primarySource,
   sortTasksByRecency,
   splitTaskItems,
+  taskCode,
   taskIdFromParam,
   taskPath,
 } from '../lib/tasks';
@@ -196,37 +200,113 @@ function ItemCard({ item }: ItemCardProps) {
   );
 }
 
-/** A Code-lane card: a PR, a branch, or the two joined — the PR leads and the local branch
- *  it was pushed from rides underneath, with its git-spice stack if it has one. */
-function CodeCard({ unit }: { unit: CodeUnit }) {
-  const primary = unit.pr ?? unit.branch;
-  const joined = unit.pr && unit.branch ? unit.branch : null;
-  if (!primary) return null;
-
+/** All of a task's local branches in one card, drawn as their git-spice stack — indented by
+ *  depth, base at the top — so the chain reads once instead of repeating under every PR. */
+function BranchesCard({ rows }: { rows: StackRow<Item>[] }) {
   return (
-    <Card withBorder radius="sm" p="sm" data-testid="code-item">
-      <ItemCardBody item={primary} />
-      {joined && (
-        <Box mt={8} ml={28}>
-          <Divider mb={8} variant="dashed" />
-          <Group gap={6} wrap="nowrap">
-            <IconGitBranch size={14} color="var(--mantine-color-orange-6)" />
+    <Card withBorder radius="sm" p="sm" data-testid="branches-card">
+      <Text fz={10} c="dimmed" fw={700} tt="uppercase" mb={8} style={{ letterSpacing: '0.04em' }}>
+        Branches
+      </Text>
+      <Stack gap={6}>
+        {rows.map(({ item, depth }) => (
+          <Group key={item.id} gap={6} wrap="nowrap" style={{ paddingLeft: depth * 18 }}>
+            <IconGitBranch
+              size={13}
+              color="var(--mantine-color-orange-6)"
+              style={{ flexShrink: 0 }}
+            />
             <Text
               fz="xs"
               truncate
-              td={joined.gone ? 'line-through' : undefined}
-              c={joined.gone ? 'dimmed' : undefined}
+              td={item.gone ? 'line-through' : undefined}
+              c={item.gone ? 'dimmed' : undefined}
               style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}
             >
-              {joined.branch}
+              {item.branch}
             </Text>
-            <Badge size="xs" variant="light" color={joined.gone ? 'red' : 'gray'}>
-              {joined.gone ? 'deleted' : 'local'}
-            </Badge>
+            {item.gone && (
+              <Badge size="xs" color="red" variant="light" style={{ flexShrink: 0 }}>
+                deleted
+              </Badge>
+            )}
           </Group>
-          {joined.stack.length > 1 && <StackTrail stack={joined.stack} />}
-        </Box>
-      )}
+        ))}
+      </Stack>
+    </Card>
+  );
+}
+
+function PrStackRow({ pr }: { pr: Item }) {
+  const { data: emojiMap = {} } = useEmojiMap();
+  return (
+    <Group gap={8} wrap="nowrap" align="flex-start">
+      <IconGitPullRequest
+        size={15}
+        color="var(--mantine-color-grape-6)"
+        style={{ marginTop: 3, flexShrink: 0 }}
+      />
+      <Box style={{ flex: 1, minWidth: 0 }}>
+        {pr.url ? (
+          <Anchor href={pr.url} target="_blank" rel="noreferrer" fz="sm" lh={1.3}>
+            <Group gap={4} wrap="nowrap">
+              {itemLabel(pr.label, { ...emojiMap, ...pr.emoji })}
+              <IconExternalLink size={12} />
+            </Group>
+          </Anchor>
+        ) : (
+          <Text fz="sm" lh={1.3}>
+            {itemLabel(pr.label, { ...emojiMap, ...pr.emoji })}
+          </Text>
+        )}
+        <Group gap={8} wrap="nowrap" mt={2}>
+          {pr.context && (
+            <Text fz="xs" c="dimmed">
+              {pr.context}
+            </Text>
+          )}
+          {pr.pr_status && (
+            <PrStatusPill
+              status={pr.pr_status}
+              reviewRequested={pr.pr_review_requested}
+              size="xs"
+            />
+          )}
+        </Group>
+        {pr.people.length > 0 && (
+          <Box mt={4}>
+            <PeopleStrip people={pr.people} />
+          </Box>
+        )}
+      </Box>
+    </Group>
+  );
+}
+
+/** A git-spice stack of PRs as one card — the tree from the GitHub stack comment, base at the
+ *  top, each PR indented onto the one below it. */
+function PrStackCard({ stack }: { stack: PrStack }) {
+  return (
+    <Card withBorder radius="sm" p="sm" data-testid="code-item">
+      <Stack gap={12}>
+        {stack.rows.map(({ item, depth }) => (
+          <Box key={item.id} style={{ paddingLeft: depth * 18 }}>
+            <PrStackRow pr={item} />
+          </Box>
+        ))}
+      </Stack>
+      <Group gap={4} mt={10} c="dimmed" wrap="nowrap">
+        <IconStack2 size={12} />
+        <Text fz={10}>git-spice stack</Text>
+      </Group>
+    </Card>
+  );
+}
+
+function LonePrCard({ pr }: { pr: Item }) {
+  return (
+    <Card withBorder radius="sm" p="sm" data-testid="code-item">
+      <ItemCardBody item={pr} />
     </Card>
   );
 }
@@ -565,9 +645,9 @@ export function TaskDetailView() {
     });
   };
 
-  const { slack, other, code } = selected
-    ? splitTaskItems(selected)
-    : { slack: [], other: [], code: [] as CodeUnit[] };
+  const { slack, other } = selected ? splitTaskItems(selected) : { slack: [], other: [] };
+  const code: TaskCode = selected ? taskCode(selected) : { branches: [], stacks: [], lonePrs: [] };
+  const hasCode = code.branches.length + code.stacks.length + code.lonePrs.length > 0;
   const sidebarGroups: { label: string; tasks: Task[] }[] =
     groupMode === 'tags'
       ? groupByTag(filtered).map((g) => ({ label: g.tag, tasks: g.tasks }))
@@ -1148,7 +1228,7 @@ export function TaskDetailView() {
             )}
 
             <SimpleGrid
-              cols={{ base: 1, md: slack.length + other.length > 0 && code.length > 0 ? 2 : 1 }}
+              cols={{ base: 1, md: slack.length + other.length > 0 && hasCode ? 2 : 1 }}
               spacing="lg"
               style={{ alignItems: 'start' }}
             >
@@ -1197,7 +1277,7 @@ export function TaskDetailView() {
                 </Box>
               )}
 
-              {code.length > 0 && (
+              {hasCode && (
                 <Box data-testid="code-lane">
                   <Box data-testid="code-section">
                     <Text
@@ -1212,8 +1292,12 @@ export function TaskDetailView() {
                       Code
                     </Text>
                     <Stack gap={8}>
-                      {code.map((unit) => (
-                        <CodeCard key={unit.pr?.id ?? unit.branch?.id} unit={unit} />
+                      {code.branches.length > 0 && <BranchesCard rows={code.branches} />}
+                      {code.stacks.map((stack, i) => (
+                        <PrStackCard key={`stack-${i}`} stack={stack} />
+                      ))}
+                      {code.lonePrs.map((pr) => (
+                        <LonePrCard key={pr.id} pr={pr} />
                       ))}
                     </Stack>
                   </Box>

@@ -88,17 +88,17 @@ describe('AppLayout sync', () => {
 
   it('counts the items and tasks in view', async () => {
     renderApp('/');
-    expect(await screen.findByText('6 items across 3 tasks')).toBeInTheDocument();
+    expect(await screen.findByText('8 items across 3 tasks')).toBeInTheDocument();
   });
 
   it('recounts as the search narrows the board', async () => {
     const user = userEvent.setup();
     renderApp('/');
 
-    await screen.findByText('6 items across 3 tasks');
+    await screen.findByText('8 items across 3 tasks');
     await user.type(screen.getByLabelText('Search'), 'bucket:auth');
 
-    await waitFor(() => expect(screen.getByText('2 items across 1 task')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('4 items across 1 task')).toBeInTheDocument());
   });
 
   it('focuses the search box on Cmd/Ctrl+K', async () => {

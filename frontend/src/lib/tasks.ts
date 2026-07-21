@@ -83,40 +83,102 @@ export function splitSlackItems(task: Task): { slack: Item[]; other: Item[] } {
 
 const CODE_SOURCES: Source[] = ['pr', 'branch'];
 
-/** A code reference in the task's Code lane: a PR, a local branch, or the two joined when
- *  the branch is the one the PR was pushed from. At least one of the two is always set. */
-export interface CodeUnit {
-  pr: Item | null;
-  branch: Item | null;
+/** The Activity lane: Slack leads, the rest of the non-code items follow. PRs and branches
+ *  are pulled out into their own Code lane by `taskCode`. */
+export function splitTaskItems(task: Task): { slack: Item[]; other: Item[] } {
+  return {
+    slack: task.items.filter((item) => item.source === 'slack'),
+    other: task.items.filter(
+      (item) => item.source !== 'slack' && !CODE_SOURCES.includes(item.source),
+    ),
+  };
 }
 
-/** The task detail splits three ways: Slack leads the Activity lane, other non-code items
- *  follow it, and PRs and branches move to a Code lane — a PR joined to its local branch. */
-export function splitTaskItems(task: Task): {
-  slack: Item[];
-  other: Item[];
-  code: CodeUnit[];
-} {
-  const slack = task.items.filter((item) => item.source === 'slack');
-  const other = task.items.filter(
-    (item) => item.source !== 'slack' && !CODE_SOURCES.includes(item.source),
-  );
-  const prs = task.items.filter((item) => item.source === 'pr');
-  const branches = task.items.filter((item) => item.source === 'branch');
+/** A branch or PR at a depth in its git-spice stack — 0 is the base, deeper sits on top. */
+export interface StackRow<T> {
+  item: T;
+  depth: number;
+}
+export interface PrStack {
+  chain: string[];
+  rows: StackRow<Item>[];
+}
+/** The Code lane, arranged like a git-spice stack rather than a flat list: every local branch
+ *  in one tree, each PR stack as its own tree, and standalone PRs on their own. */
+export interface TaskCode {
+  branches: StackRow<Item>[];
+  stacks: PrStack[];
+  lonePrs: Item[];
+}
 
-  const joined = new Set<string>();
-  const code: CodeUnit[] = prs.map((pr) => {
-    const match = pr.head_branch
-      ? branches.find((b) => !joined.has(b.id) && b.branch === pr.head_branch)
-      : undefined;
-    if (match) joined.add(match.id);
-    return { pr, branch: match ?? null };
-  });
-  for (const branch of branches) {
-    if (!joined.has(branch.id)) code.push({ pr: null, branch });
+/** A branch's git-spice stack base — the bottom of its chain, which every branch in the same
+ *  stack shares. Null for a branch git-spice doesn't track. */
+function stackBase(branch: Item): string | null {
+  return branch.stack.length > 0 ? branch.stack[0] : null;
+}
+
+function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const k = key(item);
+    const bucket = groups.get(k);
+    if (bucket) bucket.push(item);
+    else groups.set(k, [item]);
+  }
+  return groups;
+}
+
+export function taskCode(task: Task): TaskCode {
+  const branches = task.items.filter((item) => item.source === 'branch');
+  const prs = task.items.filter((item) => item.source === 'pr');
+
+  // Branches sharing a stack base belong to one stack; a branch git-spice doesn't track stands
+  // alone. The full order is the longest chain in the group (the top branch carries the rest).
+  const branchGroups = groupBy(branches, (b) => stackBase(b) ?? `loose:${b.id}`);
+  const chains = new Map<string, string[]>();
+  for (const [key, group] of branchGroups) {
+    let chain: string[] = [];
+    for (const b of group) if (b.stack.length > chain.length) chain = b.stack;
+    chains.set(key, chain.length ? chain : group.map((b) => b.branch ?? b.id));
   }
 
-  return { slack, other, code };
+  const branchRows: StackRow<Item>[] = [];
+  for (const [key, group] of branchGroups) {
+    const order = chains.get(key)!;
+    const byName = new Map(group.map((b) => [b.branch, b]));
+    let depth = 0;
+    for (const name of order) {
+      const branch = byName.get(name);
+      if (branch) branchRows.push({ item: branch, depth: depth++ });
+    }
+    for (const b of group)
+      if (!order.includes(b.branch ?? '')) branchRows.push({ item: b, depth: depth++ });
+  }
+
+  // A PR belongs to the stack of the branch it was pushed from. Two or more PRs in the same
+  // stack make a tree; a PR alone (or one whose branch isn't a tracked stack) is on its own.
+  const branchByName = new Map(branches.map((b) => [b.branch, b]));
+  const prGroups = groupBy(prs, (pr) => {
+    const branch = pr.head_branch ? branchByName.get(pr.head_branch) : undefined;
+    return branch ? (stackBase(branch) ?? `loose:${branch.id}`) : `lone:${pr.id}`;
+  });
+
+  const stacks: PrStack[] = [];
+  const lonePrs: Item[] = [];
+  for (const [key, group] of prGroups) {
+    const chain = chains.get(key);
+    if (group.length >= 2 && chain) {
+      const rows = group
+        .map((pr) => ({ pr, at: chain.indexOf(pr.head_branch ?? '') }))
+        .sort((a, b) => a.at - b.at)
+        .map(({ pr }, depth) => ({ item: pr, depth }));
+      stacks.push({ chain, rows });
+    } else {
+      lonePrs.push(...group);
+    }
+  }
+
+  return { branches: branchRows, stacks, lonePrs };
 }
 
 /** The dot colour source for a sidebar row: Slack if present, else the first item. */

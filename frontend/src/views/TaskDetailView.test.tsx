@@ -151,36 +151,36 @@ describe('TaskDetailView', () => {
     ).toBeInTheDocument();
   });
 
-  it('joins a PR to the local branch it was pushed from, in one Code card', async () => {
+  it('gathers the branches into one card and the PR stack into another', async () => {
     renderApp(detailRoute(AUTH_TASK_ID));
 
     const detail = await panel();
-    const codeLane = within(detail).getByTestId('code-lane');
-    // The PR and its branch collapse into a single code card, not two.
-    const cards = within(codeLane).getAllByTestId('code-item');
-    expect(cards).toHaveLength(1);
 
-    const card = cards[0];
+    // Every local branch reads once, in a single Branches card.
+    const branches = within(detail).getByTestId('branches-card');
+    expect(within(branches).getByText('dev/auth-base')).toBeInTheDocument();
+    expect(within(branches).getByText('dev/auth-session-timeout')).toBeInTheDocument();
+
+    // Both PRs of the stack sit in one code card, not two.
+    const codeItems = within(detail).getAllByTestId('code-item');
+    expect(codeItems).toHaveLength(1);
+    const stack = codeItems[0];
+    expect(within(stack).getByText('feat(auth): base session store')).toBeInTheDocument();
     expect(
-      within(card).getByText('fix(auth): rotate refresh tokens on scope change'),
+      within(stack).getByText('fix(auth): rotate refresh tokens on scope change'),
     ).toBeInTheDocument();
-    // The joined branch rides underneath, tagged local, with its git-spice stack (where the
-    // branch name shows again, hence getAllByText).
-    expect(within(card).getAllByText('dev/auth-session-timeout').length).toBeGreaterThan(0);
-    expect(within(card).getByText('local')).toBeInTheDocument();
-    expect(within(card).getByText('dev/auth-base')).toBeInTheDocument();
+    expect(within(stack).getByText('git-spice stack')).toBeInTheDocument();
   });
 
   it('flags a filed branch as deleted once the source stops reporting it', async () => {
     const auth = db.tasks.find((t) => t.id === AUTH_TASK_ID)!;
-    auth.items.find((i) => i.source === 'branch')!.gone = true;
+    auth.items.find((i) => i.branch === 'dev/auth-session-timeout')!.gone = true;
     renderApp(detailRoute(AUTH_TASK_ID));
 
     const detail = await panel();
-    const card = within(detail).getByTestId('code-item');
-    // The joined branch line reads "deleted" instead of "local".
-    expect(within(card).getByText('deleted')).toBeInTheDocument();
-    expect(within(card).queryByText('local')).not.toBeInTheDocument();
+    const branches = within(detail).getByTestId('branches-card');
+    expect(within(branches).getByText('deleted')).toBeInTheDocument();
+    expect(within(branches).getByText('dev/auth-session-timeout')).toBeInTheDocument();
   });
 
   it('links an item out to its url in a new tab', async () => {

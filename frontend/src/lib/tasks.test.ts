@@ -7,6 +7,7 @@ import {
   primarySource,
   splitSlackItems,
   splitTaskItems,
+  taskCode,
   taskIdFromParam,
   taskPath,
   uniqueSources,
@@ -96,32 +97,50 @@ describe('splitSlackItems', () => {
 });
 
 describe('splitTaskItems', () => {
-  it('keeps Slack and non-code items in the Activity lane, PRs and branches in Code', () => {
-    const { slack, other, code } = splitTaskItems(stripe);
+  it('keeps Slack and non-code items in the Activity lane, PRs and branches out', () => {
+    const { slack, other } = splitTaskItems(stripe);
     expect(slack.map((i) => i.source)).toEqual(['slack']);
     // The PR moved to the Code lane; only the non-code item is left in Activity.
     expect(other.map((i) => i.source)).toEqual(['todo']);
-    expect(code).toHaveLength(1);
-    expect(code[0].pr?.source).toBe('pr');
-    expect(code[0].branch).toBeNull();
+  });
+});
+
+describe('taskCode', () => {
+  it('puts a lone PR with no branch on its own, and lists no branches', () => {
+    const { branches, stacks, lonePrs } = taskCode(stripe);
+    expect(branches).toHaveLength(0);
+    expect(stacks).toHaveLength(0);
+    expect(lonePrs.map((p) => p.id)).toEqual(['pr:acme/webapp:1201']);
   });
 
-  it('joins a branch to the PR whose head branch it is', () => {
-    const { code } = splitTaskItems(auth);
-    expect(code).toHaveLength(1);
-    expect(code[0].pr?.id).toBe('pr:acme/webapp:1188');
-    expect(code[0].branch?.branch).toBe('dev/auth-session-timeout');
+  it('gathers every branch into one tree, base first', () => {
+    const { branches } = taskCode(auth);
+    expect(branches.map((r) => [r.item.branch, r.depth])).toEqual([
+      ['dev/auth-base', 0],
+      ['dev/auth-session-timeout', 1],
+    ]);
   });
 
-  it('leaves a branch with no matching PR standing on its own', () => {
-    const orphanBranch: Task = {
+  it('groups a stack of PRs into one tree, ordered base to top', () => {
+    const { stacks, lonePrs } = taskCode(auth);
+    expect(lonePrs).toHaveLength(0);
+    expect(stacks).toHaveLength(1);
+    expect(stacks[0].rows.map((r) => [r.item.id, r.depth])).toEqual([
+      ['pr:acme/webapp:1187', 0],
+      ['pr:acme/webapp:1188', 1],
+    ]);
+  });
+
+  it('treats a PR whose branch is a lone one as a lone PR, not a stack', () => {
+    const soloBranch: Task = {
       ...auth,
-      items: [{ ...auth.items[1], head_branch: null }],
+      items: auth.items.filter(
+        (i) => i.branch !== 'dev/auth-base' && i.head_branch !== 'dev/auth-base',
+      ),
     };
-    const { code } = splitTaskItems(orphanBranch);
-    expect(code).toHaveLength(1);
-    expect(code[0].pr).toBeNull();
-    expect(code[0].branch?.branch).toBe('dev/auth-session-timeout');
+    const { stacks, lonePrs } = taskCode(soloBranch);
+    expect(stacks).toHaveLength(0);
+    expect(lonePrs.map((p) => p.id)).toEqual(['pr:acme/webapp:1188']);
   });
 });
 

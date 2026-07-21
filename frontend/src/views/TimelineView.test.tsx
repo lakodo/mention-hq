@@ -7,10 +7,10 @@ describe('TimelineView', () => {
   it('shows every item, whether or not it is on a task', async () => {
     renderApp('/timeline');
 
-    // Six items live on the fixture's tasks; catch-up adds one more that isn't on any
+    // Eight items live on the fixture's tasks; catch-up adds one more that isn't on any
     // (the other catch-up item is the same branch already filed under the Auth task).
-    await waitFor(() => expect(screen.getAllByTestId('timeline-row')).toHaveLength(7));
-    expect(screen.getByText('7 items, most recent first')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByTestId('timeline-row')).toHaveLength(9));
+    expect(screen.getByText('9 items, most recent first')).toBeInTheDocument();
   });
 
   it('shows each row with its source and item label', async () => {
