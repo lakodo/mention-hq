@@ -1,9 +1,50 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Only in a real build — under vitest the service worker has nothing to do and would
+    // only add noise. autoUpdate rolls a new build straight through: no "reload to update"
+    // prompt, which is what you want for a tool you keep open and rebuild often.
+    ...(process.env.VITEST
+      ? []
+      : [
+          VitePWA({
+            registerType: 'autoUpdate',
+            injectRegister: 'auto',
+            includeAssets: ['icon.svg', 'icon-maskable.svg'],
+            manifest: {
+              name: 'Personal HQ',
+              short_name: 'HQ',
+              description:
+                'Your activity across GitHub, Linear, Slack, Notion and local files, grouped by subject.',
+              start_url: '/',
+              scope: '/',
+              display: 'standalone',
+              theme_color: '#ffffff',
+              background_color: '#f8f9fa',
+              icons: [
+                { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+                {
+                  src: 'icon-maskable.svg',
+                  sizes: 'any',
+                  type: 'image/svg+xml',
+                  purpose: 'maskable',
+                },
+              ],
+            },
+            workbox: {
+              globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
+              // The API is data, never the app shell: a client-side route falls back to
+              // index.html, but an /api path must always reach the backend over the network.
+              navigateFallbackDenylist: [/^\/api\//],
+            },
+          }),
+        ]),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
