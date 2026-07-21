@@ -560,7 +560,7 @@ export const handlers = [
     if (!source) return notFound(`No source: ${String(params.id)}`);
     const isSet = (key: string) => source.fields.find((f) => f.key === key)?.is_set ?? false;
     return HttpResponse.json({
-      redirect_uri: 'http://jojohq/api/admin/oauth/notion/callback',
+      redirect_uri: 'http://hq.example/api/admin/oauth/notion/callback',
       connected: isSet('token'),
       oauth_ready: isSet('client_id') && isSet('client_secret'),
     });
@@ -579,7 +579,7 @@ export const handlers = [
     if (!source) return notFound(`No source: ${String(params.id)}`);
     const isSet = (key: string) => source.fields.find((f) => f.key === key)?.is_set ?? false;
     return HttpResponse.json({
-      redirect_uri: 'http://jojohq/api/admin/oauth/notion-mcp/callback',
+      redirect_uri: 'http://hq.example/api/admin/oauth/notion-mcp/callback',
       connected: isSet('token'),
       oauth_ready: true,
     });

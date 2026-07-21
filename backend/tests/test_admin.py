@@ -101,11 +101,13 @@ class TestNotionOAuth:
     async def test_info_detects_the_redirect_uri_from_the_browser_origin(self, client, db, isolated_secrets):
         await _add_notion_oauth(db, isolated_secrets)
 
-        response = await client.get("/api/admin/sources/notion-x/notion", headers={"Origin": "http://jojohq"})
+        response = await client.get(
+            "/api/admin/sources/notion-x/notion", headers={"Origin": "http://hq.example"}
+        )
 
         assert response.status_code == 200, response.text
         body = response.json()
-        assert body["redirect_uri"] == "http://jojohq/api/admin/oauth/notion/callback"
+        assert body["redirect_uri"] == "http://hq.example/api/admin/oauth/notion/callback"
         assert body["oauth_ready"] is True
         assert body["connected"] is False
 
@@ -115,7 +117,7 @@ class TestNotionOAuth:
         await _add_notion_oauth(db, isolated_secrets)
 
         response = await client.post(
-            "/api/admin/sources/notion-x/notion/authorize", headers={"Origin": "http://jojohq"}
+            "/api/admin/sources/notion-x/notion/authorize", headers={"Origin": "http://hq.example"}
         )
 
         assert response.status_code == 200, response.text
@@ -123,7 +125,7 @@ class TestNotionOAuth:
         assert url.startswith("https://api.notion.com/v1/oauth/authorize")
         query = parse_qs(urlparse(url).query)
         assert query["client_id"] == ["cid"]
-        assert query["redirect_uri"] == ["http://jojohq/api/admin/oauth/notion/callback"]
+        assert query["redirect_uri"] == ["http://hq.example/api/admin/oauth/notion/callback"]
         assert query["state"], "a state nonce ties the callback back to this source"
 
     async def test_callback_exchanges_the_code_and_stores_the_token(
@@ -131,13 +133,13 @@ class TestNotionOAuth:
     ):
         await _add_notion_oauth(db, isolated_secrets)
         authorize = await client.post(
-            "/api/admin/sources/notion-x/notion/authorize", headers={"Origin": "http://jojohq"}
+            "/api/admin/sources/notion-x/notion/authorize", headers={"Origin": "http://hq.example"}
         )
         state = parse_qs(urlparse(authorize.json()["authorize_url"]).query)["state"][0]
 
         async def fake_exchange(self, code, redirect_uri):
             assert code == "abc"
-            assert redirect_uri == "http://jojohq/api/admin/oauth/notion/callback"
+            assert redirect_uri == "http://hq.example/api/admin/oauth/notion/callback"
             return {"token": "ntn_new", "user_id": "me", "refresh_token": "r2"}
 
         monkeypatch.setattr("app.sources.notion.NotionSource.exchange_code", fake_exchange)
@@ -146,7 +148,7 @@ class TestNotionOAuth:
 
         assert callback.status_code == 200
         assert isolated_secrets.get("notion-x", "token") == "ntn_new"
-        info = await client.get("/api/admin/sources/notion-x/notion", headers={"Origin": "http://jojohq"})
+        info = await client.get("/api/admin/sources/notion-x/notion", headers={"Origin": "http://hq.example"})
         assert info.json()["connected"] is True
 
     async def test_callback_rejects_a_state_it_never_issued(self, client, db, isolated_secrets):
@@ -160,7 +162,7 @@ class TestNotionOAuth:
     async def test_a_used_state_cannot_be_replayed(self, client, db, isolated_secrets, monkeypatch):
         await _add_notion_oauth(db, isolated_secrets)
         authorize = await client.post(
-            "/api/admin/sources/notion-x/notion/authorize", headers={"Origin": "http://jojohq"}
+            "/api/admin/sources/notion-x/notion/authorize", headers={"Origin": "http://hq.example"}
         )
         state = parse_qs(urlparse(authorize.json()["authorize_url"]).query)["state"][0]
 
@@ -184,12 +186,12 @@ class TestNotionMcpOAuth:
         await db.commit()
 
         response = await client.get(
-            "/api/admin/sources/notion_mcp-x/notion-mcp", headers={"Origin": "http://jojohq"}
+            "/api/admin/sources/notion_mcp-x/notion-mcp", headers={"Origin": "http://hq.example"}
         )
 
         assert response.status_code == 200, response.text
         body = response.json()
-        assert body["redirect_uri"] == "http://jojohq/api/admin/oauth/notion-mcp/callback"
+        assert body["redirect_uri"] == "http://hq.example/api/admin/oauth/notion-mcp/callback"
         # Nothing to paste — Connect registers HQ itself — so it is ready with no config.
         assert body["oauth_ready"] is True
         assert body["connected"] is False
@@ -203,7 +205,7 @@ class TestNotionMcpOAuth:
         )
 
         response = await client.post(
-            "/api/admin/sources/notion_mcp-x/notion-mcp/authorize", headers={"Origin": "http://jojohq"}
+            "/api/admin/sources/notion_mcp-x/notion-mcp/authorize", headers={"Origin": "http://hq.example"}
         )
 
         assert response.status_code == 200, response.text
@@ -228,7 +230,7 @@ class TestNotionMcpOAuth:
             )
         )
         authorize = await client.post(
-            "/api/admin/sources/notion_mcp-x/notion-mcp/authorize", headers={"Origin": "http://jojohq"}
+            "/api/admin/sources/notion_mcp-x/notion-mcp/authorize", headers={"Origin": "http://hq.example"}
         )
         state = parse_qs(urlparse(authorize.json()["authorize_url"]).query)["state"][0]
 

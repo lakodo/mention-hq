@@ -867,7 +867,7 @@ class TestNotion:
             )
         )
 
-        updates = await source.exchange_code("code123", "http://jojohq/api/admin/oauth/notion/callback")
+        updates = await source.exchange_code("code123", "http://hq.example/api/admin/oauth/notion/callback")
 
         assert updates["token"] == "ntn_new"
         assert updates["refresh_token"] == "refresh_1"
@@ -995,7 +995,7 @@ class TestNotionMcp:
             return_value=httpx.Response(200, json={"client_id": "cid-1"})
         )
 
-        client_id = await notion_mcp.register_client("http://jojohq/api/admin/oauth/notion-mcp/callback")
+        client_id = await notion_mcp.register_client("http://hq.example/api/admin/oauth/notion-mcp/callback")
 
         assert client_id == "cid-1"
         # No secret is requested — it registers as a public client that uses PKCE.
@@ -1009,7 +1009,7 @@ class TestNotionMcp:
             )
         )
 
-        updates = await notion_mcp.exchange_code("code", "http://jojohq/cb", "verifier", "cid-1")
+        updates = await notion_mcp.exchange_code("code", "http://hq.example/cb", "verifier", "cid-1")
 
         assert updates["token"] == "tok"
         assert updates["refresh_token"] == "ref"

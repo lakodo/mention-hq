@@ -367,11 +367,11 @@ async def test_manifest_carries_the_configured_app_name(client):
     assert default.headers["content-type"].startswith("application/manifest+json")
     assert default.json()["name"] == "Personal HQ"
 
-    await client.patch("/api/admin/settings", json={"app_name": "Jojo HQ!"})
+    await client.patch("/api/admin/settings", json={"app_name": "My HQ"})
 
     body = (await client.get("/api/manifest.webmanifest")).json()
-    assert body["name"] == "Jojo HQ!"
-    assert body["short_name"] == "Jojo HQ!"
+    assert body["name"] == "My HQ"
+    assert body["short_name"] == "My HQ"
     assert body["display"] == "standalone"
     assert {icon["purpose"] for icon in body["icons"]} == {"any", "maskable"}
 

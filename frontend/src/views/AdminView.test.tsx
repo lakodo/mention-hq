@@ -382,7 +382,7 @@ describe('AdminView', () => {
 
     const card = await screen.findByTestId('source-card-notion-notion');
     expect(
-      await within(card).findByText('http://jojohq/api/admin/oauth/notion/callback'),
+      await within(card).findByText('http://hq.example/api/admin/oauth/notion/callback'),
     ).toBeInTheDocument();
 
     const connect = within(card).getByRole('button', { name: 'Connect to Notion' });
@@ -423,7 +423,7 @@ describe('AdminView', () => {
 
     const card = await screen.findByTestId('source-card-notion_mcp-mcp');
     expect(
-      await within(card).findByText('http://jojohq/api/admin/oauth/notion-mcp/callback'),
+      await within(card).findByText('http://hq.example/api/admin/oauth/notion-mcp/callback'),
     ).toBeInTheDocument();
 
     // No client ID/secret needed — the MCP flow registers HQ itself, so Connect is live.
