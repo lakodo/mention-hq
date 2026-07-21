@@ -52,3 +52,9 @@ devbox.d/
 
 # Local database backups
 backups/
+
+# Generated logo proposals — re-run snippets/logo_generation.py to rebuild
+mention-hq-logo-proposals/
+
+# vite-plugin-pwa dev service worker output
+frontend/dev-dist/
