@@ -4,6 +4,34 @@ All notable changes to Personal HQ are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-21 — "GitHubris"
+
+### Added
+
+- **Local Git branches, with git-spice stacks.** The Local Git source reads
+  [git-spice](https://github.com/abhinav/git-spice) stack state straight from the repo's refs
+  and draws each stacked branch as a trail — the whole downstack chain, with the branch you're
+  on highlighted. Repo paths can be filled by browsing the filesystem instead of typed, with
+  git repositories marked.
+- **The task screen splits into two lanes.** Slack and the rest of your activity on the left, a
+  **Code** lane on the right for PRs and branches — where a PR and the local branch it was
+  pushed from collapse into a single card. The detail also uses the width it has.
+- **Install HQ as an app.** A web manifest and service worker make HQ a PWA: install it and it
+  opens in its own standalone window, outside the browser. It works from `task dev` behind the
+  Caddy HTTPS proxy — the way HQ actually runs — not just a production build.
+- **A welcome screen behind the logo.** Clicking the app title lands on a home: a greeting, a
+  catch-up call-to-action with the count when the inbox has items, and your five highest-priority
+  tasks, each a shortcut to its detail.
+- **A deleted branch reads as gone.** A branch you filed on a task and later delete locally is
+  struck through and pilled **deleted** rather than lingering as if it were still live — attached
+  branches included, since sync keeps them. A recreated branch clears the flag.
+
+### Fixed
+
+- An item you've attached no longer returns to catch-up when it gathers new activity. A branch
+  you filed picking up commits — or any filed item that moves — stays put; only items you
+  haven't filed still resurface on new activity.
+
 ## [1.0.1] - 2026-07-20
 
 ### Added
@@ -89,5 +117,6 @@ deliberate action you take — never as a side effect of a sync.
   (`tls internal`), which also makes strict OAuth redirect URIs work.
 - **Auto-sync** runs hourly in the background; a manual Sync button is always there.
 
+[1.1.0]: https://github.com/lakodo/mention-hq/releases/tag/v1.1.0
 [1.0.1]: https://github.com/lakodo/mention-hq/releases/tag/v1.0.1
 [1.0.0]: https://github.com/lakodo/mention-hq/releases/tag/v1.0.0

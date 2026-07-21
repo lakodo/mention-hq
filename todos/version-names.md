@@ -9,7 +9,7 @@ context back together. **v1.0.0 = "Notion Sickness".**
 | Asana Matata | Asana | "Hakuna Matata" — no worries, nothing slips through the cracks. |
 | Linear B | Linear | The ancient script that got *deciphered* — what HQ does to scattered activity. |
 | Confluenza | Confluence | "Influenza" — the contagious sprawl of docs and threads, under control. |
-| GitHubris | GitHub | "Hubris" — the confidence of knowing everything you're mentioned in. |
+| **GitHubris** ✅ v1.1.0 | GitHub | "Hubris" — the confidence of knowing everything you're mentioned in. |
 | Miro Miro | Miro | "Mirror, mirror on the wall" — HQ reflects your whole work life back. |
 | Case of the Mondays | Monday.com | The Office Space line — the Monday "what was I doing?" that catch-up fixes. |
 | Figment | Figma | "A figment of imagination" — except every mention here is real and accounted for. |
