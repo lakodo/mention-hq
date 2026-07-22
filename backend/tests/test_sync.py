@@ -15,8 +15,9 @@ from sqlalchemy import select
 from app.config import Settings
 from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, SourceInstance, SyncLog, Task
 from app.services import sync as sync_module
+from app.services.app_config import set_auto_sync
 from app.services.sources_factory import Connected
-from app.services.sync import sync_all
+from app.services.sync import scheduled_sync, sync_all, sync_lock
 from app.sources.base import RawItem, Source
 
 
@@ -208,6 +209,31 @@ async def test_a_sync_refreshes_an_attached_item_from_a_refresh_only_fetch(db, s
     assert {i.id for i in items} == {"pr:acme~api~1"}, "the attached item stays"
     assert items[0].label == "Now merged", "and is refreshed from the merged fetch"
     assert items[0].extra["status"] == "merged"
+
+
+async def test_scheduled_sync_runs_only_when_auto_sync_is_on(db, settings, use_sources, item, monkeypatch):
+    """The backend auto-sync tick syncs when the setting is on and skips when it's off, so
+    turning auto-sync off in the UI actually stops the background sync."""
+    monkeypatch.setattr(sync_module, "schedule_auto_match", lambda drain=False: None)
+    use_sources(FakeSource([item("pr", "acme~api~1")]))
+
+    assert await scheduled_sync(db, settings) is False, "off by default"
+    assert await _items(db) == []
+
+    await set_auto_sync(db, True)
+    await db.commit()
+
+    assert await scheduled_sync(db, settings) is True
+    assert len(await _items(db)) == 1
+
+
+async def test_scheduled_sync_yields_when_a_sync_is_already_running(db, settings):
+    """It shares one lock with the manual endpoint, so it skips rather than doubling a run."""
+    await set_auto_sync(db, True)
+    await db.commit()
+
+    async with sync_lock:
+        assert await scheduled_sync(db, settings) is False
 
 
 async def _row(db, item_id: str) -> Item:

@@ -14,7 +14,7 @@ from app.config import get_settings
 from app.database import SessionLocal, get_db
 from app.routers import admin, buckets, catchup, items, people, sync, tasks, triage
 from app.services.app_config import get_app_name
-from app.services.sync import sync_all
+from app.services.sync import scheduled_sync, sync_all
 
 log = structlog.get_logger(__name__)
 
@@ -23,13 +23,20 @@ log = structlog.get_logger(__name__)
 async def lifespan(app: FastAPI):
     settings = get_settings()
     background: set[asyncio.Task] = set()
-    if settings.sync_on_startup:
-        # asyncio only holds a weak reference to running tasks, so a task nobody keeps
-        # can be garbage-collected mid-flight. Hold it until it finishes.
-        task = asyncio.create_task(_startup_sync())
+
+    def spawn(coro) -> None:
+        # asyncio only holds a weak reference to running tasks, so a task nobody keeps can be
+        # garbage-collected mid-flight. Hold it until it finishes (or we cancel it).
+        task = asyncio.create_task(coro)
         background.add(task)
         task.add_done_callback(background.discard)
+
+    if settings.sync_on_startup:
+        spawn(_startup_sync())
+    spawn(_auto_sync_loop())
     yield
+    for task in background:
+        task.cancel()
 
 
 async def _startup_sync() -> None:
@@ -40,6 +47,20 @@ async def _startup_sync() -> None:
             log.info("startup_sync_done", added=result.tasks_added, updated=result.tasks_updated)
         except Exception as exc:
             log.warning("startup_sync_failed", error=str(exc))
+
+
+async def _auto_sync_loop() -> None:
+    """Backend auto-sync: every interval, sync if the setting is on. Backend-driven so it runs
+    whether or not a browser tab is open — the client only persists the on/off setting."""
+    settings = get_settings()
+    while True:
+        await asyncio.sleep(settings.auto_sync_interval_seconds)
+        try:
+            async with SessionLocal() as db:
+                if await scheduled_sync(db, settings):
+                    log.info("auto_sync_done")
+        except Exception as exc:
+            log.warning("auto_sync_failed", error=str(exc))
 
 
 app = FastAPI(title="Mention HQ", version="0.1.0", lifespan=lifespan)

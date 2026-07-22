@@ -28,12 +28,32 @@ from app.engine import TaskView
 from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, SyncLog, Task
 from app.schemas import SyncResult, SyncSourceResult
 from app.services import ai, triage
+from app.services.app_config import get_auto_sync
 from app.services.buckets import load_matcher
 from app.services.people import DbDirectory, record_people
 from app.services.sources_factory import Connected, build_connected, persist_config
 from app.sources.base import STATUS_PRIORITY, TITLE_PRIORITY, RawItem
 
 log = structlog.get_logger(__name__)
+
+# One sync at a time. Run two at once and each snapshots the DB before the other commits, so
+# both try to insert the same item ids and the loser hits `UNIQUE constraint failed: items.id`
+# — the end state was never at risk, but the run is, plus the doubled rate-limited API calls.
+# One process serves this app, so an in-process lock covers it. Shared by the manual endpoint
+# and the background auto-sync so the two never overlap.
+sync_lock = asyncio.Lock()
+
+
+async def scheduled_sync(db: AsyncSession, settings: Settings) -> bool:
+    """One auto-sync tick: sync if the setting is on and nothing else is mid-sync. Returns
+    whether a sync ran, so a skip is told apart from a run. Unlike the manual endpoint it
+    yields rather than 409s when a sync is already in flight — that run refreshes the same data."""
+    if sync_lock.locked() or not await get_auto_sync(db):
+        return False
+    async with sync_lock:
+        await sync_all(db, settings)
+    return True
+
 
 # A proposal this strong stands in for a task of the item's own. Below it, the item gets
 # its own task and keeps the proposal as a suggestion — so a weak candidate is something to
@@ -114,7 +134,10 @@ async def sync_all(db: AsyncSession, settings: Settings, only: str | None = None
     _write_log(db, outcomes, result, started_at, duration)
     await db.commit()
 
-    schedule_auto_match()
+    # Always try to match what just came in: drain the inbox rather than a single batch, so
+    # new items land with a proposal ready without waiting for a manual "Match all". Only
+    # un-matched items are considered, so this stays bounded to fresh arrivals.
+    schedule_auto_match(drain=True)
 
     return SyncResult(
         sources_synced=[o.name for o in outcomes if o.authoritative],

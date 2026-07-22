@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     frontend_dist: Path = BACKEND_DIR.parent / "frontend" / "dist"
 
     sync_on_startup: bool = False
+    # How often the backend runs an auto-sync when the setting is on. Backend-driven, so it
+    # fires whether or not a browser tab is open — unlike a client timer.
+    auto_sync_interval_seconds: int = 1200  # 20 minutes
     cors_origins: str = "http://localhost:13001"
 
     # Binding beyond loopback would expose an unauthenticated API that can read your
