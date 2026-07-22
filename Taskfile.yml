@@ -102,3 +102,13 @@ tasks:
     desc: Install the git pre-commit hooks
     cmds:
       - uv run --with pre-commit pre-commit install
+
+  docs:serve:
+    desc: Preview the docs site locally (Zensical) — http://localhost:8000
+    cmds:
+      - uvx zensical@0.0.51 serve
+
+  docs:build:
+    desc: Build the docs site into site/ (what CI publishes to GitHub Pages)
+    cmds:
+      - uvx zensical@0.0.51 build

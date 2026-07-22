@@ -58,3 +58,6 @@ mention-hq-logo-proposals/
 
 # vite-plugin-pwa dev service worker output
 frontend/dev-dist/
+
+# Zensical docs build output — CI rebuilds it for GitHub Pages
+/site/
