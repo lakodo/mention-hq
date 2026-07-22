@@ -19,6 +19,7 @@ import {
   Stack,
   Text,
   TextInput,
+  Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
@@ -70,10 +71,19 @@ function confidenceLabel(confidence: number): string {
   return `${Math.round(confidence * 100)}% confident`;
 }
 
+// A tracker state's normalised kind → a Mantine palette colour for its badge.
+const STATUS_KIND_COLOR: Record<string, string> = {
+  open: 'blue',
+  in_progress: 'orange',
+  merged: 'green',
+  done: 'gray',
+};
+
 interface LinkRowProps {
   link: Link;
   busy: boolean;
   onConfirm: () => void;
+  onConfirmAttach: () => void;
   onReject: () => void;
 }
 
@@ -142,7 +152,7 @@ function TaskPreviewPopover({ taskId }: { taskId: string }) {
  * A proposal has to be arguable, so the engine's reason and confidence are shown
  * next to the decision rather than behind it.
  */
-function LinkRow({ link, busy, onConfirm, onReject }: LinkRowProps) {
+function LinkRow({ link, busy, onConfirm, onConfirmAttach, onReject }: LinkRowProps) {
   const meta = LINK_STATE_META[link.state];
   const isProposed = link.state === 'proposed';
 
@@ -175,9 +185,21 @@ function LinkRow({ link, busy, onConfirm, onReject }: LinkRowProps) {
         </Box>
 
         {isProposed && (
+          // Confirm stages the task in the attach box so you can add more before filing;
+          // Confirm & attach files it onto this one task straight away — one click when the
+          // item belongs to a single task.
           <Group gap={6} wrap="nowrap">
             <Button size="xs" variant="light" color="teal" disabled={busy} onClick={onConfirm}>
               Confirm
+            </Button>
+            <Button
+              size="xs"
+              variant="filled"
+              color="teal"
+              disabled={busy}
+              onClick={onConfirmAttach}
+            >
+              Confirm &amp; attach
             </Button>
             <Button size="xs" variant="subtle" color="red" disabled={busy} onClick={onReject}>
               Reject
@@ -212,12 +234,21 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
   const [bucket, setBucket] = useState<string | null>(null);
   const [priority, setPriority] = useState(50);
 
+  // "Ignore" seeds a triage rule from the item you're looking at — its source and label —
+  // so a skip-this-kind-of-thing rule is one edit away instead of a blank form.
+  const [ignoreOpen, setIgnoreOpen] = useState(false);
+  const [ignoreValue, setIgnoreValue] = useState(item.label);
+  const [ignoreCondition, setIgnoreCondition] = useState<'starts_with' | 'contains'>('contains');
+  const [ignoreSources, setIgnoreSources] = useState<string[]>([item.source]);
+  const [ignoreName, setIgnoreName] = useState('');
+
   const { data: emojiMap = {} } = useEmojiMap();
   const confirm = useConfirmLinks();
   const reject = useRejectLink();
   const triage = useTriageItem();
   const unSkip = useUnSkipItem();
   const createTask = useCreateTaskFromItem();
+  const createRule = useCreateTriageRule();
   const suggest = useSuggestItemTasks();
 
   const busy =
@@ -290,6 +321,32 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
     );
   };
 
+  const submitIgnore = () => {
+    if (!ignoreValue.trim()) return;
+    createRule.mutate(
+      {
+        name: ignoreName.trim(),
+        sources: ignoreSources,
+        condition: ignoreCondition,
+        value: ignoreValue.trim(),
+      },
+      {
+        onSuccess: () => {
+          setIgnoreOpen(false);
+          // The rule only filters future syncs, so skip this item now — "ignore" should clear
+          // what you're looking at, not just its lookalikes.
+          triage.mutate({ itemId: item.id, triaged: true }, { onError: fail });
+          notifications.show({
+            title: 'Ignored',
+            message: 'Rule added — items like this are skipped from now on.',
+            color: 'teal',
+          });
+        },
+        onError: fail,
+      },
+    );
+  };
+
   return (
     <Card withBorder radius="md" p="md" data-testid="catchup-card">
       <Group gap={8} wrap="nowrap" mb={4}>
@@ -342,6 +399,17 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
           size="xs"
         />
       )}
+      {item.item_status && (
+        <Badge
+          size="xs"
+          variant="light"
+          radius="sm"
+          mt={4}
+          color={STATUS_KIND_COLOR[item.item_status_kind ?? ''] ?? 'gray'}
+        >
+          {item.item_status}
+        </Badge>
+      )}
       {item.people.length > 0 && (
         <Box mt={6}>
           <PeopleStrip people={item.people} />
@@ -356,6 +424,7 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
               link={link}
               busy={busy}
               onConfirm={() => setSelected((prev) => [...new Set([...prev, link.task.id])])}
+              onConfirmAttach={() => attach([link.task.id])}
               onReject={() =>
                 reject.mutate({ itemId: item.id, taskId: link.task.id }, { onError: fail })
               }
@@ -415,15 +484,29 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
             Un-skip
           </Button>
         ) : (
-          <Button
-            size="sm"
-            variant="subtle"
-            color="gray"
-            disabled={busy}
-            onClick={() => triage.mutate({ itemId: item.id, triaged: true }, { onError: fail })}
-          >
-            Skip
-          </Button>
+          <>
+            <Tooltip label="Ignore items like this" withArrow>
+              <ActionIcon
+                size="lg"
+                variant="subtle"
+                color="gray"
+                aria-label="Ignore items like this"
+                disabled={busy}
+                onClick={() => setIgnoreOpen(true)}
+              >
+                <IconFilterPlus size={17} />
+              </ActionIcon>
+            </Tooltip>
+            <Button
+              size="sm"
+              variant="subtle"
+              color="gray"
+              disabled={busy}
+              onClick={() => triage.mutate({ itemId: item.id, triaged: true }, { onError: fail })}
+            >
+              Skip
+            </Button>
+          </>
         )}
       </Group>
 
@@ -461,6 +544,62 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
             </Button>
             <Button onClick={submitNewTask} loading={createTask.isPending}>
               Create
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={ignoreOpen}
+        onClose={() => setIgnoreOpen(false)}
+        title="Ignore items like this"
+      >
+        <Stack gap="sm">
+          <Text fz="xs" c="dimmed">
+            A triage rule seeded from this item. Matching items are skipped automatically before
+            they reach the inbox on future syncs; this item is skipped now too.
+          </Text>
+          <Group grow align="flex-end">
+            <Select
+              label="When it"
+              data={[
+                { value: 'contains', label: 'contains' },
+                { value: 'starts_with', label: 'starts with' },
+              ]}
+              value={ignoreCondition}
+              onChange={(v) => setIgnoreCondition((v as 'starts_with' | 'contains') ?? 'contains')}
+            />
+            <TextInput
+              label="this text"
+              value={ignoreValue}
+              onChange={(e) => setIgnoreValue(e.currentTarget.value)}
+              data-autofocus
+            />
+          </Group>
+          <MultiSelect
+            label="In sources"
+            description="Leave empty to match every source"
+            data={SOURCE_KINDS}
+            value={ignoreSources}
+            onChange={setIgnoreSources}
+          />
+          <TextInput
+            label="Name (optional)"
+            placeholder="Ignore PR-bot posts"
+            value={ignoreName}
+            onChange={(e) => setIgnoreName(e.currentTarget.value)}
+          />
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={() => setIgnoreOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              leftSection={<IconFilterPlus size={15} />}
+              onClick={submitIgnore}
+              loading={createRule.isPending}
+              disabled={!ignoreValue.trim()}
+            >
+              Ignore
             </Button>
           </Group>
         </Stack>

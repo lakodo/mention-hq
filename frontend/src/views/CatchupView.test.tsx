@@ -307,6 +307,74 @@ describe('CatchupView', () => {
     await waitFor(() => expect(db.tasks.some((t) => t.title === 'Webhook retry storm')).toBe(true));
   });
 
+  it('confirms and attaches a proposal in one click, filing the item', async () => {
+    const user = userEvent.setup();
+    renderApp('/catchup');
+
+    const proposed = await screen.findByTestId('link-proposed');
+    await user.click(within(proposed).getByRole('button', { name: 'Confirm & attach' }));
+
+    await waitFor(() => {
+      const item = db.catchup.find((i) => i.id === SLACK_ITEM_ID);
+      expect(item?.triaged).toBe(true);
+      expect(item?.links.some((l) => l.state === 'confirmed')).toBe(true);
+    });
+  });
+
+  it('seeds a triage rule from an item and skips it', async () => {
+    const user = userEvent.setup();
+    renderApp('/catchup');
+
+    const cards = await screen.findAllByTestId('catchup-card');
+    await user.click(within(cards[0]).getByRole('button', { name: 'Ignore items like this' }));
+
+    // The rule form opens prefilled from the item — its label as the text to match.
+    const value = await screen.findByLabelText('this text');
+    expect(value).toHaveValue('thread: can someone look at the webhook retry storm?');
+
+    await user.click(screen.getByRole('button', { name: 'Ignore' }));
+
+    await waitFor(() => {
+      expect(
+        db.triageRules.some(
+          (r) => r.value === 'thread: can someone look at the webhook retry storm?',
+        ),
+      ).toBe(true);
+      expect(db.catchup.find((i) => i.id === SLACK_ITEM_ID)?.triaged).toBe(true);
+    });
+  });
+
+  it("shows a Linear item's tracker status", async () => {
+    db.catchup.push({
+      id: 'linear:DOC-1936',
+      source: 'linear',
+      label: 'Anonymize tool call cards & prompts in Vera',
+      url: 'https://linear.app/acme/issue/DOC-1936',
+      context: 'DOC-1936',
+      occurred_at: new Date().toISOString(),
+      triaged: false,
+      triage_reason: null,
+      triaged_at: null,
+      pr_status: null,
+      pr_review_requested: false,
+      item_status: 'In Progress',
+      item_status_kind: 'in_progress',
+      emoji: {},
+      stack: [],
+      branch: null,
+      head_branch: null,
+      gone: false,
+      people: [],
+      links: [],
+    });
+    renderApp('/catchup');
+
+    const card = (await screen.findByText('Anonymize tool call cards & prompts in Vera')).closest(
+      '[data-testid="catchup-card"]',
+    ) as HTMLElement;
+    expect(within(card).getByText('In Progress')).toBeInTheDocument();
+  });
+
   it('celebrates an empty inbox', async () => {
     server.use(http.get('http://localhost:8000/api/catchup', () => HttpResponse.json([])));
     renderApp('/catchup');

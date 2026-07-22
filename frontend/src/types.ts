@@ -43,6 +43,10 @@ export interface Item {
   triaged_at: string | null;
   pr_status: string | null;
   pr_review_requested: boolean;
+  /** A tracker's own state label, e.g. Linear's "In Progress" or "In Review". */
+  item_status?: string | null;
+  /** That state normalized to open/in_progress/done, so the UI can color it. */
+  item_status_kind?: Status | null;
   emoji: Record<string, string>;
   people: ItemPerson[];
   /** For a git-spice branch: the downstack chain from the base of the stack up to it. */
