@@ -77,6 +77,11 @@ BUCKETS = [
 REPO = "acme/platform"
 
 
+def _avatar(login: str) -> str:
+    """A stable, real-looking face per person — pravatar keys off the seed, so it never changes."""
+    return f"https://i.pravatar.cc/200?u={login}@acme.dev"
+
+
 class Builder:
     """Accumulates rows and wires their relationships, then hands them to a session."""
 
@@ -110,6 +115,7 @@ class Builder:
                         kind=kind,
                         value=value,
                         label=name,
+                        avatar_url=_avatar(login) if kind == "github" else None,
                     )
                 )
 
@@ -118,7 +124,7 @@ class Builder:
         for login in logins:
             name, slack = self.people_by_login[login]
             kind, value = ("slack", slack) if role == "mentioned" else ("github", login)
-            out.append({"kind": kind, "value": value, "name": name, "role": role})
+            out.append({"kind": kind, "value": value, "name": name, "role": role, "avatar": _avatar(login)})
         return out
 
     # --- buckets ----------------------------------------------------------------------
