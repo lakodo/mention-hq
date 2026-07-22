@@ -91,3 +91,15 @@ tasks:
     desc: Trigger a sync from the command line, without the UI
     cmds:
       - uv run python -m app.cli sync {{.CLI_ARGS}}
+
+  seed:
+    desc: Build a seeded demo database (hq-demo.db) — realistic data across every source
+    cmds:
+      - uv run python -m app.seed {{.CLI_ARGS}}
+
+  demo:
+    desc: Serve the app against the seeded demo DB on :13010 — never touches hq.db
+    cmds:
+      # Point DB_PATH at the demo file; the app serves the built SPA + API from it. Run
+      # `task back:seed` first (and `task front:build` for the UI).
+      - 'DB_PATH=hq-demo.db uv run uvicorn app.main:app --port 13010'

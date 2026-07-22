@@ -33,6 +33,7 @@ dev = [
   "respx>=0.22.0",
   "freezegun>=1.5.1",
   "ruff>=0.7",
+  "faker>=40.32.0",
 ]
 
 [tool.uv]
