@@ -1,4 +1,4 @@
-# Personal HQ — frontend
+# Mention HQ — frontend
 
 React 19 + Vite + Mantine (stock theme) + TanStack Query.
 

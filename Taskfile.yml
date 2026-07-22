@@ -20,7 +20,7 @@ tasks:
     cmds:
       - task: back:setup
       - task: front:setup
-      - echo "Personal HQ ready ✓  ->  task dev"
+      - echo "Mention HQ ready ✓  ->  task dev"
 
   dev:
     desc: Run backend (:13000) and frontend (:13001) together

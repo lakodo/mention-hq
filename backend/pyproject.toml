@@ -1,7 +1,7 @@
 [project]
 name = "hq-backend"
 version = "0.1.0"
-description = "Personal HQ — aggregates activity across Linear, Slack, GitHub and local files into topic buckets"
+description = "Mention HQ — aggregates activity across Linear, Slack, GitHub and local files into topic buckets"
 requires-python = "~=3.11.0"
 readme = "README.md"
 license = { text = "MIT" }

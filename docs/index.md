@@ -2,9 +2,9 @@
 icon: lucide/home
 ---
 
-# Personal HQ
+# Mention HQ
 
-**Personal HQ** aggregates your activity across GitHub, Linear, Slack, Notion and local files —
+**Mention HQ** aggregates your activity across GitHub, Linear, Slack, Notion and local files —
 git branches, todo files, markdown docs — and groups it into the subjects you actually work on,
 so you regain context on a topic fast instead of tab-hopping across ten tools.
 

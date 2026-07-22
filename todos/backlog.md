@@ -1,4 +1,4 @@
-# Personal HQ — working backlog
+# Mention HQ — working backlog
 
 Living backlog for the `feat/hq-foundation` branch. The "Shipped" list is a short pointer
 to what already works; the "To do" list is what's left, most-wanted first-ish. Each to-do

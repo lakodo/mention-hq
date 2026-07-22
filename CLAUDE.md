@@ -1,4 +1,4 @@
-# Personal HQ
+# Mention HQ
 
 A local web app that aggregates your activity across GitHub, Linear, Slack, Dust and local
 files (git branches, todo files, markdown docs) and groups it into topics, so you can regain

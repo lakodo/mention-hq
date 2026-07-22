@@ -1,4 +1,4 @@
-# Personal HQ — backend
+# Mention HQ — backend
 
 FastAPI + SQLAlchemy (async, SQLite). Owns the database, talks to the sources, and serves
 the API the frontend consumes.

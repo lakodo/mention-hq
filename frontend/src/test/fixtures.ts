@@ -344,7 +344,7 @@ export function makeSourceKinds(): SourceKind[] {
       setup: 'Create an app, add the search:read user scope, copy the User OAuth Token.',
       setup_url: 'https://api.slack.com/apps',
       manifest:
-        'display_information:\n  name: Personal HQ\noauth_config:\n  scopes:\n    user:\n      - search:read',
+        'display_information:\n  name: Mention HQ\noauth_config:\n  scopes:\n    user:\n      - search:read',
       manifest_hint: 'Slack \u2192 Create an app \u2192 From a manifest \u2192 paste this',
       detectable: false,
       needs_credentials: true,
@@ -529,7 +529,7 @@ export function makeSources(): SourceStatus[] {
       fields: slack,
       setup: 'Create an app, add the search:read user scope, copy the User OAuth Token.',
       setup_url: 'https://api.slack.com/apps',
-      manifest: 'display_information:\n  name: Personal HQ',
+      manifest: 'display_information:\n  name: Mention HQ',
       manifest_hint: 'Slack \u2192 From a manifest \u2192 paste this',
       detectable: false,
     },
@@ -574,7 +574,7 @@ export function makeSyncLog(): SyncLogEntry[] {
 
 export function makeSettings(): AppSettings {
   return {
-    app_name: 'Personal HQ',
+    app_name: 'Mention HQ',
     auto_sync: false,
     secret_backend: 'keyring',
     secret_backend_is_keychain: true,

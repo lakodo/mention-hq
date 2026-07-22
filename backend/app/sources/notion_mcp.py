@@ -109,7 +109,7 @@ class NotionMcpSource(Source):
             response = await client.post(
                 REGISTER_URL,
                 json={
-                    "client_name": "Personal HQ",
+                    "client_name": "Mention HQ",
                     "redirect_uris": [redirect_uri],
                     "token_endpoint_auth_method": "none",
                     "grant_types": ["authorization_code", "refresh_token"],
@@ -227,7 +227,7 @@ class NotionMcpSource(Source):
                 "params": {
                     "protocolVersion": PROTOCOL_VERSION,
                     "capabilities": {},
-                    "clientInfo": {"name": "Personal HQ", "version": "1"},
+                    "clientInfo": {"name": "Mention HQ", "version": "1"},
                 },
             },
         )

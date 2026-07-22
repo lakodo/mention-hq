@@ -354,7 +354,7 @@ async def test_admin_reports_source_fields_without_leaking_secrets(client, conne
 
 
 async def test_app_name_is_configurable(client):
-    assert (await client.get("/api/admin/settings")).json()["app_name"] == "Personal HQ"
+    assert (await client.get("/api/admin/settings")).json()["app_name"] == "Mention HQ"
 
     await client.patch("/api/admin/settings", json={"app_name": "My HQ"})
     assert (await client.get("/api/admin/settings")).json()["app_name"] == "My HQ"
@@ -365,7 +365,7 @@ async def test_manifest_carries_the_configured_app_name(client):
     default = await client.get("/api/manifest.webmanifest")
     assert default.status_code == 200
     assert default.headers["content-type"].startswith("application/manifest+json")
-    assert default.json()["name"] == "Personal HQ"
+    assert default.json()["name"] == "Mention HQ"
 
     await client.patch("/api/admin/settings", json={"app_name": "My HQ"})
 

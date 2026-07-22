@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import AppConfig
 
 APP_NAMESPACE = "app"
-DEFAULT_APP_NAME = "Personal HQ"
+DEFAULT_APP_NAME = "Mention HQ"
 
 
 async def get_value(db: AsyncSession, namespace: str, key: str) -> str | None:

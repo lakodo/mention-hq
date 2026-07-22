@@ -43,7 +43,7 @@ describe('WelcomeView', () => {
     const user = userEvent.setup();
     renderApp('/');
 
-    await user.click(await screen.findByRole('link', { name: 'Personal HQ' }));
+    await user.click(await screen.findByRole('link', { name: 'Mention HQ' }));
 
     expect(await screen.findByText('Top priorities')).toBeInTheDocument();
   });

@@ -1,4 +1,4 @@
-# Personal HQ
+# Mention HQ
 
 [![CI](https://github.com/lakodo/mention-hq/actions/workflows/ci.yml/badge.svg)](https://github.com/lakodo/mention-hq/actions/workflows/ci.yml)
 

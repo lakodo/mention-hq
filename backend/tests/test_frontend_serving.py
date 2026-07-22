@@ -17,7 +17,7 @@ BROWSER = {"Accept": "text/html,application/xhtml+xml", "Sec-Fetch-Mode": "navig
 
 @pytest.fixture
 def dist(tmp_path):
-    (tmp_path / "index.html").write_text("<!doctype html><title>Personal HQ</title>")
+    (tmp_path / "index.html").write_text("<!doctype html><title>Mention HQ</title>")
     (tmp_path / "assets").mkdir()
     (tmp_path / "assets" / "app.js").write_text("console.log(1)")
     return tmp_path
@@ -51,7 +51,7 @@ async def web(app_with_frontend):
 async def test_the_index_is_served_at_the_root(web):
     response = await web.get("/", headers=BROWSER)
     assert response.status_code == 200
-    assert "Personal HQ" in response.text
+    assert "Mention HQ" in response.text
 
 
 async def test_assets_are_served(web):
@@ -63,7 +63,7 @@ async def test_a_client_side_route_gets_the_app(web):
     response = await web.get("/task/abc", headers=BROWSER)
 
     assert response.status_code == 200
-    assert "Personal HQ" in response.text
+    assert "Mention HQ" in response.text
 
 
 async def test_the_api_still_owns_its_own_paths(web):

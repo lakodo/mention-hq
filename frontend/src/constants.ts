@@ -1,6 +1,6 @@
 import type { LinkState, Source, SourceConnectionStatus, Status } from './types';
 
-export const DEFAULT_APP_NAME = 'Personal HQ';
+export const DEFAULT_APP_NAME = 'Mention HQ';
 
 export const UNCATEGORIZED = 'Uncategorized';
 

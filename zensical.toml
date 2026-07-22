@@ -2,7 +2,7 @@
 # Content lives in docs/; `zensical build` writes the site to site/ (gitignored).
 
 [project]
-site_name = "Personal HQ"
+site_name = "Mention HQ"
 site_description = "Aggregate your activity across GitHub, Linear, Slack, Notion, Dust and local files, grouped by subject."
 site_author = "lakodo"
 site_url = "https://lako.do/mention-hq/"

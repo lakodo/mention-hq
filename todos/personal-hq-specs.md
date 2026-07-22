@@ -1,4 +1,4 @@
-# Personal HQ - Project Specs
+# Mention HQ - Project Specs
 
 ## Overview
 

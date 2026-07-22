@@ -16,7 +16,7 @@
   },
   "shell": {
     "init_hook": [
-      "echo 'Personal HQ  ·  run: task setup'"
+      "echo 'Mention HQ  ·  run: task setup'"
     ],
     "scripts": {
       "setup": ["task setup", "task hooks"]

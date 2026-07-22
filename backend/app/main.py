@@ -42,7 +42,7 @@ async def _startup_sync() -> None:
             log.warning("startup_sync_failed", error=str(exc))
 
 
-app = FastAPI(title="Personal HQ", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Mention HQ", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

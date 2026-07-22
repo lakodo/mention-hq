@@ -4,7 +4,7 @@ icon: lucide/rocket
 
 # Getting started
 
-Personal HQ is a local web app: a FastAPI backend and a React frontend, run side by side.
+Mention HQ is a local web app: a FastAPI backend and a React frontend, run side by side.
 
 ## Requirements
 
