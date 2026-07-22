@@ -4,9 +4,9 @@ import { notifications } from '@mantine/notifications';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Header } from '../components/Header';
-import { AUTO_SYNC_INTERVAL_MS, CLOCK_TICK_MS, DEFAULT_APP_NAME } from '../constants';
+import { CLOCK_TICK_MS, DEFAULT_APP_NAME } from '../constants';
 import { errorMessage, isSyncAlreadyRunning } from '../api/client';
-import { useSettings, useSync, useTasks, useUpdateSettings } from '../api/hooks';
+import { useSettings, useSync, useSyncStatus, useTasks, useUpdateSettings } from '../api/hooks';
 import { filterTasks } from '../lib/search';
 import { countItems } from '../lib/tasks';
 import { HqContext, type HqContextValue } from './HqContext';
@@ -21,54 +21,48 @@ function syncMessage(result: SyncResult): string {
 
 export function AppLayout() {
   const [query, setQuery] = useState('');
-  const [lastSync, setLastSync] = useState<string | null>(null);
 
   const { data: tasks } = useTasks();
   const { data: settings } = useSettings();
+  const { data: syncLog } = useSyncStatus();
   const updateSettings = useUpdateSettings();
   const sync = useSync();
 
-  // Persisted like the app's name, so the timer's on/off survives a reload.
+  // "Last synced" comes from the server's sync log, so it survives a reload — rather than local
+  // state that reset to "Never synced" on every refresh even after syncs had run.
+  const lastSync = syncLog?.[0]?.finished_at ?? syncLog?.[0]?.started_at ?? null;
+  // Persisted server-side, so the on/off survives a reload. The backend runs the timer now, so
+  // auto-sync fires whether or not a tab is open.
   const autoSync = settings?.auto_sync ?? false;
 
   // Held in a ref so the auto-sync interval survives the mutation object changing identity.
   const syncRef = useRef(sync);
   syncRef.current = sync;
 
-  const runSync = useCallback((auto = false) => {
+  const runSync = useCallback(() => {
     if (syncRef.current.isPending) return;
 
     syncRef.current.mutate(undefined, {
       onSuccess: (result) => {
-        setLastSync(new Date().toISOString());
         notifications.show({
-          title: auto ? 'Auto-sync complete' : 'Sync complete',
+          title: 'Sync complete',
           message: syncMessage(result),
           color: result.errors.length ? 'orange' : 'teal',
         });
       },
       onError: (error) => {
         if (isSyncAlreadyRunning(error)) {
-          // The run already under way refreshes the same data, so there is nothing to report.
-          if (!auto) {
-            notifications.show({
-              title: 'Sync already running',
-              message: 'A sync is in flight. Its results will land shortly.',
-              color: 'gray',
-            });
-          }
+          notifications.show({
+            title: 'Sync already running',
+            message: 'A sync is in flight. Its results will land shortly.',
+            color: 'gray',
+          });
           return;
         }
         notifications.show({ title: 'Sync failed', message: errorMessage(error), color: 'red' });
       },
     });
   }, []);
-
-  useEffect(() => {
-    if (!autoSync) return;
-    const id = setInterval(() => runSync(true), AUTO_SYNC_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [autoSync, runSync]);
 
   // ⌘/Ctrl+K jumps to whatever search box the current screen has — the header search on the
   // board/catch-up/timeline, the task-list search on Tasks. Focus the first visible one.
@@ -119,7 +113,7 @@ export function AppLayout() {
       toggleAutoSync: () => updateSettings.mutate({ auto_sync: !autoSync }),
       lastSync,
       syncing: sync.isPending,
-      runSync: () => runSync(false),
+      runSync,
       taskCount: visible.length,
       itemCount: countItems(visible),
     }),

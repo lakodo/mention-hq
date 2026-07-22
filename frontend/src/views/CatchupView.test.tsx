@@ -19,6 +19,15 @@ describe('CatchupView', () => {
     expect(screen.getByText('#payments-eng, 4 replies')).toBeInTheDocument();
   });
 
+  it('refreshes on open when the last sync is stale', async () => {
+    // The newest fixture sync is minutes old (past the throttle), so opening the inbox kicks a
+    // sync — the /sync handler records a run, which is what we assert on.
+    const before = db.syncLog.length;
+    renderApp('/catchup');
+
+    await waitFor(() => expect(db.syncLog.length).toBeGreaterThan(before));
+  });
+
   it('files skipped items under the Skipped tab and un-skips them', async () => {
     const user = userEvent.setup();
     renderApp('/catchup');
@@ -49,7 +58,7 @@ describe('CatchupView', () => {
     );
     renderApp('/catchup');
 
-    expect(await screen.findByText('7 left')).toBeInTheDocument();
+    expect(await screen.findByText('Matching · 7 items left')).toBeInTheDocument();
     // The Match all button gives way to the progress while a pass runs.
     expect(screen.queryByRole('button', { name: /Match all/ })).not.toBeInTheDocument();
 

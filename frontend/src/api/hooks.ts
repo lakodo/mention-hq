@@ -149,7 +149,13 @@ export function useSkippedItems(since?: string): UseQueryResult<ItemWithLinks[]>
 }
 
 export function useSyncStatus(limit?: number): UseQueryResult<SyncLogEntry[]> {
-  return useQuery({ queryKey: queryKeys.syncStatus(), queryFn: () => fetchSyncStatus(limit) });
+  return useQuery({
+    queryKey: queryKeys.syncStatus(),
+    queryFn: () => fetchSyncStatus(limit),
+    // Poll so a background (backend-driven) auto-sync surfaces in the header and log without a
+    // manual refresh.
+    refetchInterval: 60_000,
+  });
 }
 
 export function useSources(): UseQueryResult<SourceStatus[]> {

@@ -19,6 +19,14 @@ describe('AppLayout sync', () => {
     expect(await screen.findByText(/Synced just now/)).toBeInTheDocument();
   });
 
+  it('shows the last sync from the server log, so it survives a reload', async () => {
+    // Derived from GET /sync/status, not local state that reset to "Never synced" on refresh.
+    renderApp('/');
+
+    expect(await screen.findByText(/Synced/)).toBeInTheDocument();
+    expect(screen.queryByText('Never synced')).not.toBeInTheDocument();
+  });
+
   it('persists the auto-sync toggle to settings', async () => {
     const user = userEvent.setup();
     renderApp('/');

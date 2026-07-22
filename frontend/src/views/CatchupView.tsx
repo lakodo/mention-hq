@@ -29,7 +29,7 @@ import {
   IconSparkles,
   IconTrash,
 } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SourceDot } from '../components/SourceDot';
 import { PrStatusPill } from '../components/PrStatusPill';
 import { StackTrail } from '../components/StackTrail';
@@ -48,6 +48,8 @@ import {
   useEmojiMap,
   useMatchAllItems,
   useMatchStatus,
+  useSync,
+  useSyncStatus,
   useRejectLink,
   useSkippedItems,
   useStopMatching,
@@ -620,7 +622,7 @@ function MatchProgress() {
     <Group gap={8} wrap="nowrap" style={{ flex: 1, maxWidth: 360 }}>
       <Progress value={value} striped animated size="sm" style={{ flex: 1 }} radius="xl" />
       <Text fz="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-        {status.remaining} left
+        Matching · {status.remaining} {status.remaining === 1 ? 'item' : 'items'} left
       </Text>
       <Button
         size="xs"
@@ -647,6 +649,21 @@ export function CatchupView() {
   const { data: buckets } = useBuckets();
   const { data: matchStatus } = useMatchStatus();
   const matchAll = useMatchAllItems();
+
+  // Opening catch-up refreshes it, so the inbox reflects what's landed since you were last here.
+  // Skipped when a sync ran recently, so flipping back and forth doesn't sync on every visit.
+  const sync = useSync();
+  const syncRef = useRef(sync);
+  syncRef.current = sync;
+  const { data: syncLog } = useSyncStatus();
+  const refreshedOnOpen = useRef(false);
+  useEffect(() => {
+    if (refreshedOnOpen.current || syncLog === undefined) return;
+    refreshedOnOpen.current = true;
+    const last = syncLog[0]?.finished_at ?? syncLog[0]?.started_at;
+    const stale = !last || Date.now() - new Date(last).getTime() > 120_000;
+    if (stale) syncRef.current.mutate(undefined);
+  }, [syncLog]);
 
   const fail = (error: unknown) =>
     notifications.show({ title: 'Action failed', message: errorMessage(error), color: 'red' });

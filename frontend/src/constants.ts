@@ -4,8 +4,6 @@ export const DEFAULT_APP_NAME = 'Mention HQ';
 
 export const UNCATEGORIZED = 'Uncategorized';
 
-export const AUTO_SYNC_INTERVAL_MS = 3_600_000; // hourly
-
 /** Cadence at which relative-time labels are recomputed. */
 export const CLOCK_TICK_MS = 30_000;
 
