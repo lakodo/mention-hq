@@ -231,8 +231,11 @@ class Builder:
         )
 
     def sync_log(self) -> None:
-        for i in range(3):
-            started = self.ago(24 * i + 1)
+        # Newest sync is seconds old, so the app opens on a freshly-synced state — and catch-up's
+        # open-refresh throttle skips a re-sync, which would otherwise rebuild proposals the demo
+        # data can't reproduce.
+        for hours in (0.005, 24, 48):
+            started = self.ago(hours)
             self.add(
                 SyncLog(
                     started_at=started,
@@ -319,7 +322,10 @@ def _curated_tasks(b: Builder) -> None:
             context="PAY-412",
             url="https://linear.app/acme/issue/PAY-412",
             hours=20,
-            extra={"people": b.refs("mokoye", role="assignee")},
+            extra={
+                "people": b.refs("mokoye", role="assignee"),
+                **_linear_state("In Progress", "in_progress"),
+            },
         ),
     )
     b.link(
@@ -533,6 +539,7 @@ def _filler_tasks(b: Builder) -> None:
                             if source == "pr"
                             else {}
                         ),
+                        **(_linear_state(*random.choice(LINEAR_STATES)) if source == "linear" else {}),
                     },
                 ),
             )
@@ -559,7 +566,10 @@ def _catchup(b: Builder) -> None:
             url=_url_for(source, n),
             hours=random.uniform(0.5, 30),
             triaged=False,
-            extra={"people": b.refs(random.choice(list(b.people_by_login)))},
+            extra={
+                "people": b.refs(random.choice(list(b.people_by_login))),
+                **(_linear_state("In Progress", "in_progress") if source == "linear" else {}),
+            },
         )
         if i < 2:
             b.link(
@@ -590,6 +600,21 @@ def _catchup(b: Builder) -> None:
         triaged=True,
         triage_reason="Rule: Dependabot noise",
     )
+
+
+LINEAR_STATES = [
+    ("Todo", "open"),
+    ("In Progress", "in_progress"),
+    ("In Review", "in_progress"),
+    ("Backlog", "open"),
+    ("Done", "done"),
+]
+
+
+def _linear_state(name: str, kind: str) -> dict[str, str]:
+    """A Linear issue's own workflow state — the label the catch-up card shows, and the
+    normalised kind (open/in_progress/done) it colours by."""
+    return {"state_name": name, "state_kind": kind}
 
 
 def _label_for(source: str, n: int) -> str:
