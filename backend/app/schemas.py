@@ -380,6 +380,10 @@ class BackupOut(BaseModel):
     created_at: datetime
 
 
+class FolderOut(BaseModel):
+    path: str
+
+
 class MatchStatusOut(BaseModel):
     running: bool
     total: int

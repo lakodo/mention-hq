@@ -537,6 +537,8 @@ export const handlers = [
     }),
   ),
 
+  http.post(`${BASE}/admin/backup/reveal`, () => HttpResponse.json({ path: '/app/backups' })),
+
   http.get(`${BASE}/admin/emoji`, () => HttpResponse.json({})),
 
   http.get(`${BASE}/admin/browse`, ({ request }) => {

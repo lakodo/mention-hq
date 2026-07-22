@@ -25,6 +25,7 @@ import { notifications } from '@mantine/notifications';
 import {
   IconChevronDown,
   IconChevronUp,
+  IconFolderOpen,
   IconFolderSearch,
   IconPencil,
   IconPlus,
@@ -40,6 +41,7 @@ import {
   useAIStatus,
   useAddSource,
   useBackupDatabase,
+  useOpenBackupFolder,
   useBuckets,
   useCreateBucket,
   useDeleteBucket,
@@ -116,6 +118,7 @@ function AppNameSection() {
 
 function DatabaseSection() {
   const backup = useBackupDatabase();
+  const openFolder = useOpenBackupFolder();
 
   return (
     <Card withBorder radius="md" p="md">
@@ -126,18 +129,33 @@ function DatabaseSection() {
         Save a timestamped copy into <code>backups/</code> next to the live file. Migrations do this
         automatically; use this before anything else risky.
       </Text>
-      <Button
-        variant="light"
-        loading={backup.isPending}
-        onClick={() =>
-          backup.mutate(undefined, {
-            onSuccess: (b) => ok('Backed up', `Saved to ${b.filename}.`),
-            onError: fail,
-          })
-        }
-      >
-        Back up now
-      </Button>
+      <Group gap="sm">
+        <Button
+          variant="light"
+          loading={backup.isPending}
+          onClick={() =>
+            backup.mutate(undefined, {
+              onSuccess: (b) => ok('Backed up', `Saved to ${b.filename}.`),
+              onError: fail,
+            })
+          }
+        >
+          Back up now
+        </Button>
+        <Button
+          variant="default"
+          leftSection={<IconFolderOpen size={16} />}
+          loading={openFolder.isPending}
+          onClick={() =>
+            openFolder.mutate(undefined, {
+              onSuccess: () => ok('Opened', 'The backups folder is open in your file manager.'),
+              onError: fail,
+            })
+          }
+        >
+          Open backup folder
+        </Button>
+      </Group>
     </Card>
   );
 }

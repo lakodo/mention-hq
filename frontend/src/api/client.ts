@@ -296,6 +296,11 @@ export async function backupDatabase(): Promise<Backup> {
   return data;
 }
 
+export async function openBackupFolder(): Promise<{ path: string }> {
+  const { data } = await api.post<{ path: string }>('/admin/backup/reveal');
+  return data;
+}
+
 export async function fetchSourceKinds(): Promise<SourceKind[]> {
   const { data } = await api.get<SourceKind[]>('/admin/source-kinds');
   return data;

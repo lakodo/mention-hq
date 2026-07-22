@@ -8,10 +8,16 @@ touches its schema.
 from __future__ import annotations
 
 import sqlite3
+import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
 from app.config import Settings
+
+
+def backups_dir(settings: Settings) -> Path:
+    return settings.db_path.parent / "backups"
 
 
 def backup_database(settings: Settings) -> Path:
@@ -40,3 +46,18 @@ def backup_database(settings: Settings) -> Path:
         src.close()
 
     return destination
+
+
+def reveal_backups(settings: Settings) -> Path:
+    """Open the backups folder in the OS file manager and return its path. HQ runs locally, so
+    the machine serving the API is the one in front of you. The folder is created first, so the
+    button works even before the first backup exists."""
+    folder = backups_dir(settings)
+    folder.mkdir(parents=True, exist_ok=True)
+    _open_in_file_manager(folder)
+    return folder
+
+
+def _open_in_file_manager(path: Path) -> None:
+    opener = {"darwin": "open", "win32": "explorer"}.get(sys.platform, "xdg-open")
+    subprocess.Popen([opener, str(path)])

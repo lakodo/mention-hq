@@ -8,6 +8,7 @@ import {
 import {
   addIdentity,
   backupDatabase,
+  openBackupFolder,
   addSource,
   archiveBucket,
   confirmLinks,
@@ -486,6 +487,10 @@ export function useUpdateSettings(): UseMutationResult<AppSettings, Error, AppSe
 
 export function useBackupDatabase(): UseMutationResult<Backup, Error, void> {
   return useMutation({ mutationFn: backupDatabase });
+}
+
+export function useOpenBackupFolder(): UseMutationResult<{ path: string }, Error, void> {
+  return useMutation({ mutationFn: openBackupFolder });
 }
 
 export function useEnrichTasks(): UseMutationResult<{ scheduled: number }, Error, void> {

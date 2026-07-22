@@ -25,6 +25,7 @@ from app.schemas import (
     BrowseOut,
     ConfigFieldOut,
     DetectionOut,
+    FolderOut,
     NotionAuthorizeOut,
     NotionOAuthOut,
     SourceConfigUpdate,
@@ -43,7 +44,7 @@ from app.services.app_config import (
     set_auto_sync,
     set_value,
 )
-from app.services.backup import backup_database
+from app.services.backup import backup_database, reveal_backups
 from app.services.sources_factory import (
     BY_KIND,
     SOURCE_CLASSES,
@@ -99,6 +100,12 @@ async def backup_now() -> BackupOut:
         size_bytes=stat.st_size,
         created_at=datetime.fromtimestamp(stat.st_mtime, UTC),
     )
+
+
+@router.post("/backup/reveal", response_model=FolderOut)
+async def reveal_backup_folder() -> FolderOut:
+    """Open the backups folder in the OS file manager — a local app, so it's your own machine."""
+    return FolderOut(path=str(reveal_backups(get_settings())))
 
 
 @router.get("/browse", response_model=BrowseOut)

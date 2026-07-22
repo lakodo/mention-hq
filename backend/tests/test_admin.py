@@ -90,6 +90,23 @@ class TestBackup:
         assert response.status_code == 400
 
 
+class TestRevealBackup:
+    async def test_creates_the_folder_and_hands_it_to_the_file_manager(
+        self, client, tmp_path, point_backup_at, monkeypatch
+    ):
+        point_backup_at(tmp_path / "hq.db")
+        opened: list = []
+        monkeypatch.setattr("app.services.backup._open_in_file_manager", opened.append)
+
+        response = await client.post("/api/admin/backup/reveal")
+
+        assert response.status_code == 200, response.text
+        folder = tmp_path / "backups"
+        assert response.json()["path"] == str(folder)
+        assert folder.is_dir(), "the folder is created even before the first backup exists"
+        assert opened == [folder], "and handed to the file manager, never opened for real in a test"
+
+
 async def _add_notion_oauth(db, secrets) -> None:
     db.add(SourceInstance(id="notion-x", kind="notion", name="Notion"))
     await set_value(db, "notion-x", "client_id", "cid")
