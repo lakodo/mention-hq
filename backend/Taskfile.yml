@@ -103,3 +103,8 @@ tasks:
       # Point DB_PATH at the demo file; the app serves the built SPA + API from it. Run
       # `task back:seed` first (and `task front:build` for the UI).
       - 'DB_PATH=hq-demo.db uv run uvicorn app.main:app --port 13010'
+
+  screenshots:
+    desc: Capture app screenshots from the demo DB (needs `task back:seed` + `task front:build`)
+    cmds:
+      - uv run python -m app.screenshots
