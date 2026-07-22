@@ -54,3 +54,18 @@ task check            # what CI runs: lint, typecheck, migration drift, tests
 task back:sync        # sync from the CLI, without the UI
 task back:test -- -k engine
 ```
+
+## Around the app
+
+Two screens beyond the main tabs:
+
+- **Welcome** — click the app name (top-left) for a home screen: a greeting, a
+  [catch-up](screens/catch-up.md) call-to-action when the inbox has items, and your five
+  highest-priority tasks.
+
+    [![The welcome screen](assets/screenshots/welcome.png)](assets/screenshots/welcome.png)
+
+- **Log** — the **Log** tab is a terminal-styled, read-only history of your syncs: per run, how
+  many items each source fetched, what was added, and any errors. **Sync** runs hourly while the
+  app is open with auto-sync on, or on demand from the button in the header.
+

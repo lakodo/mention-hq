@@ -5,7 +5,7 @@
 site_name = "Personal HQ"
 site_description = "Aggregate your activity across GitHub, Linear, Slack, Notion, Dust and local files, grouped by subject."
 site_author = "lakodo"
-site_url = "https://lakodo.github.io/mention-hq/"
+site_url = "https://lako.do/mention-hq/"
 repo_url = "https://github.com/lakodo/mention-hq"
 repo_name = "lakodo/mention-hq"
 copyright = "Copyright &copy; 2026 lakodo"
@@ -14,7 +14,16 @@ nav = [
   { "Home" = "index.md" },
   { "Getting started" = "getting-started.md" },
   { "Concepts" = "concepts.md" },
+  { "Screens" = [
+    { "The board" = "screens/board.md" },
+    { "Tasks" = "screens/tasks.md" },
+    { "Catch-up" = "screens/catch-up.md" },
+    { "Timeline" = "screens/timeline.md" },
+    { "People" = "screens/people.md" },
+    { "Admin" = "screens/admin.md" },
+  ] },
   { "Sources" = "sources.md" },
+  { "The AI brain" = "brain.md" },
 ]
 
 [project.theme]
