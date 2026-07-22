@@ -164,6 +164,7 @@ def _to_item(node: dict) -> RawItem:
         people=people,
         extra={
             "state_name": state.get("name"),
+            "state_kind": STATE_TO_STATUS.get(state.get("type", ""), "open"),
             "labels": labels,
             "project_name": project,
             "branch_name": node.get("branchName"),

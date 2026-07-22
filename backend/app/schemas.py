@@ -41,6 +41,8 @@ class ItemOut(BaseModel):
     triaged_at: datetime | None = None
     pr_status: str | None = None
     pr_review_requested: bool = False
+    item_status: str | None = None
+    item_status_kind: str | None = None
     emoji: dict[str, str] = {}
     people: list[ItemPersonOut] = []
     stack: list[str] = []

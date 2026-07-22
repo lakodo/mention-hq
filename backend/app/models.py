@@ -225,6 +225,16 @@ class Item(Base):
         return bool((self.extra or {}).get("pr_review_requested"))
 
     @property
+    def item_status(self) -> str | None:
+        """A tracker's own state label for the item, e.g. Linear's "In Progress" or "In Review"."""
+        return (self.extra or {}).get("state_name")
+
+    @property
+    def item_status_kind(self) -> str | None:
+        """That state normalised to open/in_progress/done, so the UI can colour it."""
+        return (self.extra or {}).get("state_kind")
+
+    @property
     def emoji(self) -> dict[str, str]:
         """Custom emoji shortcodes used in the label, mapped to their image URL."""
         return (self.extra or {}).get("emoji") or {}
