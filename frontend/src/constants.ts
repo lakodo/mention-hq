@@ -33,6 +33,28 @@ export function sourceMeta(source: Source): SourceMeta {
   return SOURCE_META[source] ?? UNKNOWN_SOURCE;
 }
 
+/**
+ * A source *kind* named the way it's set up in Admin — for the triage-rule source picker,
+ * where the short card labels ("PR", "Doc") read as jargon. GitHub emits `pr` and `issue`
+ * and Local Git emits `branch`, so those kinds are qualified with their adapter's name.
+ */
+export const SOURCE_KIND_LABEL: Record<string, string> = {
+  pr: 'GitHub PR',
+  issue: 'GitHub issue',
+  linear: 'Linear',
+  slack: 'Slack',
+  branch: 'Local Git',
+  todo: 'Todo list',
+  markdown: 'Markdown docs',
+  dust: 'Dust',
+  notion: 'Notion',
+  notion_mcp: 'Notion MCP',
+};
+
+export function sourceKindLabel(kind: string): string {
+  return SOURCE_KIND_LABEL[kind] ?? sourceMeta(kind as Source).label;
+}
+
 export interface StatusMeta {
   label: string;
   color: string;

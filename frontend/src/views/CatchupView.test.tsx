@@ -375,6 +375,23 @@ describe('CatchupView', () => {
     expect(within(card).getByText('In Progress')).toBeInTheDocument();
   });
 
+  it("names a rule's sources the way Admin does, not as raw kinds", async () => {
+    const user = userEvent.setup();
+    db.triageRules.push({
+      id: 'rule:ci',
+      name: 'CI noise',
+      sources: ['pr'],
+      condition: 'contains',
+      value: 'chore(deps)',
+      enabled: true,
+    });
+    renderApp('/catchup');
+
+    await user.click(await screen.findByRole('button', { name: /Triage rules/ }));
+
+    expect(await screen.findByText(/in GitHub PR/)).toBeInTheDocument();
+  });
+
   it('celebrates an empty inbox', async () => {
     server.use(http.get('http://localhost:8000/api/catchup', () => HttpResponse.json([])));
     renderApp('/catchup');

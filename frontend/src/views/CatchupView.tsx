@@ -37,7 +37,7 @@ import { StackTrail } from '../components/StackTrail';
 import { PeopleStrip } from '../components/PeopleStrip';
 import { NoteEditButton } from '../components/NoteEditButton';
 import { itemLabel } from '../components/ItemLabel';
-import { LINK_STATE_META, sourceMeta } from '../constants';
+import { LINK_STATE_META, sourceKindLabel, sourceMeta } from '../constants';
 import { errorMessage } from '../api/client';
 import {
   useBuckets,
@@ -579,7 +579,7 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
           <MultiSelect
             label="In sources"
             description="Leave empty to match every source"
-            data={SOURCE_KINDS}
+            data={SOURCE_KIND_OPTIONS}
             value={ignoreSources}
             onChange={setIgnoreSources}
           />
@@ -608,7 +608,24 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
   );
 }
 
-const SOURCE_KINDS = ['pr', 'issue', 'linear', 'slack', 'branch', 'todo', 'markdown', 'dust'];
+// The values are item source kinds (what a rule stores and matches on); the labels name each
+// the way it's set up in Admin, so the picker doesn't read as raw ids.
+const SOURCE_KINDS = [
+  'pr',
+  'issue',
+  'linear',
+  'slack',
+  'branch',
+  'todo',
+  'markdown',
+  'dust',
+  'notion',
+  'notion_mcp',
+];
+const SOURCE_KIND_OPTIONS = SOURCE_KINDS.map((kind) => ({
+  value: kind,
+  label: sourceKindLabel(kind),
+}));
 
 function TriageRules() {
   const [open, setOpen] = useState(false);
@@ -670,7 +687,9 @@ function TriageRules() {
               <Text fz="sm" truncate style={{ minWidth: 0 }}>
                 <b>{rule.name}</b> — {rule.condition === 'starts_with' ? 'starts with' : 'contains'}{' '}
                 “{rule.value}”
-                {rule.sources.length ? ` in ${rule.sources.join(', ')}` : ' (any source)'}
+                {rule.sources.length
+                  ? ` in ${rule.sources.map(sourceKindLabel).join(', ')}`
+                  : ' (any source)'}
               </Text>
               <ActionIcon
                 variant="subtle"
@@ -705,7 +724,7 @@ function TriageRules() {
           <MultiSelect
             label="In sources"
             description="Leave empty to match every source"
-            data={SOURCE_KINDS}
+            data={SOURCE_KIND_OPTIONS}
             value={sources}
             onChange={setSources}
           />
