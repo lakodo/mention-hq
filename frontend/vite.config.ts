@@ -61,7 +61,6 @@ export default defineConfig({
     // findBy ceiling and a row-menu test flakes. Capping workers keeps real parallelism while
     // leaving each one enough CPU to render a portal promptly. Also steadier on CI's fewer cores.
     maxWorkers: 4,
-    minWorkers: 1,
     // Headroom for a test that chains several portalled transitions (open menu, pick, confirm),
     // each a findBy wait — so a brief contention spike can't trip vitest's default 5s ceiling.
     testTimeout: 20000,
