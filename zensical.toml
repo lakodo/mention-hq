@@ -24,6 +24,7 @@ nav = [
   ] },
   { "Sources" = "sources.md" },
   { "The AI brain" = "brain.md" },
+  { "Keyboard" = "keyboard.md" },
 ]
 
 [project.theme]
