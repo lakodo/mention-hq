@@ -1,5 +1,5 @@
 import { Box } from '@mantine/core';
-import { useHotkeys } from '@mantine/hooks';
+import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet } from 'react-router-dom';
@@ -9,7 +9,10 @@ import { errorMessage, isSyncAlreadyRunning } from '../api/client';
 import { useSettings, useSync, useSyncStatus, useTasks, useUpdateSettings } from '../api/hooks';
 import { filterTasks } from '../lib/search';
 import { countItems } from '../lib/tasks';
+import { CommandPalette } from './CommandPalette';
 import { HqContext, type HqContextValue } from './HqContext';
+import { ShortcutsHelp } from './ShortcutsHelp';
+import { useGlobalShortcuts } from './useGlobalShortcuts';
 import type { SyncResult } from '../types';
 
 function syncMessage(result: SyncResult): string {
@@ -64,30 +67,22 @@ export function AppLayout() {
     });
   }, []);
 
-  // ⌘/Ctrl+K jumps to whatever search box the current screen has — the header search on the
+  // `/` focuses whatever search box the current screen has — the header search on the
   // board/catch-up/timeline, the task-list search on Tasks. Focus the first visible one.
-  useHotkeys(
-    [
-      [
-        'mod+K',
-        () => {
-          const candidates = Array.from(
-            document.querySelectorAll<HTMLInputElement>('input'),
-          ).filter(
-            (el) =>
-              /search/i.test(el.getAttribute('aria-label') ?? '') ||
-              /search/i.test(el.placeholder ?? ''),
-          );
-          // Prefer a laid-out (visible) one; fall back to the first match where layout is
-          // unavailable (only one search renders per screen anyway).
-          const search = candidates.find((el) => el.offsetParent !== null) ?? candidates[0];
-          search?.focus();
-          search?.select();
-        },
-      ],
-    ],
-    [],
-  );
+  const focusSearch = useCallback(() => {
+    const candidates = Array.from(document.querySelectorAll<HTMLInputElement>('input')).filter(
+      (el) =>
+        /search/i.test(el.getAttribute('aria-label') ?? '') || /search/i.test(el.placeholder ?? ''),
+    );
+    // Prefer a laid-out (visible) one; fall back to the first match where layout is
+    // unavailable (only one search renders per screen anyway).
+    const search = candidates.find((el) => el.offsetParent !== null) ?? candidates[0];
+    search?.focus();
+    search?.select();
+  }, []);
+
+  const [helpOpened, helpHandlers] = useDisclosure(false);
+  useGlobalShortcuts({ onFocusSearch: focusSearch, onShowHelp: helpHandlers.open });
 
   // Keeps the "Synced Xm ago" label honest without refetching anything.
   const [, setTick] = useState(0);
@@ -134,6 +129,8 @@ export function AppLayout() {
         <Header />
         <Outlet />
       </Box>
+      <CommandPalette onShowHelp={helpHandlers.open} />
+      <ShortcutsHelp opened={helpOpened} onClose={helpHandlers.close} />
     </HqContext.Provider>
   );
 }

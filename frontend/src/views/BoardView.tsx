@@ -36,6 +36,7 @@ import {
 import { filterTasks } from '../lib/search';
 import { groupByBucket, itemCountLabel, newestItemAt, taskPath, uniqueSources } from '../lib/tasks';
 import { formatAgo } from '../lib/time';
+import { useRovingFocus } from '../lib/useRovingFocus';
 import { useHq } from '../shell/HqContext';
 import type { Bucket, Task } from '../types';
 
@@ -118,18 +119,33 @@ function AddBucket({ ghost }: { ghost?: boolean }) {
 interface TaskCardProps {
   task: Task;
   bucketNames: string[];
+  col: number;
+  row: number;
   onOpen: (id: string) => void;
   onToggleRead: (task: Task) => void;
   onMoveToBucket: (task: Task, bucket: string) => void;
 }
 
-function TaskCard({ task, bucketNames, onOpen, onToggleRead, onMoveToBucket }: TaskCardProps) {
+function TaskCard({
+  task,
+  bucketNames,
+  col,
+  row,
+  onOpen,
+  onToggleRead,
+  onMoveToBucket,
+}: TaskCardProps) {
   return (
     <Card
       withBorder
       radius="md"
       p="sm"
       mb="xs"
+      data-roving-item
+      data-col={col}
+      data-row={row}
+      data-task-id={task.id}
+      aria-label={task.title}
       style={{
         borderLeft: `3px solid ${statusMeta(task.status).color}`,
         opacity: task.unread ? 1 : 0.6,
@@ -188,6 +204,15 @@ export function BoardView() {
     () => groupByBucket(filterTasks(tasks ?? [], query), buckets ?? []),
     [tasks, buckets, query],
   );
+
+  // ← → move between bucket columns, ↑ ↓ between cards in a column; Enter opens the task.
+  const gridKeys = useRovingFocus<HTMLDivElement>({
+    orientation: 'grid',
+    onActivate: (el) => {
+      const id = el.dataset.taskId;
+      if (id) navigate(taskPath(id));
+    },
+  });
 
   const bucketNames = useMemo(
     () => [...new Set([...(buckets ?? []).map((b) => b.name), UNCATEGORIZED])],
@@ -277,6 +302,8 @@ export function BoardView() {
 
   return (
     <Box
+      ref={gridKeys.ref}
+      onKeyDown={gridKeys.onKeyDown}
       style={{
         flex: 1,
         overflow: 'auto',
@@ -286,7 +313,7 @@ export function BoardView() {
         alignItems: 'flex-start',
       }}
     >
-      {columns.map((column) => {
+      {columns.map((column, colIndex) => {
         const isFocused = focused === column.name;
         const dimmed = focused !== null && !isFocused;
         const bucketMeta = buckets?.find((b) => b.name === column.name);
@@ -361,11 +388,13 @@ export function BoardView() {
               </Text>
             )}
 
-            {column.tasks.map((task) => (
+            {column.tasks.map((task, rowIndex) => (
               <TaskCard
                 key={task.id}
                 task={task}
                 bucketNames={bucketNames}
+                col={colIndex}
+                row={rowIndex}
                 onOpen={(id) => navigate(taskPath(id))}
                 onToggleRead={toggleRead}
                 onMoveToBucket={moveToBucket}

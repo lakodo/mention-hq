@@ -46,6 +46,7 @@ import {
 import { filterItems } from '../lib/search';
 import { taskPath } from '../lib/tasks';
 import { formatAgo } from '../lib/time';
+import { useRovingFocus } from '../lib/useRovingFocus';
 import { useHq } from '../shell/HqContext';
 import type { ItemWithLinks } from '../types';
 
@@ -227,6 +228,10 @@ function TimelineRow({
       />
       <Group
         data-testid="timeline-row"
+        data-roving-item
+        role="listitem"
+        aria-label={item.label}
+        data-task-id={tasks[0]?.id}
         gap={12}
         wrap="nowrap"
         px={16}
@@ -353,8 +358,22 @@ type Attachment = 'any' | 'filed' | 'untriaged';
 
 export function TimelineView() {
   const { query } = useHq();
+  const navigate = useNavigate();
   const { data: items, isLoading } = useItems();
   const { data: allTasks } = useTasks();
+
+  // Enter opens the item's task if it has one; otherwise its source link.
+  const listKeys = useRovingFocus({
+    orientation: 'vertical',
+    onActivate: (el) => {
+      const taskId = el.dataset.taskId;
+      if (taskId) {
+        navigate(taskPath(taskId));
+        return;
+      }
+      el.querySelector<HTMLAnchorElement>('a[href]')?.click();
+    },
+  });
 
   const [kinds, setKinds] = useState<string[]>([]);
   const [text, setText] = useState('');
@@ -503,14 +522,16 @@ export function TimelineView() {
           </Stack>
         </Center>
       ) : (
-        rows.map((item) => (
-          <TimelineRow
-            key={item.id}
-            item={item}
-            taskOptions={taskOptions}
-            bucketOptions={bucketOptions}
-          />
-        ))
+        <Box role="list" ref={listKeys.ref} onKeyDown={listKeys.onKeyDown}>
+          {rows.map((item) => (
+            <TimelineRow
+              key={item.id}
+              item={item}
+              taskOptions={taskOptions}
+              bucketOptions={bucketOptions}
+            />
+          ))}
+        </Box>
       )}
     </Box>
   );

@@ -25,3 +25,10 @@ body,
     animation: none;
   }
 }
+
+/* Keyboard focus on a roving list item (card, row, tab). Mouse clicks don't trigger it. */
+[data-roving-item]:focus-visible {
+  outline: 2px solid var(--mantine-color-blue-5);
+  outline-offset: 2px;
+  border-radius: var(--mantine-radius-md);
+}

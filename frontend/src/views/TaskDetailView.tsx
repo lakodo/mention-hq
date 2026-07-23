@@ -81,6 +81,7 @@ import {
   taskPath,
 } from '../lib/tasks';
 import { formatAgo } from '../lib/time';
+import { useRovingFocus } from '../lib/useRovingFocus';
 import type { BucketSuggestion, Item, NextAction, Task, TaskCandidate } from '../types';
 
 const DELETE_WARNING =
@@ -420,6 +421,15 @@ export function TaskDetailView() {
   );
   const selected = useMemo(() => ordered.find((task) => task.id === id), [ordered, id]);
 
+  // ↑ ↓ move through the task list; Enter opens the focused task.
+  const listKeys = useRovingFocus({
+    orientation: 'vertical',
+    onActivate: (el) => {
+      const taskId = el.dataset.taskId;
+      if (taskId) navigate(taskPath(taskId));
+    },
+  });
+
   // Opening a task reads it — that's what un-bolds it on the board and in the list.
   useEffect(() => {
     if (selected?.unread) updateTask.mutate({ id: selected.id, patch: { unread: false } });
@@ -662,6 +672,10 @@ export function TaskDetailView() {
     return (
       <Group
         key={task.id}
+        data-roving-item
+        role="listitem"
+        aria-label={task.title}
+        data-task-id={task.id}
         gap={8}
         wrap="nowrap"
         px={collapsed ? 0 : 8}
@@ -905,7 +919,12 @@ export function TaskDetailView() {
           </Group>
         )}
 
-        <Box style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
+        <Box
+          role="list"
+          ref={listKeys.ref}
+          onKeyDown={listKeys.onKeyDown}
+          style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}
+        >
           {!collapsed && filtered.length > 0 && (
             <Group gap={8} px={20} pb={6} wrap="nowrap">
               <Checkbox

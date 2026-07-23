@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { notifications } from '@mantine/notifications';
+import { spotlight } from '@mantine/spotlight';
 import { cleanup, configure } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 import { resetDb } from './handlers';
@@ -35,6 +36,8 @@ class ResizeObserverStub {
 window.ResizeObserver = ResizeObserverStub;
 
 window.scrollTo = vi.fn();
+// jsdom has no layout, so scrollIntoView is missing — the command palette calls it on selection.
+Element.prototype.scrollIntoView = vi.fn();
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 
@@ -44,6 +47,9 @@ afterEach(() => {
   // left alone, toasts pile up past the display limit and later ones never show.
   notifications.clean();
   notifications.cleanQueue();
+  // The spotlight store is a singleton too — a test that opens the palette would otherwise
+  // leave it open, and its autofocused input steals focus from the next test.
+  spotlight.close();
   server.resetHandlers();
   resetDb();
 });

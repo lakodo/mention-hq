@@ -30,6 +30,7 @@ import {
   useRemoveIdentity,
   useUpdatePerson,
 } from '../api/hooks';
+import { useRovingFocus } from '../lib/useRovingFocus';
 import type { Person } from '../types';
 
 // The handles a person can carry. Freeform on the API; these are the ones worth offering.
@@ -97,7 +98,15 @@ function PersonCard({ person, others }: PersonCardProps) {
     });
 
   return (
-    <Card withBorder radius="md" p="md" data-testid="person-card">
+    <Card
+      withBorder
+      radius="md"
+      p="md"
+      data-testid="person-card"
+      data-roving-item
+      role="listitem"
+      aria-label={person.display_name}
+    >
       <Group justify="space-between" wrap="nowrap" mb={6}>
         <Group gap={10} wrap="nowrap" style={{ minWidth: 0 }}>
           <Avatar src={resolvedAvatar} size={40} radius="xl" name={person.display_name} />
@@ -413,6 +422,13 @@ export function PeopleView() {
     [people],
   );
 
+  // A person card has no single "open" — Enter drops focus onto its first control.
+  const listKeys = useRovingFocus({
+    orientation: 'vertical',
+    onActivate: (el) =>
+      el.querySelector<HTMLElement>('button, a[href], input, select, textarea')?.focus(),
+  });
+
   if (isLoading) {
     return (
       <Center style={{ flex: 1 }}>
@@ -436,7 +452,13 @@ export function PeopleView() {
           No one yet. Sync a source to discover people, or add one by hand.
         </Text>
       ) : (
-        <Stack gap="sm" style={{ maxWidth: 820 }}>
+        <Stack
+          gap="sm"
+          style={{ maxWidth: 820 }}
+          role="list"
+          ref={listKeys.ref}
+          onKeyDown={listKeys.onKeyDown}
+        >
           {sorted.map((person) => (
             <PersonCard
               key={person.id}
