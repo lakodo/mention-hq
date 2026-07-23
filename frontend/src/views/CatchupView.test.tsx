@@ -389,7 +389,7 @@ describe('CatchupView', () => {
 
     await user.click(await screen.findByRole('button', { name: /Triage rules/ }));
 
-    expect(await screen.findByText(/in GitHub PR/)).toBeInTheDocument();
+    expect(await screen.findByText(/in GitHub — pr/)).toBeInTheDocument();
   });
 
   it('celebrates an empty inbox', async () => {

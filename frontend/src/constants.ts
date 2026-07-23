@@ -34,13 +34,12 @@ export function sourceMeta(source: Source): SourceMeta {
 }
 
 /**
- * A source *kind* named the way it's set up in Admin — for the triage-rule source picker,
- * where the short card labels ("PR", "Doc") read as jargon. GitHub emits `pr` and `issue`
- * and Local Git emits `branch`, so those kinds are qualified with their adapter's name.
+ * A source kind's Admin name — the adapter it's set up under. GitHub emits `pr` and `issue`
+ * and Local Git emits `branch`, so several kinds share one name; the kind disambiguates.
  */
-export const SOURCE_KIND_LABEL: Record<string, string> = {
-  pr: 'GitHub PR',
-  issue: 'GitHub issue',
+export const SOURCE_ADMIN_NAME: Record<string, string> = {
+  pr: 'GitHub',
+  issue: 'GitHub',
   linear: 'Linear',
   slack: 'Slack',
   branch: 'Local Git',
@@ -51,8 +50,10 @@ export const SOURCE_KIND_LABEL: Record<string, string> = {
   notion_mcp: 'Notion MCP',
 };
 
+/** "GitHub — pr": the Admin name paired with the raw source kind, for the triage-rule picker. */
 export function sourceKindLabel(kind: string): string {
-  return SOURCE_KIND_LABEL[kind] ?? sourceMeta(kind as Source).label;
+  const name = SOURCE_ADMIN_NAME[kind] ?? sourceMeta(kind as Source).label;
+  return `${name} — ${kind}`;
 }
 
 export interface StatusMeta {
