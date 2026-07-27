@@ -258,6 +258,41 @@ describe('CatchupView', () => {
     expect(screen.getAllByTestId('catchup-card')).toHaveLength(2);
   });
 
+  it('offers archived tasks in the attach box only once you search', async () => {
+    const user = userEvent.setup();
+    db.tasks.push({
+      id: 'task:archived-1',
+      title: 'Old migration cleanup',
+      description: null,
+      bucket: 'Infra',
+      status: 'done',
+      priority: 50,
+      tags: [],
+      unread: false,
+      origin: 'manual',
+      archived: true,
+      next_action: null,
+      updated_at: new Date().toISOString(),
+      items: [],
+      candidates: [],
+    });
+    renderApp('/catchup');
+
+    const cards = await screen.findAllByTestId('catchup-card');
+    const input = within(cards[0]).getByPlaceholderText('Attach to tasks…');
+    await user.click(input);
+    const listbox = document.getElementById(input.getAttribute('aria-controls')!)!;
+
+    // Hidden while the search is empty…
+    expect(within(listbox).queryByText(/Old migration cleanup/)).not.toBeInTheDocument();
+
+    // …surfaced (marked archived) once you type its name.
+    await user.type(input, 'migration');
+    expect(
+      await within(listbox).findByText('Old migration cleanup · Infra · archived'),
+    ).toBeInTheDocument();
+  });
+
   it('attaches one item to several tasks at once', async () => {
     const user = userEvent.setup();
     renderApp('/catchup');

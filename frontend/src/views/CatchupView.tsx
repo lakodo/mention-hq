@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Center,
+  type ComboboxItem,
   Divider,
   Group,
   Loader,
@@ -214,11 +215,18 @@ function LinkRow({ link, busy, onConfirm, onConfirmAttach, onReject }: LinkRowPr
 interface CatchupCardProps {
   item: ItemWithLinks;
   taskOptions: { value: string; label: string }[];
+  archivedTaskIds: Set<string>;
   bucketOptions: string[];
   skipped?: boolean;
 }
 
-function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: CatchupCardProps) {
+function CatchupCard({
+  item,
+  taskOptions,
+  archivedTaskIds,
+  bucketOptions,
+  skipped = false,
+}: CatchupCardProps) {
   // An item can already be attached (a confirmed link) yet still sit untriaged. Show those
   // tasks pre-selected in the attach box rather than as a separate badge, so Attach files it.
   const confirmedTaskIds = item.links.filter((l) => l.state === 'confirmed').map((l) => l.task.id);
@@ -462,6 +470,22 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
           aria-label="Attach to tasks"
           searchable
           clearable
+          // Archived tasks are attachable, but only show once you search for one, and sit at the
+          // end so they never crowd the active tasks.
+          filter={({ options, search }) => {
+            const q = search.trim().toLowerCase();
+            const items = options as ComboboxItem[];
+            return items
+              .filter((o) => {
+                if (archivedTaskIds.has(o.value))
+                  return q !== '' && o.label.toLowerCase().includes(q);
+                return o.label.toLowerCase().includes(q);
+              })
+              .sort(
+                (a, b) =>
+                  Number(archivedTaskIds.has(a.value)) - Number(archivedTaskIds.has(b.value)),
+              );
+          }}
           style={{ flex: 1, minWidth: 0 }}
           // Portalled: the card scrolls and clips, so an inline list gets cut off.
           comboboxProps={{ withinPortal: true }}
@@ -824,6 +848,9 @@ export function CatchupView() {
   const { data: inboxItems, isLoading: inboxLoading } = useCatchup();
   const { data: skippedItems, isLoading: skippedLoading } = useSkippedItems(since);
   const { data: tasks } = useTasks();
+  // Archived tasks are a separate query — the list endpoint returns active or archived, not both.
+  // They stay out of the attach box until you search for one (see the MultiSelect filter below).
+  const { data: archivedTasks } = useTasks({ archived: true });
   const { data: buckets } = useBuckets();
   const { data: matchStatus } = useMatchStatus();
   const matchAll = useMatchAllItems();
@@ -858,9 +885,18 @@ export function CatchupView() {
     });
 
   const taskOptions = useMemo(
-    () =>
-      (tasks ?? []).map((task) => ({ value: task.id, label: `${task.title} · ${task.bucket}` })),
-    [tasks],
+    () => [
+      ...(tasks ?? []).map((task) => ({ value: task.id, label: `${task.title} · ${task.bucket}` })),
+      ...(archivedTasks ?? []).map((task) => ({
+        value: task.id,
+        label: `${task.title} · ${task.bucket} · archived`,
+      })),
+    ],
+    [tasks, archivedTasks],
+  );
+  const archivedTaskIds = useMemo(
+    () => new Set((archivedTasks ?? []).map((task) => task.id)),
+    [archivedTasks],
   );
   const bucketOptions = useMemo(() => (buckets ?? []).map((b) => b.name), [buckets]);
 
@@ -957,6 +993,7 @@ export function CatchupView() {
               key={item.id}
               item={item}
               taskOptions={taskOptions}
+              archivedTaskIds={archivedTaskIds}
               bucketOptions={bucketOptions}
               skipped={skipped}
             />
