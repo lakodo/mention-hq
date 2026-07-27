@@ -49,6 +49,7 @@ import { StackTrail } from '../components/StackTrail';
 import { PeopleStrip, mergePeople } from '../components/PeopleStrip';
 import { NoteEditButton } from '../components/NoteEditButton';
 import { itemLabel } from '../components/ItemLabel';
+import { Markdown } from '../components/Markdown';
 import { SourceDot } from '../components/SourceDot';
 import { StatusPill } from '../components/StatusPill';
 import { SLACK_ACCENT, UNCATEGORIZED, sourceMeta } from '../constants';
@@ -1026,15 +1027,24 @@ export function TaskDetailView() {
                   if (e.key === 'Escape') setDescDraft(null);
                 }}
               />
+            ) : selected.description ? (
+              // Rendered Markdown; clicking anywhere but a link opens the raw editor.
+              <Box
+                mb="md"
+                style={{ cursor: 'text' }}
+                onClick={() => setDescDraft(selected.description ?? '')}
+              >
+                <Markdown>{selected.description}</Markdown>
+              </Box>
             ) : (
               <Text
                 fz="sm"
-                c={selected.description ? undefined : 'dimmed'}
+                c="dimmed"
                 mb="md"
-                style={{ cursor: 'text', whiteSpace: 'pre-wrap' }}
-                onClick={() => setDescDraft(selected.description ?? '')}
+                style={{ cursor: 'text' }}
+                onClick={() => setDescDraft('')}
               >
-                {selected.description ?? 'Add a description…'}
+                Add a description…
               </Text>
             )}
 
@@ -1148,7 +1158,7 @@ export function TaskDetailView() {
                   </Group>
                 }
               >
-                <Text fz="sm">{nextActionResult?.action ?? selected.next_action}</Text>
+                <Markdown>{nextActionResult?.action ?? selected.next_action ?? ''}</Markdown>
               </Alert>
             ) : (
               <Button
