@@ -26,8 +26,9 @@ body,
   }
 }
 
-/* Keyboard focus on a roving list item (card, row, tab). Mouse clicks don't trigger it. */
-[data-roving-item]:focus-visible {
+/* Keyboard focus ring on a spatial-nav participant (card, row, bucket header). Since these are
+   divs with tabindex=-1, they have no default focus style; clicks don't trigger :focus-visible. */
+[data-nav-item]:focus-visible {
   outline: 2px solid var(--mantine-color-blue-5);
   outline-offset: 2px;
   border-radius: var(--mantine-radius-md);

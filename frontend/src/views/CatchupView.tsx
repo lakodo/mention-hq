@@ -64,7 +64,6 @@ import {
 import { NoMatches } from '../components/NoMatches';
 import { filterItems } from '../lib/search';
 import { formatAgo } from '../lib/time';
-import { useRovingFocus } from '../lib/useRovingFocus';
 import { useHq } from '../shell/HqContext';
 import type { ItemWithLinks, Link } from '../types';
 
@@ -354,9 +353,21 @@ function CatchupCard({ item, taskOptions, bucketOptions, skipped = false }: Catc
       radius="md"
       p="md"
       data-testid="catchup-card"
-      data-roving-item
-      role="listitem"
+      tabIndex={-1}
+      data-nav-item
       aria-label={item.label}
+      // A card has no single "open" — Enter drops focus into it, onto the attach box.
+      onKeyDown={(event) => {
+        if ((event.key !== 'Enter' && event.key !== ' ') || event.target !== event.currentTarget) {
+          return;
+        }
+        event.preventDefault();
+        const card = event.currentTarget;
+        const attach = card.querySelector<HTMLElement>('[aria-label="Attach to tasks"]');
+        (
+          attach ?? card.querySelector<HTMLElement>('button, a[href], input, select, textarea')
+        )?.focus();
+      }}
     >
       <Group gap={8} wrap="nowrap" mb={4}>
         <SourceDot source={item.source} />
@@ -853,17 +864,6 @@ export function CatchupView() {
   );
   const bucketOptions = useMemo(() => (buckets ?? []).map((b) => b.name), [buckets]);
 
-  // A card has no single "open" — Enter drops focus into it, onto the attach box (its main action).
-  const listKeys = useRovingFocus({
-    orientation: 'vertical',
-    onActivate: (el) => {
-      const attach = el.querySelector<HTMLElement>('[aria-label="Attach to tasks"]');
-      const focusable =
-        attach ?? el.querySelector<HTMLElement>('button, a[href], input, select, textarea');
-      focusable?.focus();
-    },
-  });
-
   const skipped = tab === 'skipped';
   const source = skipped ? skippedItems : inboxItems;
   const isLoading = skipped ? skippedLoading : inboxLoading;
@@ -951,13 +951,7 @@ export function CatchupView() {
       ) : visible.length === 0 ? (
         <NoMatches query={query} />
       ) : (
-        <Stack
-          gap="sm"
-          style={{ maxWidth: 860 }}
-          role="list"
-          ref={listKeys.ref}
-          onKeyDown={listKeys.onKeyDown}
-        >
+        <Stack gap="sm" style={{ maxWidth: 860 }}>
           {visible.map((item) => (
             <CatchupCard
               key={item.id}

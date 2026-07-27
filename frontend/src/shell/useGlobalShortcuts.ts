@@ -5,6 +5,8 @@ import { NAV_TARGETS, isTypingTarget } from '../lib/keyboard';
 interface GlobalShortcutHandlers {
   onFocusSearch: () => void;
   onShowHelp: () => void;
+  /** Fired as the `g` prefix is armed and disarmed, so the UI can show the key hints. */
+  onGoToModeChange?: (active: boolean) => void;
 }
 
 // How long a `g` prefix waits for its second key before giving up.
@@ -15,7 +17,11 @@ const G_PREFIX_MS = 1200;
  * search, `?` for the shortcuts overlay. All are dormant while typing and never touch modifier
  * combos, so the browser's own Cmd/Ctrl shortcuts (and the palette's Cmd/Ctrl+K) are left alone.
  */
-export function useGlobalShortcuts({ onFocusSearch, onShowHelp }: GlobalShortcutHandlers) {
+export function useGlobalShortcuts({
+  onFocusSearch,
+  onShowHelp,
+  onGoToModeChange,
+}: GlobalShortcutHandlers) {
   const navigate = useNavigate();
 
   const pendingG = useRef(false);
@@ -23,6 +29,7 @@ export function useGlobalShortcuts({ onFocusSearch, onShowHelp }: GlobalShortcut
 
   useEffect(() => {
     const clearG = () => {
+      if (pendingG.current) onGoToModeChange?.(false);
       pendingG.current = false;
       if (timer.current) clearTimeout(timer.current);
     };
@@ -45,6 +52,7 @@ export function useGlobalShortcuts({ onFocusSearch, onShowHelp }: GlobalShortcut
 
       if (event.key === 'g') {
         pendingG.current = true;
+        onGoToModeChange?.(true);
         timer.current = setTimeout(clearG, G_PREFIX_MS);
         return;
       }
@@ -75,5 +83,5 @@ export function useGlobalShortcuts({ onFocusSearch, onShowHelp }: GlobalShortcut
       document.removeEventListener('keydown', onKeyDown);
       clearG();
     };
-  }, [navigate, onFocusSearch, onShowHelp]);
+  }, [navigate, onFocusSearch, onShowHelp, onGoToModeChange]);
 }

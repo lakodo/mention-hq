@@ -10,9 +10,11 @@ import { useSettings, useSync, useSyncStatus, useTasks, useUpdateSettings } from
 import { filterTasks } from '../lib/search';
 import { countItems } from '../lib/tasks';
 import { CommandPalette } from './CommandPalette';
+import { GoToModeContext } from './GoToModeContext';
 import { HqContext, type HqContextValue } from './HqContext';
 import { ShortcutsHelp } from './ShortcutsHelp';
 import { useGlobalShortcuts } from './useGlobalShortcuts';
+import { useSpatialNavigation } from './useSpatialNavigation';
 import type { SyncResult } from '../types';
 
 function syncMessage(result: SyncResult): string {
@@ -82,7 +84,13 @@ export function AppLayout() {
   }, []);
 
   const [helpOpened, helpHandlers] = useDisclosure(false);
-  useGlobalShortcuts({ onFocusSearch: focusSearch, onShowHelp: helpHandlers.open });
+  const [goToMode, setGoToMode] = useState(false);
+  useGlobalShortcuts({
+    onFocusSearch: focusSearch,
+    onShowHelp: helpHandlers.open,
+    onGoToModeChange: setGoToMode,
+  });
+  useSpatialNavigation();
 
   // Keeps the "Synced Xm ago" label honest without refetching anything.
   const [, setTick] = useState(0);
@@ -117,20 +125,22 @@ export function AppLayout() {
 
   return (
     <HqContext.Provider value={value}>
-      <Box
-        style={{
-          height: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          background: 'var(--mantine-color-gray-0)',
-        }}
-      >
-        <Header />
-        <Outlet />
-      </Box>
-      <CommandPalette onShowHelp={helpHandlers.open} />
-      <ShortcutsHelp opened={helpOpened} onClose={helpHandlers.close} />
+      <GoToModeContext.Provider value={goToMode}>
+        <Box
+          style={{
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            background: 'var(--mantine-color-gray-0)',
+          }}
+        >
+          <Header />
+          <Outlet />
+        </Box>
+        <CommandPalette onShowHelp={helpHandlers.open} />
+        <ShortcutsHelp opened={helpOpened} onClose={helpHandlers.close} />
+      </GoToModeContext.Provider>
     </HqContext.Provider>
   );
 }
