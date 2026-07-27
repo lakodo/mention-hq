@@ -48,8 +48,8 @@ def _github_search(pr_json: dict):
 
     def handler(request):
         q = request.url.params.get("q", "")
-        # The open-PR query returns pr_json; the merged-PR and issue queries return nothing.
-        if q.startswith("is:pr") and "is:merged" not in q:
+        # The open-PR query returns pr_json; the merged-PR, closed-PR and issue queries return nothing.
+        if q.startswith("is:pr") and "is:merged" not in q and "is:closed" not in q:
             return httpx.Response(200, json=pr_json)
         return httpx.Response(200, json={"items": []})
 
@@ -117,6 +117,26 @@ class TestGitHub:
         assert items[0].status == "merged"
         # The pill reads pr_status, which the review pass must not overwrite back to open.
         assert items[0].extra["pr_status"] == "merged"
+        # Refresh-only: it updates a PR already filed on a task, but doesn't flood catch-up.
+        assert items[0].refresh_only is True
+
+    @respx.mock
+    async def test_a_recently_closed_pr_is_fetched_and_pilled_closed(self, github):
+        closed_pr = {**PR_SEARCH["items"][0], "state": "closed", "pull_request": {"merged_at": None}}
+
+        def handler(request):
+            q = request.url.params.get("q", "")
+            return httpx.Response(200, json={"items": [closed_pr]} if "is:closed" in q else {"items": []})
+
+        respx.get("https://api.github.com/search/issues").mock(side_effect=handler)
+        _github_graphql()
+
+        items = await github.fetch()
+
+        assert len(items) == 1, "the closed-window query brings it back after it left is:open"
+        assert items[0].status == "done"
+        # A closed PR mustn't keep showing its last open status (the review pass would say "open").
+        assert items[0].extra["pr_status"] == "closed"
         # Refresh-only: it updates a PR already filed on a task, but doesn't flood catch-up.
         assert items[0].refresh_only is True
 

@@ -12,10 +12,11 @@ from app.sources.keys import all_reference_keys, github_key
 from app.sources.tools import run_tool
 
 API_ROOT = "https://api.github.com"
-# How far back to keep showing a merged PR. Recently-merged ones stay visible (as "merged")
-# rather than vanishing the moment they leave the is:open search; older ones age out — unless
-# you've filed one onto a task, which sync keeps regardless.
-MERGED_WINDOW_DAYS = 14
+# How far back to keep refreshing a PR that has left the is:open search — merged or closed. A PR
+# you've filed onto a task keeps showing its real end state (as "merged" or "closed") instead of
+# freezing at its last open status; recent ones you never filed still don't flood catch-up, and
+# older ones age out entirely.
+CLOSED_WINDOW_DAYS = 14
 
 
 class GitHubSource(Source):
@@ -91,10 +92,11 @@ class GitHubSource(Source):
         if not self.is_configured():
             return []
         username, org = self.get("username"), self.get("org")
-        merged_since = (datetime.now(UTC) - timedelta(days=MERGED_WINDOW_DAYS)).date().isoformat()
+        since = (datetime.now(UTC) - timedelta(days=CLOSED_WINDOW_DAYS)).date().isoformat()
         queries = [
             (f"is:pr author:{username} org:{org} is:open", "pr"),
-            (f"is:pr author:{username} org:{org} is:merged merged:>={merged_since}", "pr"),
+            (f"is:pr author:{username} org:{org} is:merged merged:>={since}", "pr"),
+            (f"is:pr author:{username} org:{org} is:closed is:unmerged closed:>={since}", "pr"),
             (f"is:issue assignee:{username} org:{org} is:open", "issue"),
         ]
         items: list[RawItem] = []
@@ -121,6 +123,12 @@ class GitHubSource(Source):
                 # GraphQL only covers open PRs anyway. It refreshes a PR you've already filed
                 # (so it shows "merged") but doesn't flood catch-up with every recent merge.
                 item.extra["pr_status"] = "merged"
+                item.refresh_only = True
+                continue
+            if item.status == "done":
+                # Closed without merging. Same as merged: refresh a filed PR so it stops showing a
+                # stale "review required", but don't surface everyone's abandoned PRs in catch-up.
+                item.extra["pr_status"] = "closed"
                 item.refresh_only = True
                 continue
             state = review.get(item.external_id, {})
