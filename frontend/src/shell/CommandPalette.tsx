@@ -1,7 +1,9 @@
 import { Spotlight, type SpotlightActionData } from '@mantine/spotlight';
 import { IconBulb, IconKeyboard, IconRefresh, IconSearch } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
+import { useTasks } from '../api/hooks';
 import { NAV_TARGETS } from '../lib/keyboard';
+import { taskPath } from '../lib/tasks';
 import { useHq } from './HqContext';
 
 interface CommandPaletteProps {
@@ -10,11 +12,12 @@ interface CommandPaletteProps {
 
 /**
  * Cmd/Ctrl+K command palette (its open shortcut is registered by Spotlight itself). Fuzzy-searches
- * the same jump-to-view targets the keyboard shortcuts use, plus the handful of global actions.
+ * the jump-to-view targets, every task, and the handful of global actions.
  */
 export function CommandPalette({ onShowHelp }: CommandPaletteProps) {
   const navigate = useNavigate();
   const { runSync } = useHq();
+  const { data: tasks } = useTasks();
 
   const goTo: SpotlightActionData[] = NAV_TARGETS.map((target) => ({
     id: `go-${target.path}`,
@@ -22,6 +25,14 @@ export function CommandPalette({ onShowHelp }: CommandPaletteProps) {
     description: `Go to ${target.label}`,
     keywords: ['go', 'open', 'navigate', target.label],
     onClick: () => navigate(target.path),
+  }));
+
+  const taskActions: SpotlightActionData[] = (tasks ?? []).map((task) => ({
+    id: `task-${task.id}`,
+    label: task.title,
+    description: task.bucket,
+    keywords: ['task', task.bucket, ...task.tags],
+    onClick: () => navigate(taskPath(task.id)),
   }));
 
   const commands: SpotlightActionData[] = [
@@ -55,6 +66,7 @@ export function CommandPalette({ onShowHelp }: CommandPaletteProps) {
     <Spotlight
       actions={[
         { group: 'Go to', actions: goTo },
+        { group: 'Tasks', actions: taskActions },
         { group: 'Actions', actions: commands },
       ]}
       highlightQuery

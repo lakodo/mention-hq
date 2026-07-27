@@ -54,6 +54,18 @@ describe('global keyboard shortcuts', () => {
     expect(await screen.findByPlaceholderText('Type a command or search…')).toBeInTheDocument();
   });
 
+  it('lists tasks in the command palette', async () => {
+    const user = userEvent.setup();
+    // People screen shows no task titles of its own, so a match can only be the palette's.
+    renderApp('/people');
+    await user.keyboard('{Control>}k{/Control}');
+    await screen.findByPlaceholderText('Type a command or search…');
+
+    expect(
+      await screen.findByText('Stripe webhook handling for invoice payments'),
+    ).toBeInTheDocument();
+  });
+
   it('stays dormant while typing in a field', async () => {
     const user = userEvent.setup();
     renderApp('/');
