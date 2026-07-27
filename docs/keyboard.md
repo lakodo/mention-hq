@@ -33,13 +33,20 @@ Two ways, whichever sticks: a mnemonic <kbd>g</kbd> pair, or the tab's number.
 | <kbd>g</kbd> <kbd>o</kbd> · <kbd>6</kbd> | Log |
 | <kbd>g</kbd> <kbd>a</kbd> · <kbd>7</kbd> | Admin |
 
-## Within a list or menu
+## Moving around with the arrows
 
-Move with the arrow keys; <kbd>Tab</kbd> still steps through controls as usual.
+The arrow keys move focus to the **nearest control in that direction**, anywhere in the app — the
+header flows left-to-right across the brain-dump button, the tabs, the search box and the sync
+controls; pressing <kbd>↓</kbd> drops from the header into a bucket's cards or the task list; a task
+row's checkbox and its title sit side by side. <kbd>Tab</kbd> still steps through controls the usual
+way.
 
 | Keys | Action |
 |---|---|
-| <kbd>←</kbd> <kbd>→</kbd> | Move between tabs, or between board columns |
-| <kbd>↑</kbd> <kbd>↓</kbd> | Move between items in a list, or cards in a board column (<kbd>k</kbd> / <kbd>j</kbd> work too) |
-| <kbd>Home</kbd> <kbd>End</kbd> | Jump to the first or last item |
-| <kbd>Enter</kbd> <kbd>Space</kbd> | Open or select the focused item |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Move focus to the nearest control that way |
+| <kbd>Enter</kbd> <kbd>Space</kbd> | Open or activate the focused item |
+
+Two things politely stay out of the way: inside a text box the arrows move the cursor, and only hand
+off once it's at the very start or end; an open dropdown or menu keeps the arrows for its own options.
+
+When you press <kbd>g</kbd>, each tab shows its go-to letter so you don't have to remember them.
