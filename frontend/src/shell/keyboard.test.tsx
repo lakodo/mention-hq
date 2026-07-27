@@ -132,4 +132,19 @@ describe('spatial navigation', () => {
     await user.keyboard('{ArrowLeft}');
     expect(checkbox).toHaveFocus();
   });
+
+  it('does not get stuck on a row menu button (a closed menu keeps no arrows)', async () => {
+    const user = userEvent.setup();
+    renderApp('/task');
+
+    const title = 'Stripe webhook handling for invoice payments';
+    const taskName = await screen.findByLabelText(title);
+    const menu = screen.getByLabelText(`Actions for ${title}`);
+    layout(taskName, 30, 40, 240, 20);
+    layout(menu, 300, 40, 24, 20);
+
+    menu.focus();
+    await user.keyboard('{ArrowLeft}');
+    expect(taskName).toHaveFocus();
+  });
 });

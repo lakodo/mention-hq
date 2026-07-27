@@ -15,11 +15,22 @@ function isTextEditable(el: HTMLElement): el is HTMLInputElement | HTMLTextAreaE
   return el.tagName === 'INPUT' && TEXT_INPUT_TYPES.has((el as HTMLInputElement).type);
 }
 
-/** The control owns its arrows: a combobox/select opens, a number spinner steps, a menu moves. */
+/** The control consumes arrows itself: a combobox/select opens on arrow, a number spinner steps. */
 function ownsArrows(el: HTMLElement): boolean {
   const role = el.getAttribute('role');
-  if (role === 'combobox' || role === 'spinbutton') return true;
-  if (el.getAttribute('aria-haspopup')) return true;
+  if (role === 'combobox' || role === 'listbox' || role === 'spinbutton') return true;
+  // A listbox/tree/grid popup opens or moves on arrow, so hand it the keys. A *menu* button does
+  // not — it opens on Enter/Space — so it stays a spatial-nav stop until its menu is actually open
+  // (then focus is inside the menu and `popupOpen` takes over).
+  const haspopup = el.getAttribute('aria-haspopup');
+  if (
+    haspopup === 'listbox' ||
+    haspopup === 'tree' ||
+    haspopup === 'grid' ||
+    haspopup === 'dialog'
+  ) {
+    return true;
+  }
   return el.tagName === 'INPUT' && (el as HTMLInputElement).type === 'number';
 }
 
