@@ -4,6 +4,7 @@ const META: Record<string, { label: string; bg: string; color: string }> = {
   draft: { label: 'Draft', bg: 'var(--mantine-color-gray-5)', color: '#fff' },
   open: { label: 'Open', bg: 'var(--mantine-color-green-7)', color: '#fff' },
   merged: { label: 'Merged', bg: 'var(--mantine-color-violet-6)', color: '#fff' },
+  closed: { label: 'Closed', bg: 'var(--mantine-color-red-7)', color: '#fff' },
   approved: { label: 'Approved', bg: 'var(--mantine-color-teal-6)', color: '#fff' },
   review_required: { label: 'Review required', bg: 'var(--mantine-color-blue-6)', color: '#fff' },
   changes_requested: {
