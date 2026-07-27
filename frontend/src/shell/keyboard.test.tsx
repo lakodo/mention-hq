@@ -1,6 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
+import { db } from '../test/handlers';
 import { renderApp } from '../test/utils';
 
 /**
@@ -64,6 +65,31 @@ describe('global keyboard shortcuts', () => {
     expect(
       await screen.findByText('Stripe webhook handling for invoice payments'),
     ).toBeInTheDocument();
+  });
+
+  it('lists archived tasks in the command palette too', async () => {
+    const user = userEvent.setup();
+    db.tasks.push({
+      id: 'task:archived-pal',
+      title: 'Retired billing migration',
+      description: null,
+      bucket: 'Infra',
+      status: 'done',
+      priority: 50,
+      tags: [],
+      unread: false,
+      origin: 'manual',
+      archived: true,
+      next_action: null,
+      updated_at: new Date().toISOString(),
+      items: [],
+      candidates: [],
+    });
+    renderApp('/people');
+    await user.keyboard('{Control>}k{/Control}');
+    await screen.findByPlaceholderText('Type a command or search…');
+
+    expect(await screen.findByText('Retired billing migration')).toBeInTheDocument();
   });
 
   it('stays dormant while typing in a field', async () => {

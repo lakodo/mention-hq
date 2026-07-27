@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTasks } from '../api/hooks';
 import { NAV_TARGETS } from '../lib/keyboard';
 import { taskPath } from '../lib/tasks';
+import type { Task } from '../types';
 import { useHq } from './HqContext';
 
 interface CommandPaletteProps {
@@ -18,6 +19,8 @@ export function CommandPalette({ onShowHelp }: CommandPaletteProps) {
   const navigate = useNavigate();
   const { runSync } = useHq();
   const { data: tasks } = useTasks();
+  // Archived tasks are a separate query (the list endpoint returns active or archived, not both).
+  const { data: archivedTasks } = useTasks({ archived: true });
 
   const goTo: SpotlightActionData[] = NAV_TARGETS.map((target) => ({
     id: `go-${target.path}`,
@@ -27,13 +30,18 @@ export function CommandPalette({ onShowHelp }: CommandPaletteProps) {
     onClick: () => navigate(target.path),
   }));
 
-  const taskActions: SpotlightActionData[] = (tasks ?? []).map((task) => ({
+  const toTaskAction = (extraKeyword?: string) => (task: Task) => ({
     id: `task-${task.id}`,
     label: task.title,
-    description: task.bucket,
-    keywords: ['task', task.bucket, ...task.tags],
+    description: extraKeyword ? `${task.bucket} · ${extraKeyword}` : task.bucket,
+    keywords: ['task', task.bucket, ...task.tags, ...(extraKeyword ? [extraKeyword] : [])],
     onClick: () => navigate(taskPath(task.id)),
-  }));
+  });
+
+  const taskActions: SpotlightActionData[] = (tasks ?? []).map(toTaskAction());
+  const archivedActions: SpotlightActionData[] = (archivedTasks ?? []).map(
+    toTaskAction('archived'),
+  );
 
   const commands: SpotlightActionData[] = [
     {
@@ -67,6 +75,7 @@ export function CommandPalette({ onShowHelp }: CommandPaletteProps) {
       actions={[
         { group: 'Go to', actions: goTo },
         { group: 'Tasks', actions: taskActions },
+        { group: 'Archived tasks', actions: archivedActions },
         { group: 'Actions', actions: commands },
       ]}
       highlightQuery
