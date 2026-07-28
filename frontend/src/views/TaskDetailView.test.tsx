@@ -25,6 +25,35 @@ describe('TaskDetailView', () => {
     expect(within(detail).getByText('backend')).toBeInTheDocument();
   });
 
+  it('opens an archived task directly and flips the sidebar to archived', async () => {
+    db.tasks.push({
+      id: 'task:archived-detail',
+      title: 'Old infra migration',
+      description: null,
+      bucket: 'Infra',
+      status: 'done',
+      priority: 50,
+      tags: [],
+      unread: false,
+      origin: 'manual',
+      archived: true,
+      next_action: null,
+      updated_at: new Date().toISOString(),
+      items: [],
+      candidates: [],
+    });
+    renderApp(detailRoute('task:archived-detail'));
+
+    // The detail shows it even though the sidebar starts on active tasks…
+    const detail = await panel();
+    expect(within(detail).getByText('Old infra migration')).toBeInTheDocument();
+
+    // …and the sidebar flips to archived, so the task also appears there (title now in both).
+    await waitFor(() =>
+      expect(screen.getAllByText('Old infra migration').length).toBeGreaterThan(1),
+    );
+  });
+
   it('edits the task priority and persists it', async () => {
     const user = userEvent.setup();
     renderApp(detailRoute(PAYMENTS_TASK_ID));

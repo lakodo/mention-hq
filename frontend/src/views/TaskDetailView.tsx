@@ -41,7 +41,7 @@ import {
   IconTrash,
   IconX,
 } from '@tabler/icons-react';
-import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useState } from 'react';
+import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ReadToggle } from '../components/ReadToggle';
 import { PrStatusPill } from '../components/PrStatusPill';
@@ -63,6 +63,7 @@ import {
   useNextAction,
   useRejectTaskCandidate,
   useSuggestBucket,
+  useTask,
   useTasks,
   useUpdateTask,
 } from '../api/hooks';
@@ -420,7 +421,24 @@ export function TaskDetailView() {
     () => ordered.filter((task) => matchesSidebarQuery(task, sidebarQuery)),
     [ordered, sidebarQuery],
   );
-  const selected = useMemo(() => ordered.find((task) => task.id === id), [ordered, id]);
+  // A task opened from the palette or a link may be archived while the sidebar shows active tasks,
+  // so it isn't in `ordered`. Fetch it by id and fall back to it, so the detail shows straight away.
+  const inList = id !== undefined && ordered.some((task) => task.id === id);
+  const { data: routeTask } = useTask(!inList ? id : undefined);
+  const selected = useMemo(
+    () => ordered.find((task) => task.id === id) ?? routeTask,
+    [ordered, id, routeTask],
+  );
+
+  // And flip the sidebar to its archived view once, so the task also shows (highlighted) in the
+  // list. Guarded per id so a later manual toggle back to active isn't fought.
+  const autoSwitched = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (routeTask?.archived && autoSwitched.current !== routeTask.id) {
+      autoSwitched.current = routeTask.id;
+      setShowArchived(true);
+    }
+  }, [routeTask?.id, routeTask?.archived]);
 
   // Opening a task reads it — that's what un-bolds it on the board and in the list.
   useEffect(() => {
