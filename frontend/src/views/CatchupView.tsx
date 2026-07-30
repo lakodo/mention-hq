@@ -67,12 +67,17 @@ import {
 import { NoMatches } from '../components/NoMatches';
 import { filterItems } from '../lib/search';
 import { formatAgo } from '../lib/time';
+import { useGraceAction } from '../lib/useGraceAction';
 import { useHq } from '../shell/HqContext';
 import type { ItemWithLinks, Link } from '../types';
 
 function confidenceLabel(confidence: number): string {
   return `${Math.round(confidence * 100)}% confident`;
 }
+
+// The grace window before an action commits and the card leaves. Near-instant under the test
+// runner so its many attach/skip flows don't each wait out the real countdown.
+const GRACE_MS = import.meta.env.MODE === 'test' ? 60 : 3500;
 
 // A tracker state's normalised kind → a Mantine palette colour for its badge.
 const STATUS_KIND_COLOR: Record<string, string> = {
@@ -262,12 +267,20 @@ function CatchupCard({
   const createRule = useCreateTriageRule();
   const suggest = useSuggestItemTasks();
 
+  // Before an action hides the card, run it behind a grace bar: it commits only when the bar
+  // fills, and pauses while the pointer is over the card — so you can still click through to the
+  // item's source, or Cancel. Starts paused if you're already hovering (you just clicked inside).
+  const grace = useGraceAction(GRACE_MS);
+  const hovering = useRef(false);
+  const runWithGrace = (commit: () => void) => grace.start(commit, hovering.current);
+
   const busy =
     confirm.isPending ||
     reject.isPending ||
     triage.isPending ||
     unSkip.isPending ||
-    createTask.isPending;
+    createTask.isPending ||
+    grace.active;
   const meta = sourceMeta(item.source);
 
   const fail = (error: unknown) =>
@@ -369,6 +382,14 @@ function CatchupCard({
       aria-label={item.label}
       // A done item is dimmed wherever it shows, for an optional sense of completion.
       style={{ opacity: item.done ? 0.55 : undefined }}
+      onMouseEnter={() => {
+        hovering.current = true;
+        grace.pause();
+      }}
+      onMouseLeave={() => {
+        hovering.current = false;
+        grace.resume();
+      }}
       // A card has no single "open" — Enter drops focus into it, onto the attach box.
       onKeyDown={(event) => {
         if ((event.key !== 'Enter' && event.key !== ' ') || event.target !== event.currentTarget) {
@@ -465,7 +486,7 @@ function CatchupCard({
               link={link}
               busy={busy}
               onConfirm={() => setSelected((prev) => [...new Set([...prev, link.task.id])])}
-              onConfirmAttach={() => attach([link.task.id])}
+              onConfirmAttach={() => runWithGrace(() => attach([link.task.id]))}
               onReject={() =>
                 reject.mutate({ itemId: item.id, taskId: link.task.id }, { onError: fail })
               }
@@ -503,7 +524,11 @@ function CatchupCard({
           // Portalled: the card scrolls and clips, so an inline list gets cut off.
           comboboxProps={{ withinPortal: true }}
         />
-        <Button size="sm" disabled={busy || selected.length === 0} onClick={() => attach(selected)}>
+        <Button
+          size="sm"
+          disabled={busy || selected.length === 0}
+          onClick={() => runWithGrace(() => attach(selected))}
+        >
           Attach
         </Button>
         <Button
@@ -559,13 +584,37 @@ function CatchupCard({
               variant="subtle"
               color="gray"
               disabled={busy}
-              onClick={() => triage.mutate({ itemId: item.id, triaged: true }, { onError: fail })}
+              onClick={() =>
+                runWithGrace(() =>
+                  triage.mutate({ itemId: item.id, triaged: true }, { onError: fail }),
+                )
+              }
             >
               Skip
             </Button>
           </>
         )}
       </Group>
+
+      {grace.active && (
+        <Group gap={8} mt="sm" wrap="nowrap" align="center">
+          <Progress
+            value={grace.progress}
+            size="sm"
+            radius="xl"
+            striped
+            animated
+            color="teal"
+            style={{ flex: 1 }}
+          />
+          <Text fz="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+            hover to keep
+          </Text>
+          <Button size="compact-xs" variant="subtle" color="gray" onClick={grace.cancel}>
+            Cancel
+          </Button>
+        </Group>
+      )}
 
       <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="New task from this item">
         <Stack gap="sm">

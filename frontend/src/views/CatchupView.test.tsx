@@ -34,6 +34,8 @@ describe('CatchupView', () => {
 
     const cards = await screen.findAllByTestId('catchup-card');
     await user.click(within(cards[0]).getByRole('button', { name: 'Skip' }));
+    // The action commits after a grace window that pauses while the pointer is over the card.
+    await user.unhover(cards[0]);
 
     await user.click(screen.getByText('Skipped'));
 
@@ -235,6 +237,7 @@ describe('CatchupView', () => {
     expect(db.catchup.find((i) => i.id === SLACK_ITEM_ID)?.triaged).toBe(false);
 
     await user.click(within(card).getByRole('button', { name: 'Attach' }));
+    await user.unhover(card); // let the grace window commit
 
     await waitFor(() => {
       const item = db.catchup.find((i) => i.id === SLACK_ITEM_ID);
@@ -306,6 +309,7 @@ describe('CatchupView', () => {
     await user.click(await within(listbox).findByText(/Refund flow throws on partial captures/));
     await user.click(await within(listbox).findByText(/Refresh token rotation on scope change/));
     await user.click(within(card).getByRole('button', { name: 'Attach' }));
+    await user.unhover(card); // let the grace window commit
 
     await waitFor(() => {
       const item = db.catchup.find((i) => i.id === SLACK_ITEM_ID);
@@ -321,6 +325,7 @@ describe('CatchupView', () => {
 
     const cards = await screen.findAllByTestId('catchup-card');
     await user.click(within(cards[1]).getByRole('button', { name: 'Skip' }));
+    await user.unhover(cards[1]); // let the grace window commit
 
     await waitFor(() => expect(screen.getAllByTestId('catchup-card')).toHaveLength(1));
   });
@@ -347,13 +352,34 @@ describe('CatchupView', () => {
     renderApp('/catchup');
 
     const proposed = await screen.findByTestId('link-proposed');
+    const card = proposed.closest('[data-testid="catchup-card"]') as HTMLElement;
     await user.click(within(proposed).getByRole('button', { name: 'Confirm & attach' }));
+    await user.unhover(card); // let the grace window commit
 
     await waitFor(() => {
       const item = db.catchup.find((i) => i.id === SLACK_ITEM_ID);
       expect(item?.triaged).toBe(true);
       expect(item?.links.some((l) => l.state === 'confirmed')).toBe(true);
     });
+  });
+
+  it('holds a hiding action behind a grace bar that can be cancelled', async () => {
+    const user = userEvent.setup();
+    renderApp('/catchup');
+
+    const proposed = await screen.findByTestId('link-proposed');
+    const card = proposed.closest('[data-testid="catchup-card"]') as HTMLElement;
+    await user.click(within(proposed).getByRole('button', { name: 'Confirm & attach' }));
+
+    // The grace bar shows (paused while the pointer is over the card) and nothing has committed.
+    const cancel = await within(card).findByRole('button', { name: 'Cancel' });
+    expect(db.catchup.find((i) => i.id === SLACK_ITEM_ID)?.triaged).toBe(false);
+
+    await user.click(cancel);
+    await waitFor(() =>
+      expect(within(card).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument(),
+    );
+    expect(db.catchup.find((i) => i.id === SLACK_ITEM_ID)?.triaged).toBe(false);
   });
 
   it('seeds a triage rule from an item and skips it', async () => {
@@ -459,6 +485,7 @@ describe('CatchupView', () => {
     await user.click(within(proposed).getByRole('button', { name: 'Confirm' }));
     // The failure only happens on Attach now — Confirm just stages the task.
     await user.click(within(card).getByRole('button', { name: 'Attach' }));
+    await user.unhover(card); // let the grace window commit and hit the failing endpoint
 
     expect(await screen.findByText(`Task not found: ${PAYMENTS_TASK_ID}`)).toBeInTheDocument();
   });
