@@ -9,6 +9,7 @@ from app.models import Item, Task
 from app.schemas import (
     ConfirmRequest,
     CreateTaskFromItemRequest,
+    DoneRequest,
     ItemWithLinks,
     MatchStatusOut,
     TaskMatchOut,
@@ -106,5 +107,13 @@ async def create_task(
 async def triage(item_id: str, request: TriageRequest, db: AsyncSession = Depends(get_db)):
     try:
         return await catchup.mark_triaged(db, item_id, request.triaged)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{item_id}/done", response_model=ItemWithLinks)
+async def set_done(item_id: str, request: DoneRequest, db: AsyncSession = Depends(get_db)):
+    try:
+        return await catchup.set_done(db, item_id, request.done)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

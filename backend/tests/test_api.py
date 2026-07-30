@@ -221,6 +221,19 @@ async def test_catchup_lists_only_untriaged(client, db):
     assert (await client.get("/api/catchup")).json() == []
 
 
+async def test_marking_an_item_done_toggles_the_flag_without_hiding_it(client, db):
+    item = await _make_item(db)
+    await db.commit()
+
+    done = (await client.post(f"/api/catchup/{item.id}/done", json={"done": True})).json()
+    assert done["done"] is True
+    # Done is independent of triage — the item still shows in the inbox.
+    assert len((await client.get("/api/catchup")).json()) == 1
+
+    undone = (await client.post(f"/api/catchup/{item.id}/done", json={"done": False})).json()
+    assert undone["done"] is False
+
+
 async def test_items_lists_everything_regardless_of_triage_or_task(client, db):
     await _make_task(db)
     item = await _make_item(db)  # untriaged, on no task

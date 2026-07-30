@@ -258,6 +258,11 @@ export async function triageItem(itemId: string, triaged: boolean): Promise<Item
   return data;
 }
 
+export async function setItemDone(itemId: string, done: boolean): Promise<ItemWithLinks> {
+  const { data } = await api.post<ItemWithLinks>(`/catchup/${seg(itemId)}/done`, { done });
+  return data;
+}
+
 export async function matchAllItems(): Promise<void> {
   await api.post('/catchup/match-all');
 }

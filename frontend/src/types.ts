@@ -41,6 +41,8 @@ export interface Item {
   triaged: boolean;
   triage_reason: string | null;
   triaged_at: string | null;
+  /** An optional, user-set sense of completion; a done item renders dimmed. */
+  done?: boolean;
   pr_status: string | null;
   pr_review_requested: boolean;
   /** A tracker's own state label, e.g. Linear's "In Progress" or "In Review". */

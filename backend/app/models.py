@@ -200,6 +200,9 @@ class Item(Base):
     # has never been tried; once set, the auto-matcher skips it so the brain isn't called
     # again on every sync. Cleared by "Match all" to force a fresh attempt.
     matched_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # An optional, user-set sense of completion, independent of triage: a done item is shown
+    # dimmed wherever it appears. None means not done.
+    done_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, server_default=func.now())
     extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
@@ -215,6 +218,10 @@ class Item(Base):
     @property
     def tasks(self) -> list[Task]:
         return [link.task for link in self.links if link.state != REJECTED]
+
+    @property
+    def done(self) -> bool:
+        return self.done_at is not None
 
     @property
     def pr_status(self) -> str | None:

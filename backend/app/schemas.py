@@ -39,6 +39,7 @@ class ItemOut(BaseModel):
     triaged: bool
     triage_reason: str | None = None
     triaged_at: datetime | None = None
+    done: bool = False
     pr_status: str | None = None
     pr_review_requested: bool = False
     item_status: str | None = None
@@ -171,6 +172,10 @@ class NoteUpdate(BaseModel):
 
 class TriageRequest(BaseModel):
     triaged: bool = True
+
+
+class DoneRequest(BaseModel):
+    done: bool = True
 
 
 class BucketOut(BaseModel):

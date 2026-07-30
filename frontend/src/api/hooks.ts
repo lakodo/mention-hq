@@ -63,6 +63,7 @@ import {
   deleteTriageRule,
   fetchTriageRules,
   testSource,
+  setItemDone,
   triageItem,
   updatePerson,
 } from './client';
@@ -348,6 +349,18 @@ export function useTriageItem(): UseMutationResult<
   const invalidate = useCatchupInvalidation();
   return useMutation({
     mutationFn: ({ itemId, triaged }) => triageItem(itemId, triaged),
+    onSuccess: invalidate,
+  });
+}
+
+export function useSetItemDone(): UseMutationResult<
+  ItemWithLinks,
+  Error,
+  { itemId: string; done: boolean }
+> {
+  const invalidate = useCatchupInvalidation();
+  return useMutation({
+    mutationFn: ({ itemId, done }) => setItemDone(itemId, done),
     onSuccess: invalidate,
   });
 }

@@ -403,6 +403,14 @@ export const handlers = [
     return HttpResponse.json(item);
   }),
 
+  http.post(`${BASE}/catchup/:itemId/done`, async ({ params, request }) => {
+    const item = db.catchup.find((i) => i.id === params.itemId);
+    if (!item) return notFound(`Item not found: ${String(params.itemId)}`);
+    const { done } = (await request.json()) as { done: boolean };
+    item.done = done;
+    return HttpResponse.json(item);
+  }),
+
   http.get(`${BASE}/people`, () => HttpResponse.json(db.people)),
 
   http.post(`${BASE}/people`, async ({ request }) => {

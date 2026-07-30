@@ -427,6 +427,16 @@ describe('CatchupView', () => {
     expect(await screen.findByText(/in GitHub — pr/)).toBeInTheDocument();
   });
 
+  it('marks an item done from the inbox', async () => {
+    const user = userEvent.setup();
+    renderApp('/catchup');
+
+    const cards = await screen.findAllByTestId('catchup-card');
+    await user.click(within(cards[0]).getByLabelText('Mark done'));
+
+    await waitFor(() => expect(db.catchup.find((i) => i.id === SLACK_ITEM_ID)?.done).toBe(true));
+  });
+
   it('celebrates an empty inbox', async () => {
     server.use(http.get('http://localhost:8000/api/catchup', () => HttpResponse.json([])));
     renderApp('/catchup');

@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Center,
+  Checkbox,
   type ComboboxItem,
   Divider,
   Group,
@@ -55,6 +56,7 @@ import {
   useRejectLink,
   useSkippedItems,
   useStopMatching,
+  useSetItemDone,
   useSuggestItemTasks,
   useTask,
   useTasks,
@@ -254,6 +256,7 @@ function CatchupCard({
   const confirm = useConfirmLinks();
   const reject = useRejectLink();
   const triage = useTriageItem();
+  const setDone = useSetItemDone();
   const unSkip = useUnSkipItem();
   const createTask = useCreateTaskFromItem();
   const createRule = useCreateTriageRule();
@@ -364,6 +367,8 @@ function CatchupCard({
       tabIndex={-1}
       data-nav-item
       aria-label={item.label}
+      // A done item is dimmed wherever it shows, for an optional sense of completion.
+      style={{ opacity: item.done ? 0.55 : undefined }}
       // A card has no single "open" — Enter drops focus into it, onto the attach box.
       onKeyDown={(event) => {
         if ((event.key !== 'Enter' && event.key !== ' ') || event.target !== event.currentTarget) {
@@ -378,6 +383,14 @@ function CatchupCard({
       }}
     >
       <Group gap={8} wrap="nowrap" mb={4}>
+        <Checkbox
+          size="xs"
+          checked={item.done ?? false}
+          aria-label={item.done ? 'Mark not done' : 'Mark done'}
+          onChange={(e) =>
+            setDone.mutate({ itemId: item.id, done: e.currentTarget.checked }, { onError: fail })
+          }
+        />
         <SourceDot source={item.source} />
         <Text fz={11} c="dimmed" fw={600} tt="uppercase" style={{ letterSpacing: '0.04em' }}>
           {meta.label}

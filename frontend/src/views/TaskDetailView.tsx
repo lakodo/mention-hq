@@ -62,6 +62,7 @@ import {
   useDeleteTask,
   useNextAction,
   useRejectTaskCandidate,
+  useSetItemDone,
   useSuggestBucket,
   useTask,
   useTasks,
@@ -135,10 +136,18 @@ interface ItemCardProps {
 
 function ItemCardBody({ item }: ItemCardProps) {
   const { data: emojiMap = {} } = useEmojiMap();
+  const setDone = useSetItemDone();
   const meta = sourceMeta(item.source);
 
   return (
     <Group gap={12} align="flex-start" wrap="nowrap">
+      <Checkbox
+        mt={3}
+        size="xs"
+        checked={item.done ?? false}
+        aria-label={item.done ? 'Mark not done' : 'Mark done'}
+        onChange={(e) => setDone.mutate({ itemId: item.id, done: e.currentTarget.checked })}
+      />
       <Box mt={5}>
         <SourceDot source={item.source} />
       </Box>
@@ -197,7 +206,13 @@ function ItemCardBody({ item }: ItemCardProps) {
 
 function ItemCard({ item }: ItemCardProps) {
   return (
-    <Card withBorder radius="sm" p="sm" data-testid="detail-item">
+    <Card
+      withBorder
+      radius="sm"
+      p="sm"
+      data-testid="detail-item"
+      style={{ opacity: item.done ? 0.55 : undefined }}
+    >
       <ItemCardBody item={item} />
     </Card>
   );

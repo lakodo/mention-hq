@@ -211,6 +211,14 @@ async def mark_triaged(db: AsyncSession, item_id: str, triaged: bool = True) -> 
     return await _reload(db, item_id)
 
 
+async def set_done(db: AsyncSession, item_id: str, done: bool) -> Item:
+    """Mark an item done (or not) — an optional sense of completion, independent of triage."""
+    item = await _require_item(db, item_id)
+    item.done_at = datetime.now(UTC) if done else None
+    await db.commit()
+    return await _reload(db, item_id)
+
+
 async def reset_matched_at(db: AsyncSession) -> int:
     """Clear matched_at for every untriaged item so the auto-matcher re-runs them all."""
     items = list((await db.execute(select(Item).where(Item.triaged.is_(False)))).scalars().all())
