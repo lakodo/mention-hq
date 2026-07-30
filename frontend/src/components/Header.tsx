@@ -14,9 +14,9 @@ import {
   TextInput,
   Tooltip,
 } from '@mantine/core';
-import { IconBulb, IconRefresh, IconSearch } from '@tabler/icons-react';
+import { IconAlertTriangle, IconBulb, IconRefresh, IconSearch } from '@tabler/icons-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useCatchup } from '../api/hooks';
+import { useCatchup, useSyncStatus } from '../api/hooks';
 import { NAV_TARGETS } from '../lib/keyboard';
 import { formatAgo } from '../lib/time';
 import { useGoToMode } from '../shell/GoToModeContext';
@@ -54,6 +54,11 @@ export function Header() {
   const { data: catchupItems } = useCatchup();
   const catchupCount = catchupItems?.length ?? 0;
   const catchupBadge = catchupCount > 99 ? '99+' : String(catchupCount);
+
+  // Sources that failed on the last sync (from the sync log the app already polls), so a source
+  // that quietly lost its auth is impossible to miss instead of only showing up in the logs.
+  const { data: syncLog } = useSyncStatus();
+  const failedSources = syncLog?.[0]?.sources.filter((s) => s.error) ?? [];
 
   const path = location.pathname;
   const isDetail = path.startsWith('/task/');
@@ -147,6 +152,27 @@ export function Header() {
           {SECONDARY_TABS.map(tabButton)}
         </Group>
       </Group>
+
+      {failedSources.length > 0 && (
+        <Tooltip
+          withArrow
+          multiline
+          w={260}
+          label={`${failedSources.map((s) => s.source).join(', ')} couldn't sync — likely needs reconnecting. Open Admin to fix it.`}
+        >
+          <Button
+            size="xs"
+            variant="light"
+            color="orange"
+            leftSection={<IconAlertTriangle size={15} />}
+            onClick={() => navigate('/admin')}
+            aria-label={`${failedSources.length} source${failedSources.length > 1 ? 's' : ''} need attention`}
+            style={{ flexShrink: 0 }}
+          >
+            {failedSources.length} {failedSources.length === 1 ? 'source' : 'sources'} failing
+          </Button>
+        </Tooltip>
+      )}
 
       {showToolbar && (
         <>

@@ -49,10 +49,14 @@ export function AppLayout() {
 
     syncRef.current.mutate(undefined, {
       onSuccess: (result) => {
+        // Each error reads "source name: detail"; name the sources so a failure is actionable.
+        const failed = result.errors.map((e) => e.split(':')[0].trim());
         notifications.show({
-          title: 'Sync complete',
-          message: syncMessage(result),
-          color: result.errors.length ? 'orange' : 'teal',
+          title: failed.length ? 'Sync finished with problems' : 'Sync complete',
+          message: failed.length
+            ? `Couldn't sync ${failed.join(', ')} — open Admin to reconnect.`
+            : syncMessage(result),
+          color: failed.length ? 'orange' : 'teal',
         });
       },
       onError: (error) => {

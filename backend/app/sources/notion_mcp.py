@@ -278,7 +278,14 @@ class NotionMcpSource(Source):
         if protocol:
             headers["MCP-Protocol-Version"] = protocol
         response = await client.post(MCP_URL, headers=headers, json=payload)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            # An expired or revoked token can't be refreshed silently — say so plainly, so the
+            # sync log and Admin show "reconnect" rather than a bare 401.
+            if exc.response.status_code in (401, 403):
+                raise RuntimeError("Notion access expired — reconnect this source in Admin") from exc
+            raise
         return response
 
 

@@ -51,6 +51,39 @@ describe('AppLayout sync', () => {
     expect(screen.queryByText('Sync failed')).not.toBeInTheDocument();
   });
 
+  it('flags a source that failed on the last sync so it is not just in the logs', async () => {
+    server.use(
+      http.get('http://localhost:8000/api/sync/status', () =>
+        HttpResponse.json([
+          {
+            id: 9,
+            started_at: new Date().toISOString(),
+            finished_at: new Date().toISOString(),
+            sources: [
+              {
+                source: 'my-notion',
+                kind: 'notion_mcp',
+                items_fetched: 0,
+                configured: true,
+                error: 'Notion access expired — reconnect this source in Admin',
+              },
+            ],
+            items_fetched: 0,
+            items_added: 0,
+            items_updated: 0,
+            proposals: 0,
+            tasks_updated: 0,
+            duration_seconds: 1,
+            error: 'my-notion: expired',
+          },
+        ]),
+      ),
+    );
+    renderApp('/');
+
+    expect(await screen.findByText('1 source failing')).toBeInTheDocument();
+  });
+
   it('still surfaces a real sync failure', async () => {
     server.use(
       http.post(SYNC, () => HttpResponse.json({ detail: 'Everything broke' }, { status: 500 })),

@@ -1025,6 +1025,12 @@ class TestNotionMcp:
         assert items[0].extra["mention"] is False, "a topic-search hit is not a mention"
 
     @respx.mock
+    async def test_an_expired_token_asks_to_reconnect_rather_than_a_bare_401(self, notion_mcp):
+        respx.post("https://mcp.notion.com/mcp").mock(return_value=httpx.Response(401, text="unauthorized"))
+        with pytest.raises(RuntimeError, match="reconnect"):
+            await notion_mcp.fetch()
+
+    @respx.mock
     async def test_identity_search_flags_a_page_as_mentioning_you(self):
         source = NotionMcpSource({"token": "mcp-token", "identity": "Ada Lovelace"})
         entry = {"id": "page-1", "title": "Roadmap", "url": "u", "type": "page"}
