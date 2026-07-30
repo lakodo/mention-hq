@@ -410,7 +410,7 @@ class TestSlack:
 
         items = await slack.fetch()
 
-        assert len(items) == 1, "the same thread matching both queries must collapse to one item"
+        assert len(items) == 1, "the same thread matching every query must collapse to one item"
         item = items[0]
         assert item.source == "slack"
         assert item.id == "slack:C01:1752660000.000100"
@@ -430,6 +430,46 @@ class TestSlack:
         assert item.reference_keys == {"ENG-42"}
         assert item.identity_keys == set()
         assert item.status is None
+
+    @respx.mock
+    async def test_a_channel_mention_you_did_not_write_is_one_item_per_thread(self, slack):
+        # A thread you were pinged in but never wrote to: from:/to: miss it, the bare mention
+        # query finds it, and being named twice still collapses to a single thread item.
+        root_ts = "1752669000.000100"
+        replies = [
+            {
+                "ts": "1752669500.000200",
+                "thread_ts": root_ts,
+                "text": "hey <@U1> could you check that?",
+                "permalink": f"https://acme.slack.com/archives/C09/p200?thread_ts={root_ts}",
+                "channel": {"id": "C09", "name": "mo"},
+            },
+            {
+                "ts": "1752670000.000300",
+                "thread_ts": root_ts,
+                "text": "<@U1> ping again",
+                "permalink": f"https://acme.slack.com/archives/C09/p300?thread_ts={root_ts}",
+                "channel": {"id": "C09", "name": "mo"},
+            },
+        ]
+
+        def handler(request):
+            query = request.url.params.get("query", "")
+            found = replies if query.startswith("<@U1>") else []
+            return httpx.Response(200, json={"ok": True, "messages": {"matches": found}})
+
+        respx.get("https://slack.com/api/search.messages").mock(side_effect=handler)
+        respx.get("https://slack.com/api/users.info").mock(
+            return_value=httpx.Response(
+                200, json={"ok": True, "user": {"id": "U1", "profile": {"display_name": "joris"}}}
+            )
+        )
+
+        items = await slack.fetch()
+
+        assert len(items) == 1, "one item per thread, even when mentioned several times"
+        assert items[0].id == f"slack:C09:{root_ts}"
+        assert items[0].label.startswith("#mo - ")
 
     @respx.mock
     async def test_slack_reports_failure_with_status_200(self, slack):

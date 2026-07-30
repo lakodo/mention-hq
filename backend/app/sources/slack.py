@@ -121,7 +121,10 @@ class SlackSource(Source):
         matches: dict[str, dict] = {}
         async with httpx.AsyncClient(timeout=20) as client:
             user_id = await self._user_id(client)
-            queries = [f"from:<@{user_id}>", f"to:<@{user_id}>"]
+            # `from:` your own messages; `to:` DMs sent to you; `<@you>` any message that mentions
+            # you. `to:` does not surface an @mention in a channel or thread reply — only the bare
+            # mention token does — so without it a ping where you weren't the author is missed.
+            queries = [f"from:<@{user_id}>", f"to:<@{user_id}>", f"<@{user_id}>"]
             for query in queries:
                 payload = await self._call(
                     client,
