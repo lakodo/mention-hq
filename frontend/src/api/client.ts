@@ -306,6 +306,22 @@ export async function openBackupFolder(): Promise<{ path: string }> {
   return data;
 }
 
+export interface ReportsResult {
+  count: number;
+  task_map_path: string;
+  generated_at: string;
+}
+
+export async function generateReports(): Promise<ReportsResult> {
+  const { data } = await api.post<ReportsResult>('/tasks/reports');
+  return data;
+}
+
+export async function openReportsFolder(): Promise<{ path: string }> {
+  const { data } = await api.post<{ path: string }>('/tasks/reports/reveal');
+  return data;
+}
+
 export async function fetchSourceKinds(): Promise<SourceKind[]> {
   const { data } = await api.get<SourceKind[]>('/admin/source-kinds');
   return data;

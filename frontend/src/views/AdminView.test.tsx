@@ -33,6 +33,16 @@ describe('AdminView', () => {
     expect(within(slack).getByText('4 channels watched')).toBeInTheDocument();
   });
 
+  it('generates task reports and reports how many were written', async () => {
+    const user = userEvent.setup();
+    renderApp('/admin');
+
+    await user.click(await screen.findByRole('button', { name: 'Generate task reports' }));
+
+    expect(await screen.findByText('Reports written')).toBeInTheDocument();
+    expect(await screen.findByText(/3 tasks/)).toBeInTheDocument();
+  });
+
   it('shows the manifest to copy when a source has one', async () => {
     const user = userEvent.setup();
     renderApp('/admin');

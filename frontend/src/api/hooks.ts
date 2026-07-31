@@ -8,7 +8,10 @@ import {
 import {
   addIdentity,
   backupDatabase,
+  generateReports,
   openBackupFolder,
+  openReportsFolder,
+  type ReportsResult,
   addSource,
   archiveBucket,
   confirmLinks,
@@ -514,6 +517,14 @@ export function useOpenBackupFolder(): UseMutationResult<{ path: string }, Error
 
 export function useEnrichTasks(): UseMutationResult<{ scheduled: number }, Error, void> {
   return useMutation({ mutationFn: enrichTasks });
+}
+
+export function useGenerateReports(): UseMutationResult<ReportsResult, Error, void> {
+  return useMutation({ mutationFn: generateReports });
+}
+
+export function useOpenReportsFolder(): UseMutationResult<{ path: string }, Error, void> {
+  return useMutation({ mutationFn: openReportsFolder });
 }
 
 export function useEmojiMap(): UseQueryResult<Record<string, string>> {

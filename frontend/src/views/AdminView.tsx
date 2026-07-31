@@ -25,6 +25,7 @@ import { notifications } from '@mantine/notifications';
 import {
   IconChevronDown,
   IconChevronUp,
+  IconFileText,
   IconFolderOpen,
   IconFolderSearch,
   IconPencil,
@@ -41,7 +42,9 @@ import {
   useAIStatus,
   useAddSource,
   useBackupDatabase,
+  useGenerateReports,
   useOpenBackupFolder,
+  useOpenReportsFolder,
   useBuckets,
   useCreateBucket,
   useDeleteBucket,
@@ -154,6 +157,52 @@ function DatabaseSection() {
           }
         >
           Open backup folder
+        </Button>
+      </Group>
+    </Card>
+  );
+}
+
+function ReportsSection() {
+  const generate = useGenerateReports();
+  const openFolder = useOpenReportsFolder();
+
+  return (
+    <Card withBorder radius="md" p="md">
+      <Title order={5} mb="xs">
+        Task reports
+      </Title>
+      <Text fz="xs" c="dimmed" mb="sm">
+        Write a Markdown report per task under <code>~/.hq/tasks/</code>, plus a priority-ordered{' '}
+        <code>task-map.md</code> — a read-only export to point another tool at. Slack, GitHub and
+        Linear items carry their full content.
+      </Text>
+      <Group gap="sm">
+        <Button
+          variant="light"
+          leftSection={<IconFileText size={16} />}
+          loading={generate.isPending}
+          onClick={() =>
+            generate.mutate(undefined, {
+              onSuccess: (r) => ok('Reports written', `${r.count} tasks · ${r.task_map_path}`),
+              onError: fail,
+            })
+          }
+        >
+          Generate task reports
+        </Button>
+        <Button
+          variant="default"
+          leftSection={<IconFolderOpen size={16} />}
+          loading={openFolder.isPending}
+          onClick={() =>
+            openFolder.mutate(undefined, {
+              onSuccess: () => ok('Opened', 'The reports folder is open in your file manager.'),
+              onError: fail,
+            })
+          }
+        >
+          Open reports folder
         </Button>
       </Group>
     </Card>
@@ -1092,6 +1141,7 @@ export function AdminView() {
       <Stack gap="lg" style={{ maxWidth: 1100 }}>
         <AppNameSection />
         <DatabaseSection />
+        <ReportsSection />
         <BucketsSection />
         <SourcesSection />
         <AISection />

@@ -547,6 +547,16 @@ export const handlers = [
 
   http.post(`${BASE}/admin/backup/reveal`, () => HttpResponse.json({ path: '/app/backups' })),
 
+  http.post(`${BASE}/tasks/reports`, () =>
+    HttpResponse.json({
+      count: 3,
+      task_map_path: '/Users/me/.hq/task-map.md',
+      generated_at: '2026-07-31T09:00:00Z',
+    }),
+  ),
+
+  http.post(`${BASE}/tasks/reports/reveal`, () => HttpResponse.json({ path: '/Users/me/.hq' })),
+
   http.get(`${BASE}/admin/emoji`, () => HttpResponse.json({})),
 
   http.get(`${BASE}/admin/browse`, ({ request }) => {
