@@ -287,11 +287,11 @@ describe('CatchupView', () => {
     // Hidden while the search is empty…
     expect(within(listbox).queryByText(/Old migration cleanup/)).not.toBeInTheDocument();
 
-    // …surfaced (marked archived) once you type its name.
+    // …surfaced once you type its name, with its bucket and an "archived" tag as badges.
     await user.type(input, 'migration');
-    expect(
-      await within(listbox).findByText('Old migration cleanup · Infra · archived'),
-    ).toBeInTheDocument();
+    expect(await within(listbox).findByText('Old migration cleanup')).toBeInTheDocument();
+    expect(within(listbox).getByText('Infra')).toBeInTheDocument();
+    expect(within(listbox).getByText('archived')).toBeInTheDocument();
   });
 
   it('attaches one item to several tasks at once', async () => {

@@ -221,10 +221,17 @@ function LinkRow({ link, busy, onConfirm, onConfirmAttach, onReject }: LinkRowPr
   );
 }
 
+interface TaskMeta {
+  title: string;
+  bucket: string;
+  archived: boolean;
+}
+
 interface CatchupCardProps {
   item: ItemWithLinks;
   taskOptions: { value: string; label: string }[];
   archivedTaskIds: Set<string>;
+  taskMeta: Map<string, TaskMeta>;
   bucketOptions: string[];
   delayAttach: boolean;
   skipped?: boolean;
@@ -234,6 +241,7 @@ function CatchupCard({
   item,
   taskOptions,
   archivedTaskIds,
+  taskMeta,
   bucketOptions,
   delayAttach,
   skipped = false,
@@ -530,6 +538,25 @@ function CatchupCard({
                 (a, b) =>
                   Number(archivedTaskIds.has(a.value)) - Number(archivedTaskIds.has(b.value)),
               );
+          }}
+          renderOption={({ option }) => {
+            const meta = taskMeta.get(option.value);
+            if (!meta) return <Text fz="sm">{option.label}</Text>;
+            return (
+              <Group gap={8} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+                <Text fz="sm" truncate c={meta.archived ? 'dimmed' : undefined} style={{ flex: 1 }}>
+                  {meta.title}
+                </Text>
+                <Badge size="xs" variant="light" color="gray" radius="sm">
+                  {meta.bucket}
+                </Badge>
+                {meta.archived && (
+                  <Badge size="xs" variant="light" color="orange" radius="sm">
+                    archived
+                  </Badge>
+                )}
+              </Group>
+            );
           }}
           style={{ flex: 1, minWidth: 0 }}
           // Portalled: the card scrolls and clips, so an inline list gets cut off.
@@ -966,6 +993,16 @@ export function CatchupView() {
     () => new Set((archivedTasks ?? []).map((task) => task.id)),
     [archivedTasks],
   );
+  // Structured metadata per option id, so the dropdown can render the bucket as a badge and mark
+  // archived tasks — the flat label stays "title · bucket [· archived]" so search still matches.
+  const taskMeta = useMemo(() => {
+    const meta = new Map<string, { title: string; bucket: string; archived: boolean }>();
+    for (const task of tasks ?? [])
+      meta.set(task.id, { title: task.title, bucket: task.bucket, archived: false });
+    for (const task of archivedTasks ?? [])
+      meta.set(task.id, { title: task.title, bucket: task.bucket, archived: true });
+    return meta;
+  }, [tasks, archivedTasks]);
   const bucketOptions = useMemo(() => (buckets ?? []).map((b) => b.name), [buckets]);
 
   const skipped = tab === 'skipped';
@@ -1069,6 +1106,7 @@ export function CatchupView() {
               item={item}
               taskOptions={taskOptions}
               archivedTaskIds={archivedTaskIds}
+              taskMeta={taskMeta}
               bucketOptions={bucketOptions}
               delayAttach={delayAttach}
               skipped={skipped}
