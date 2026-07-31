@@ -389,6 +389,12 @@ class BackupOut(BaseModel):
     created_at: datetime
 
 
+class ReportsOut(BaseModel):
+    count: int
+    task_map_path: str
+    generated_at: datetime
+
+
 class FolderOut(BaseModel):
     path: str
 

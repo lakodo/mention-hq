@@ -7,10 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import get_db
 from app.models import CONFIRMED, PROPOSED, REJECTED, Item, Link, Task
-from app.schemas import NextActionOut, TaskCreate, TaskOut, TaskPatch
-from app.services import ai, enrich
+from app.schemas import FolderOut, NextActionOut, ReportsOut, TaskCreate, TaskOut, TaskPatch
+from app.services import ai, enrich, reports
 from app.services.buckets import UNCATEGORIZED, load_matcher
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -92,6 +93,22 @@ async def enrich_tasks(db: AsyncSession = Depends(get_db)) -> dict[str, int]:
     """Backfill: compute the next action for every active task that lacks one, in the
     background. Returns how many were scheduled."""
     return {"scheduled": await enrich.backfill(db)}
+
+
+@router.post("/reports", response_model=ReportsOut)
+async def generate_reports(db: AsyncSession = Depends(get_db)) -> ReportsOut:
+    """Write a Markdown report per task under hq_dir, plus the priority-ordered task-map index."""
+    result = await reports.generate_all_reports(db, get_settings())
+    return ReportsOut(
+        count=result.count,
+        task_map_path=str(result.task_map_path),
+        generated_at=datetime.now(UTC),
+    )
+
+
+@router.post("/reports/reveal", response_model=FolderOut)
+async def reveal_reports() -> FolderOut:
+    return FolderOut(path=str(reports.reveal_reports(get_settings())))
 
 
 @router.get("/{task_id}", response_model=TaskOut)

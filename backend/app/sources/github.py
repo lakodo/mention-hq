@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import httpx
 
 from app.sources.base import ConfigField, Detection, RawItem, Source
+
+if TYPE_CHECKING:
+    from app.models import Item
 from app.sources.keys import all_reference_keys, github_key
 from app.sources.tools import run_tool
 
@@ -87,6 +90,25 @@ class GitHubSource(Source):
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(f"{API_ROOT}/user", headers=self._headers())
             response.raise_for_status()
+
+    async def _get(self, client: httpx.AsyncClient, path: str) -> dict | list:
+        response = await client.get(f"{API_ROOT}{path}", headers=self._headers())
+        response.raise_for_status()
+        return response.json()
+
+    async def item_detail(self, item: Item) -> str | None:
+        """The PR/issue body and its discussion, as Markdown."""
+        repo = (item.extra or {}).get("repo")
+        number = (item.context or "").lstrip("#")
+        if not repo or not number.isdigit() or not self.is_configured():
+            return None
+        is_pr = item.source == "pr"
+        async with httpx.AsyncClient(timeout=20) as client:
+            kind = "pulls" if is_pr else "issues"
+            main = await self._get(client, f"/repos/{repo}/{kind}/{number}")
+            comments = await self._get(client, f"/repos/{repo}/issues/{number}/comments")
+            reviews = await self._get(client, f"/repos/{repo}/pulls/{number}/comments") if is_pr else []
+        return _render_github_detail(main, comments, reviews)
 
     async def fetch(self) -> list[RawItem]:
         if not self.is_configured():
@@ -269,3 +291,23 @@ def _repo_from_url(repository_url: str) -> str | None:
     if len(parts) < 2:
         return None
     return f"{parts[-2]}/{parts[-1]}"
+
+
+def _github_comment(comment: dict, where: str = "") -> str:
+    author = (comment.get("user") or {}).get("login", "someone")
+    body = (comment.get("body") or "").strip()
+    return f"**@{author}**{where}:\n\n{body}"
+
+
+def _render_github_detail(main: dict, comments: list, reviews: list) -> str:
+    """PR/issue body followed by its discussion (issue + inline review comments), oldest first."""
+    parts = [(main.get("body") or "").strip() or "_No description._"]
+    threads: list[tuple[str, str]] = [(c.get("created_at", ""), _github_comment(c)) for c in comments]
+    for c in reviews:
+        where = f" on `{c.get('path')}`" if c.get("path") else ""
+        threads.append((c.get("created_at", ""), _github_comment(c, where)))
+    if threads:
+        threads.sort(key=lambda t: t[0])
+        parts.append("#### Comments")
+        parts.extend(text for _, text in threads)
+    return "\n\n".join(parts)

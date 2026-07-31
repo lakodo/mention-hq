@@ -15,7 +15,10 @@ import abc
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import ClassVar, Literal, Protocol
+from typing import TYPE_CHECKING, ClassVar, Literal, Protocol
+
+if TYPE_CHECKING:
+    from app.models import Item
 
 TITLE_PRIORITY = ["linear", "issue", "pr", "markdown", "todo", "branch", "dust", "slack"]
 
@@ -173,6 +176,12 @@ class Source(abc.ABC):
 
     def detail(self) -> str:
         return ""
+
+    async def item_detail(self, item: Item) -> str | None:
+        """One item's full content as Markdown, for a task report — a PR body and its comments,
+        a Linear issue's description and comments, a local file's body. None when the source has
+        nothing richer than the fields already stored (the report then falls back to those)."""
+        return None
 
     async def check(self) -> None:
         """Raise if the source is unreachable or misconfigured. Backs /admin/sources/{id}/test."""

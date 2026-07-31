@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # Only used when no OS keychain is available; see app/security/secrets.py.
     secrets_dir: Path = Path.home() / ".config" / "personal-hq"
 
+    # Where per-task Markdown reports and the task-map index are written (task:reports).
+    # Point HQ_DIR at a throwaway folder to generate reports without touching the real one.
+    hq_dir: Path = Path.home() / ".hq"
+
     # Built frontend. Served by the API when present, so a production run is one process
     # on one origin; absent in dev, where Vite serves it with hot reload.
     frontend_dist: Path = BACKEND_DIR.parent / "frontend" / "dist"

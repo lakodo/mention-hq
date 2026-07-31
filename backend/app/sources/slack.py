@@ -216,9 +216,8 @@ def _to_item(match: dict, names: dict[str, str], emoji: dict[str, str]) -> RawIt
     raw = _message_text(match)
     thread_ts = _thread_ts(match)
 
-    body = _render(raw, names) or _fallback_label(match)
-    if len(body) > MAX_BODY_CHARS:
-        body = body[:MAX_BODY_CHARS].rstrip() + "…"
+    full = _render(raw, names) or _fallback_label(match)
+    body = full if len(full) <= MAX_BODY_CHARS else full[:MAX_BODY_CHARS].rstrip() + "…"
     # "#channel - message" (or "DM with @x - message"), so an item reads as itself without a
     # second line, and a thread that pinged you five times still shows as one.
     label = f"{_channel_label(channel, names)} - {body}"
@@ -244,8 +243,25 @@ def _to_item(match: dict, names: dict[str, str], emoji: dict[str, str]) -> RawIt
         # references but no identity, and never wins the task title. Keys read the raw text
         # so a ticket ref inside a link or mention isn't lost to rendering.
         reference_keys=all_reference_keys(raw),
-        extra={"thread_ts": thread_ts, "emoji": used},
+        # The label is truncated for the UI, but the full matched-message text is kept for the
+        # task report — it's what search.messages already returns, so no extra scope is needed.
+        extra={
+            "thread_ts": thread_ts,
+            "emoji": used,
+            "message_text": full,
+            "files": _file_urls(match),
+        },
     )
+
+
+def _file_urls(match: dict) -> list[str]:
+    """Permalinks of any files/images on the matched message, for the report."""
+    urls = []
+    for file in match.get("files") or []:
+        url = file.get("permalink") or file.get("url_private")
+        if url:
+            urls.append(url)
+    return urls
 
 
 def _display_name(user: dict) -> str:

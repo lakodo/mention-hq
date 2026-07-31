@@ -3,14 +3,27 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import httpx
 
 from app.sources.base import ConfigField, RawItem, Source
 from app.sources.keys import all_reference_keys
 
+if TYPE_CHECKING:
+    from app.models import Item
+
 API_URL = "https://api.linear.app/graphql"
+
+ISSUE_DETAIL_QUERY = """
+query Issue($id: String!) {
+  issue(id: $id) {
+    title
+    description
+    comments { nodes { body createdAt user { displayName } } }
+  }
+}
+"""
 
 MY_ISSUES_QUERY = """
 query MyIssues($userId: ID!) {
@@ -123,6 +136,26 @@ class LinearSource(Source):
             user_id = await self._user_id(client)
             data = await self._post(client, MY_ISSUES_QUERY, {"userId": user_id})
         return [_to_item(node) for node in data["issues"]["nodes"]]
+
+    async def item_detail(self, item: Item) -> str | None:
+        """The Linear issue's description and comments, as Markdown."""
+        node_id = item.id.removeprefix("linear:")
+        if not node_id or not self.is_configured():
+            return None
+        async with httpx.AsyncClient(timeout=15) as client:
+            data = await self._post(client, ISSUE_DETAIL_QUERY, {"id": node_id})
+        return _render_linear_detail(data.get("issue") or {})
+
+
+def _render_linear_detail(issue: dict) -> str:
+    parts = [(issue.get("description") or "").strip() or "_No description._"]
+    comments = ((issue.get("comments") or {}).get("nodes")) or []
+    if comments:
+        parts.append("#### Comments")
+        for comment in comments:
+            author = (comment.get("user") or {}).get("displayName", "someone")
+            parts.append(f"**{author}**:\n\n{(comment.get('body') or '').strip()}")
+    return "\n\n".join(parts)
 
 
 def _to_item(node: dict) -> RawItem:

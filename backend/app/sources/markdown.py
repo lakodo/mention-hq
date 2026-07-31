@@ -6,10 +6,13 @@ import glob
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from app.sources.base import ConfigField, RawItem, Source
 from app.sources.keys import all_reference_keys
+
+if TYPE_CHECKING:
+    from app.models import Item
 
 H1_RE = re.compile(r"^#\s+(?P<title>.+?)\s*$", re.MULTILINE)
 
@@ -42,6 +45,16 @@ class MarkdownSource(Source):
                 if item:
                     items.append(item)
         return items
+
+    async def item_detail(self, item: Item) -> str | None:
+        """The doc's full body — a local read, so a report carries the whole spec, not the head."""
+        raw = (item.extra or {}).get("file_path")
+        if not raw:
+            return None
+        try:
+            return Path(raw).read_text(encoding="utf-8", errors="replace").strip() or None
+        except OSError:
+            return None
 
 
 def _read_doc(path: Path) -> RawItem | None:
