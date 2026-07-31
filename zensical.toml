@@ -24,6 +24,7 @@ nav = [
   ] },
   { "Sources" = "sources.md" },
   { "The AI brain" = "brain.md" },
+  { "Task reports" = "task-reports.md" },
   { "Keyboard" = "keyboard.md" },
 ]
 
