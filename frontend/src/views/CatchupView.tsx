@@ -57,10 +57,12 @@ import {
   useSkippedItems,
   useStopMatching,
   useSetItemDone,
+  useSettings,
   useSuggestItemTasks,
   useTask,
   useTasks,
   useTriageItem,
+  useUpdateSettings,
   useTriageRules,
   useUnSkipItem,
 } from '../api/hooks';
@@ -224,6 +226,7 @@ interface CatchupCardProps {
   taskOptions: { value: string; label: string }[];
   archivedTaskIds: Set<string>;
   bucketOptions: string[];
+  delayAttach: boolean;
   skipped?: boolean;
 }
 
@@ -232,6 +235,7 @@ function CatchupCard({
   taskOptions,
   archivedTaskIds,
   bucketOptions,
+  delayAttach,
   skipped = false,
 }: CatchupCardProps) {
   // An item can already be attached (a confirmed link) yet still sit untriaged. Show those
@@ -272,7 +276,9 @@ function CatchupCard({
   // item's source, or Cancel. Starts paused if you're already hovering (you just clicked inside).
   const grace = useGraceAction(GRACE_MS);
   const hovering = useRef(false);
-  const runWithGrace = (commit: () => void) => grace.start(commit, hovering.current);
+  // Attaching runs behind the grace bar when the setting is on; otherwise it commits at once.
+  const runWithGrace = (commit: () => void) =>
+    delayAttach ? grace.start(commit, hovering.current) : commit();
 
   const busy =
     confirm.isPending ||
@@ -380,8 +386,13 @@ function CatchupCard({
       tabIndex={-1}
       data-nav-item
       aria-label={item.label}
-      // A done item is dimmed wherever it shows, for an optional sense of completion.
-      style={{ opacity: item.done ? 0.55 : undefined }}
+      // A done item is dimmed wherever it shows, for an optional sense of completion. Relative +
+      // clipped so the grace bar can sit flush along the bottom edge without resizing the card.
+      style={{
+        opacity: item.done ? 0.55 : undefined,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
       onMouseEnter={() => {
         hovering.current = true;
         grace.pause();
@@ -584,11 +595,7 @@ function CatchupCard({
               variant="subtle"
               color="gray"
               disabled={busy}
-              onClick={() =>
-                runWithGrace(() =>
-                  triage.mutate({ itemId: item.id, triaged: true }, { onError: fail }),
-                )
-              }
+              onClick={() => triage.mutate({ itemId: item.id, triaged: true }, { onError: fail })}
             >
               Skip
             </Button>
@@ -597,23 +604,17 @@ function CatchupCard({
       </Group>
 
       {grace.active && (
-        <Group gap={8} mt="sm" wrap="nowrap" align="center">
-          <Progress
-            value={grace.progress}
-            size="sm"
-            radius="xl"
-            striped
-            animated
-            color="teal"
-            style={{ flex: 1 }}
-          />
-          <Text fz="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-            hover to keep
-          </Text>
-          <Button size="compact-xs" variant="subtle" color="gray" onClick={grace.cancel}>
-            Cancel
-          </Button>
-        </Group>
+        // An overlay at the very bottom edge, so the countdown never resizes the card. Hover the
+        // card to pause it (handled on the Card above).
+        <Progress
+          data-testid="grace-bar"
+          value={grace.progress}
+          size="xs"
+          radius={0}
+          color="teal"
+          transitionDuration={0}
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}
+        />
       )}
 
       <Modal opened={modalOpen} onClose={() => setModalOpen(false)} title="New task from this item">
@@ -916,6 +917,11 @@ export function CatchupView() {
   const { data: buckets } = useBuckets();
   const { data: matchStatus } = useMatchStatus();
   const matchAll = useMatchAllItems();
+  const { data: settings } = useSettings();
+  const updateSettings = useUpdateSettings();
+  // On by default: attaching runs behind a grace bar so you can still reach the item's source.
+  // Turn it off for a pure catch-up flow where a filed item vanishes at once.
+  const delayAttach = settings?.attach_delay ?? true;
 
   // Opening catch-up refreshes it, so the inbox reflects what's landed since you were last here.
   // Skipped when a sync ran recently, so flipping back and forth doesn't sync on every visit.
@@ -1018,6 +1024,13 @@ export function CatchupView() {
             <MatchProgress />
           ) : (
             <>
+              <Checkbox
+                size="xs"
+                label="Delay after attach"
+                checked={delayAttach}
+                onChange={(e) => updateSettings.mutate({ attach_delay: e.currentTarget.checked })}
+                styles={{ label: { fontSize: 'var(--mantine-font-size-xs)' } }}
+              />
               <Button
                 size="xs"
                 variant="default"
@@ -1057,6 +1070,7 @@ export function CatchupView() {
               taskOptions={taskOptions}
               archivedTaskIds={archivedTaskIds}
               bucketOptions={bucketOptions}
+              delayAttach={delayAttach}
               skipped={skipped}
             />
           ))}

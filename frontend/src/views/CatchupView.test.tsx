@@ -34,8 +34,6 @@ describe('CatchupView', () => {
 
     const cards = await screen.findAllByTestId('catchup-card');
     await user.click(within(cards[0]).getByRole('button', { name: 'Skip' }));
-    // The action commits after a grace window that pauses while the pointer is over the card.
-    await user.unhover(cards[0]);
 
     await user.click(screen.getByText('Skipped'));
 
@@ -325,7 +323,6 @@ describe('CatchupView', () => {
 
     const cards = await screen.findAllByTestId('catchup-card');
     await user.click(within(cards[1]).getByRole('button', { name: 'Skip' }));
-    await user.unhover(cards[1]); // let the grace window commit
 
     await waitFor(() => expect(screen.getAllByTestId('catchup-card')).toHaveLength(1));
   });
@@ -363,7 +360,7 @@ describe('CatchupView', () => {
     });
   });
 
-  it('holds a hiding action behind a grace bar that can be cancelled', async () => {
+  it('holds an attach behind a grace bar that pauses while the card is hovered', async () => {
     const user = userEvent.setup();
     renderApp('/catchup');
 
@@ -371,15 +368,24 @@ describe('CatchupView', () => {
     const card = proposed.closest('[data-testid="catchup-card"]') as HTMLElement;
     await user.click(within(proposed).getByRole('button', { name: 'Confirm & attach' }));
 
-    // The grace bar shows (paused while the pointer is over the card) and nothing has committed.
-    const cancel = await within(card).findByRole('button', { name: 'Cancel' });
+    // The grace bar shows and, while the pointer is over the card, nothing commits.
+    expect(await within(card).findByTestId('grace-bar')).toBeInTheDocument();
     expect(db.catchup.find((i) => i.id === SLACK_ITEM_ID)?.triaged).toBe(false);
 
-    await user.click(cancel);
-    await waitFor(() =>
-      expect(within(card).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument(),
-    );
-    expect(db.catchup.find((i) => i.id === SLACK_ITEM_ID)?.triaged).toBe(false);
+    // Leaving the card lets it commit.
+    await user.unhover(card);
+    await waitFor(() => expect(db.catchup.find((i) => i.id === SLACK_ITEM_ID)?.triaged).toBe(true));
+  });
+
+  it('attaches at once, with no grace bar, when the delay setting is off', async () => {
+    db.settings.attach_delay = false;
+    const user = userEvent.setup();
+    renderApp('/catchup');
+
+    const proposed = await screen.findByTestId('link-proposed');
+    await user.click(within(proposed).getByRole('button', { name: 'Confirm & attach' }));
+
+    await waitFor(() => expect(db.catchup.find((i) => i.id === SLACK_ITEM_ID)?.triaged).toBe(true));
   });
 
   it('seeds a triage rule from an item and skips it', async () => {

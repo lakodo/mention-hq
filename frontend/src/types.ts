@@ -291,6 +291,7 @@ export interface SyncResult {
 export interface AppSettings {
   app_name: string;
   auto_sync: boolean;
+  attach_delay: boolean;
   secret_backend: string;
   secret_backend_is_keychain: boolean;
 }
@@ -298,6 +299,7 @@ export interface AppSettings {
 export interface AppSettingsPatch {
   app_name?: string;
   auto_sync?: boolean;
+  attach_delay?: boolean;
 }
 
 export interface Backup {

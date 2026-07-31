@@ -60,3 +60,12 @@ async def get_auto_sync(db: AsyncSession) -> bool:
 async def set_auto_sync(db: AsyncSession, enabled: bool) -> None:
     # "0" is stored, not cleared, so an explicit off survives the DB->env->default fallback.
     await set_value(db, APP_NAMESPACE, "auto_sync", "1" if enabled else "0")
+
+
+async def get_attach_delay(db: AsyncSession) -> bool:
+    # Default on: the grace window before a card leaves is the friendlier behaviour; unset means on.
+    return (await get_value(db, APP_NAMESPACE, "attach_delay")) != "0"
+
+
+async def set_attach_delay(db: AsyncSession, enabled: bool) -> None:
+    await set_value(db, APP_NAMESPACE, "attach_delay", "1" if enabled else "0")

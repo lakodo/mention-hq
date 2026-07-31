@@ -371,6 +371,7 @@ class PersonMerge(BaseModel):
 class AppSettingsOut(BaseModel):
     app_name: str
     auto_sync: bool
+    attach_delay: bool
     secret_backend: str
     secret_backend_is_keychain: bool
 
@@ -378,6 +379,7 @@ class AppSettingsOut(BaseModel):
 class AppSettingsPatch(BaseModel):
     app_name: str | None = None
     auto_sync: bool | None = None
+    attach_delay: bool | None = None
 
 
 class BackupOut(BaseModel):

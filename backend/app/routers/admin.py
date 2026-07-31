@@ -38,9 +38,11 @@ from app.security import get_secret_store
 from app.services import ai
 from app.services.app_config import (
     get_app_name,
+    get_attach_delay,
     get_auto_sync,
     get_value,
     set_app_name,
+    set_attach_delay,
     set_auto_sync,
     set_value,
 )
@@ -67,6 +69,7 @@ async def get_settings_(db: AsyncSession = Depends(get_db)) -> AppSettingsOut:
     return AppSettingsOut(
         app_name=await get_app_name(db),
         auto_sync=await get_auto_sync(db),
+        attach_delay=await get_attach_delay(db),
         secret_backend=store.backend_name,
         secret_backend_is_keychain=store.is_keychain,
     )
@@ -80,6 +83,9 @@ async def patch_settings(patch: AppSettingsPatch, db: AsyncSession = Depends(get
         changed = True
     if patch.auto_sync is not None:
         await set_auto_sync(db, patch.auto_sync)
+        changed = True
+    if patch.attach_delay is not None:
+        await set_attach_delay(db, patch.attach_delay)
         changed = True
     if changed:
         await db.commit()

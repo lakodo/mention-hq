@@ -576,6 +576,7 @@ export function makeSettings(): AppSettings {
   return {
     app_name: 'Mention HQ',
     auto_sync: false,
+    attach_delay: true,
     secret_backend: 'keyring',
     secret_backend_is_keychain: true,
   };
